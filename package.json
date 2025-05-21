@@ -52,6 +52,7 @@
     "@trpc/server": "^11.0.0",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
+    "dayjs": "^1.11.13",
     "drizzle-orm": "^0.41.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
