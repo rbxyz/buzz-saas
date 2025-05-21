@@ -1,50 +1,103 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import { db } from "@/server/db";
-import { agendamentos } from "@/server/db/schema";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { agendamentos, clientes } from "@/server/db/schema";
+import { eq, and, gte, lte, or, like } from "drizzle-orm";
 import dayjs from "dayjs";
+import {sql} from "drizzle-orm";
 
 export const agendamentoRouter = createTRPCRouter({
   getByData: publicProcedure
-    .input(z.object({ dia: z.string() })) // formato YYYY-MM-DD
+    .input(z.object({ date: z.string() })) // ISO string
     .query(async ({ input }) => {
-      const start = dayjs(input.dia).startOf("day").toDate();
-      const end = dayjs(input.dia).endOf("day").toDate();
-      return db.query.agendamentos.findMany({
-        where: and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end)),
-      });
+      const start = dayjs(input.date).startOf("day").toDate();
+      const end = dayjs(input.date).endOf("day").toDate();
+
+      const agendamentosDoDia = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end)
+          )
+        );
+
+      return agendamentosDoDia;
     }),
 
-  criar: publicProcedure
-    .input(z.object({
-      clienteId: z.string().uuid(),
-      dataHora: z.string().datetime(),
-      servico: z.string(),
-    }))
+  create: publicProcedure
+    .input(
+      z.object({
+        clienteId: z.string().uuid(),
+        data: z.string(), // Ex: "2025-05-21"
+        horario: z.string(), // Ex: "14:30"
+        servico: z.string(),
+        status: z.enum(["agendado", "cancelado", "concluido"]),
+      })
+    )
     .mutation(async ({ input }) => {
-      const existente = await db.query.agendamentos.findFirst({
-        where: eq(agendamentos.dataHora, new Date(input.dataHora)),
+      const dataHora = dayjs(`${input.data}T${input.horario}`).toDate();
+
+      // Inserção: id UUID será gerado automaticamente pelo banco
+      const result = await db.insert(agendamentos).values({
+        clienteId: input.clienteId,
+        dataHora,
+        servico: input.servico,
+        status: input.status,
+      }).returning({
+        id: agendamentos.id,
       });
 
-      if (existente) {
-        throw new Error("Horário indisponível");
-      }
-
-      return db.insert(agendamentos).values({
-        ...input,
-        status: "agendado",
-      });
+      return result[0]; // Retorna o novo agendamento criado com o id gerado
     }),
 
   atualizarStatus: publicProcedure
-    .input(z.object({
-      id: z.string().uuid(),
-      status: z.enum(["agendado", "cancelado", "concluido"]),
-    }))
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        status: z.enum(["agendado", "cancelado", "concluido"]),
+      })
+    )
     .mutation(async ({ input }) => {
-      return db.update(agendamentos)
+      const result = await db
+        .update(agendamentos)
         .set({ status: input.status })
-        .where(eq(agendamentos.id, input.id));
+        .where(eq(agendamentos.id, input.id))
+        .returning();
+
+      return result[0]; // Retorna o agendamento atualizado
+    }),
+
+    // Busca cliente pelo código (ID ou parte do nome) - pode ajustar filtro depois
+    getByClientCode: publicProcedure
+    .input(z.object({ query: z.string() }))
+    .query(async ({ input }) => {
+      const searchTerm = `%${input.query.toLowerCase()}%`;
+
+      const clientesEncontrados = await db
+        .select({
+          id: clientes.id,
+          nome: clientes.nome,
+        })
+        .from(clientes)
+        .where(
+          or(
+            eq(clientes.id, input.query), // busca exata por UUID, caso query seja um ID
+            sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`
+          )
+        )
+        .limit(10);
+
+      return clientesEncontrados;
     }),
 });
