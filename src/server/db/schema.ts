@@ -39,7 +39,7 @@ export const agendamentos = pgTable("agendamentos", {
 export const configuracoes = pgTable("configuracoes", {
   id: uuid("id").primaryKey().defaultRandom(),
   chave: text("chave").notNull().unique(),
-  valor: text("valor").notNull(), // Pode ser JSON.stringify de algo
+  valor: text("valor").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
