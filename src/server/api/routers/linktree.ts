@@ -5,9 +5,15 @@ import { links } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 
 export const linktreeRouter = createTRPCRouter({
-  listar: publicProcedure.query(() =>
-    db.query.links.findMany()
-  ),
+  listar: publicProcedure.query(async () => {
+    const result = await db.query.links.findMany();
+
+    // Garantir que imagem (ou outro campo binário) esteja em formato serializável
+    return result.map((link) => ({
+      ...link,
+      imagem: link.imagem ? link.imagem.toString() : null,
+    }));
+  }),
 
   criar: publicProcedure
     .input(z.object({
