@@ -5,7 +5,9 @@ import { links } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 
 export const linktreeRouter = createTRPCRouter({
-  listar: publicProcedure.query(() => db.query.links.findMany()),
+  listar: publicProcedure.query(() =>
+    db.query.links.findMany()
+  ),
 
   criar: publicProcedure
     .input(z.object({
@@ -13,8 +15,15 @@ export const linktreeRouter = createTRPCRouter({
       url: z.string().url(),
       descricao: z.string().optional(),
       clienteId: z.string().uuid().optional(),
+      tipo: z.enum(["cliente", "parceria"]),
+      imagem: z.string().url().optional(), // ✅ imagem como URL
     }))
-    .mutation(({ input }) => db.insert(links).values(input)),
+    .mutation(({ input }) => {
+      return db.insert(links).values({
+        ...input,
+        descricao: input.descricao ?? "",
+      });
+    }),
 
   editar: publicProcedure
     .input(z.object({
@@ -22,10 +31,19 @@ export const linktreeRouter = createTRPCRouter({
       titulo: z.string(),
       url: z.string().url(),
       descricao: z.string().optional(),
+      tipo: z.enum(["cliente", "parceria"]),
+      imagem: z.string().url().optional(), // ✅ corrigido aqui também
     }))
     .mutation(({ input }) =>
       db.update(links)
-        .set(input)
+        .set({
+          titulo: input.titulo,
+          url: input.url,
+          descricao: input.descricao ?? "",
+          tipo: input.tipo,
+          imagem: input.imagem,
+          updatedAt: new Date(),
+        })
         .where(eq(links.id, input.id))
     ),
 
