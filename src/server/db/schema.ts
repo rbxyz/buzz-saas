@@ -10,29 +10,29 @@ import {
   customType,
 } from "drizzle-orm/pg-core";
 
-// Definição do tipo personalizado para 'bytea'
-export const bytea = customType<{ data: Buffer }>({
+// 🔧 Tipo personalizado para campos binários (ex: imagens)
+export const bytea = customType<{ data: Uint8Array }>({
   dataType() {
-    return 'bytea';
+    return "bytea";
   },
 });
 
-// Enum para o campo tipo do link
-const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"]);
+// 🔗 Enum para o tipo de link no Linktree
+export const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"]);
 
-// 🧩 CLIENTES
+// 🧩 Tabela de Clientes
 export const clientes = pgTable("clientes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
-  dataNascimento: date("data_nascimento"), // Por padrão, campos são nulos
-  email: text("email"), // Por padrão, campos são nulos
+  dataNascimento: date("data_nascimento"),
+  email: text("email"),
   telefone: varchar("telefone", { length: 20 }).notNull(),
-  comprasRecentes: json("compras_recentes"), // Por padrão, campos são nulos
+  comprasRecentes: json("compras_recentes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 🗓️ AGENDAMENTOS
+// 🗓️ Tabela de Agendamentos
 export const agendamentos = pgTable("agendamentos", {
   id: uuid("id").primaryKey().defaultRandom(),
   clienteId: uuid("cliente_id").notNull().references(() => clientes.id),
@@ -45,7 +45,7 @@ export const agendamentos = pgTable("agendamentos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// ⚙️ CONFIGURAÇÕES
+// ⚙️ Tabela de Configurações
 export const configuracoes = pgTable("configuracoes", {
   id: uuid("id").primaryKey().defaultRandom(),
   chave: text("chave").notNull().unique(),
@@ -54,7 +54,7 @@ export const configuracoes = pgTable("configuracoes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 🔗 LINKTREE / PARCERIAS
+// 🔗 Tabela de Links (Linktree / Parcerias)
 export const links = pgTable("links", {
   id: uuid("id").primaryKey().defaultRandom(),
   titulo: text("titulo").notNull(),
@@ -62,12 +62,12 @@ export const links = pgTable("links", {
   descricao: text("descricao").default(""),
   clienteId: uuid("cliente_id").references(() => clientes.id),
   tipo: linkTypeEnum("tipo").notNull(),
-  imagem: bytea("imagem"), // tipo é Uint8Array
+  imagem: bytea("imagem"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 📊 RELATÓRIOS
+// 📊 Tabela de Relatórios
 export const relatorios = pgTable("relatorios", {
   id: uuid("id").primaryKey().defaultRandom(),
   tipo: text("tipo").notNull(),

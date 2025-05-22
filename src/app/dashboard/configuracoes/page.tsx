@@ -45,6 +45,9 @@ export default function ConfiguracoesPage() {
   const [horaFim, setHoraFim] = useState("18:00");
   const [instanceId, setInstanceId] = useState("");
   const [token, setToken] = useState("");
+  const [modoTreinoAtivo, setModoTreinoAtivo] = useState(false);
+  const [contextoIA, setContextoIA] = useState("");
+  const [dadosIA, setDadosIA] = useState("");
 
   // Busca as configurações ao montar o componente
   const {
@@ -71,6 +74,11 @@ export default function ConfiguracoesPage() {
       setWhatsappAtivo(
         configs.find((c) => c.chave === "whatsappAtivo")?.valor === "true",
       );
+      setModoTreinoAtivo(
+        configs.find((c) => c.chave === "modoTreinoAtivo")?.valor === "true",
+      );
+      setContextoIA(configs.find((c) => c.chave === "contextoIA")?.valor || "");
+      setDadosIA(configs.find((c) => c.chave === "dadosIA")?.valor || "");
     }
   }, [configs]);
 
@@ -85,6 +93,35 @@ export default function ConfiguracoesPage() {
     },
   });
 
+  // Função para aplicar máscara manual no telefone
+  function mascararTelefone(valor: string) {
+    // Remove tudo que não for número
+    let numeros = valor.replace(/\D/g, "");
+
+    // Aplica máscara (99) 99999-9999 ou (99) 9999-9999
+    if (numeros.length > 11) numeros = numeros.slice(0, 11);
+
+    if (numeros.length <= 10) {
+      // Formato (99) 9999-9999
+      numeros = numeros.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, "($1) $2-$3");
+    } else {
+      // Formato (99) 99999-9999
+      numeros = numeros.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, "($1) $2-$3");
+    }
+
+    // Remove traço final se não tiver 4 números no final
+    numeros = numeros.replace(/-$/, "");
+
+    return numeros;
+  }
+
+  // Manipulador para telefone com máscara
+  function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const valor = e.target.value;
+    const valorMascarado = mascararTelefone(valor);
+    setTelefone(valorMascarado);
+  }
+
   function handleSalvar() {
     // Envia todas as configs como array de objetos chave/valor
     const dados = [
@@ -97,6 +134,9 @@ export default function ConfiguracoesPage() {
       { chave: "instanceId", valor: instanceId },
       { chave: "token", valor: token },
       { chave: "whatsappAtivo", valor: whatsappAtivo ? "true" : "false" },
+      { chave: "modoTreinoAtivo", valor: modoTreinoAtivo ? "true" : "false" },
+      { chave: "contextoIA", valor: contextoIA },
+      { chave: "dadosIA", valor: dadosIA },
     ];
 
     salvarConfigs.mutate(dados);
@@ -134,7 +174,7 @@ export default function ConfiguracoesPage() {
                 id="telefone"
                 placeholder="(11) 91234-5678"
                 value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
+                onChange={handleTelefoneChange} // <--- usa a função com máscara
               />
             </div>
 
@@ -244,6 +284,54 @@ export default function ConfiguracoesPage() {
           {salvarConfigs.isLoading ? "Salvando..." : "Salvar configurações"}
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Modo Treino da IA</CardTitle>
+          <CardDescription>
+            Permite treinar a IA com contexto e dados personalizados
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="modo-treino">Ativar Modo Treino</Label>
+            <Switch
+              id="modo-treino"
+              checked={modoTreinoAtivo}
+              onCheckedChange={setModoTreinoAtivo}
+              className={`relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-300 transition-colors duration-200 ease-in-out data-[state=checked]:bg-green-500`}
+            >
+              <span
+                className={`${
+                  modoTreinoAtivo ? "translate-x-5" : "translate-x-0"
+                } pointer-events-none inline-block h-[20px] w-[20px] transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </Switch>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="contexto">Contexto</Label>
+            <Textarea
+              id="contexto"
+              placeholder="Descreva o contexto que a IA deve aprender..."
+              value={contextoIA}
+              onChange={(e) => setContextoIA(e.target.value)}
+              disabled={!modoTreinoAtivo}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="dados-novos">Novos dados (opcional)</Label>
+            <Textarea
+              id="dados-novos"
+              placeholder="Dados adicionais que a IA pode usar..."
+              value={dadosIA}
+              onChange={(e) => setDadosIA(e.target.value)}
+              disabled={!modoTreinoAtivo}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={modalAberto} onOpenChange={setModalAberto}>
         <DialogContent>

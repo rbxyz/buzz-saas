@@ -5,13 +5,13 @@ import { configuracoes } from "@/server/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
 export const configuracaoRouter = createTRPCRouter({
-  // Recupera todas as configurações cadastradas (sem filtro)
+  // Recupera todas as configurações cadastradas
   listar: publicProcedure.query(async () => {
     const resultados = await db.query.configuracoes.findMany();
-    return resultados; // retorna array [{chave, valor}, ...]
+    return resultados;
   }),
 
-  // Salvar uma única configuração (pode ser usado internamente)
+  // Salva ou atualiza uma configuração específica pela chave
   salvarUnica: publicProcedure
     .input(
       z.object({
@@ -34,7 +34,7 @@ export const configuracaoRouter = createTRPCRouter({
       return db.insert(configuracoes).values(input);
     }),
 
-  // Salvar várias configurações de uma vez (chamado "salvar" no frontend)
+  // Salva várias configurações de uma vez
   salvar: publicProcedure
     .input(
       z.array(
@@ -69,6 +69,28 @@ export const configuracaoRouter = createTRPCRouter({
       if (inserts.length > 0) {
         await db.insert(configuracoes).values(inserts);
       }
+
+      return { ok: true };
+    }),
+
+  // Atualiza uma configuração existente pelo ID
+  atualizar: publicProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        chave: z.string(),
+        valor: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await db
+        .update(configuracoes)
+        .set({
+          chave: input.chave,
+          valor: input.valor,
+          updatedAt: new Date(),
+        })
+        .where(eq(configuracoes.id, input.id));
 
       return { ok: true };
     }),
