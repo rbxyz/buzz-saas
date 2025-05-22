@@ -6,18 +6,28 @@ import {
   date,
   json,
   varchar,
-  integer,
-  primaryKey,
+  pgEnum,
+  customType,
 } from "drizzle-orm/pg-core";
+
+// Definição do tipo personalizado para 'bytea'
+export const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
+// Enum para o campo tipo do link
+const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"]);
 
 // 🧩 CLIENTES
 export const clientes = pgTable("clientes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nome: text("nome").notNull(),
-  dataNascimento: date("data_nascimento"),
-  email: text("email"),
+  dataNascimento: date("data_nascimento"), // Por padrão, campos são nulos
+  email: text("email"), // Por padrão, campos são nulos
   telefone: varchar("telefone", { length: 20 }).notNull(),
-  comprasRecentes: json("compras_recentes"), // opcional, pode virar uma tabela depois
+  comprasRecentes: json("compras_recentes"), // Por padrão, campos são nulos
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -25,9 +35,9 @@ export const clientes = pgTable("clientes", {
 // 🗓️ AGENDAMENTOS
 export const agendamentos = pgTable("agendamentos", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clienteId: uuid("cliente_id").references(() => clientes.id).notNull(),
+  clienteId: uuid("cliente_id").notNull().references(() => clientes.id),
   dataHora: timestamp("data_hora").notNull(),
-  servico: text("servico").notNull(), // Para MVP será string, depois pode virar FK
+  servico: text("servico").notNull(),
   status: text("status", {
     enum: ["agendado", "cancelado", "concluido"],
   }).notNull(),
@@ -49,16 +59,18 @@ export const links = pgTable("links", {
   id: uuid("id").primaryKey().defaultRandom(),
   titulo: text("titulo").notNull(),
   url: text("url").notNull(),
-  descricao: text("descricao"),
+  descricao: text("descricao").default(""),
   clienteId: uuid("cliente_id").references(() => clientes.id),
+  tipo: linkTypeEnum("tipo").notNull(),
+  imagem: bytea("imagem"), // tipo é Uint8Array
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 📊 RELATÓRIOS (log de geração, opcional, pode ser só cálculo dinâmico via TRPC)
+// 📊 RELATÓRIOS
 export const relatorios = pgTable("relatorios", {
   id: uuid("id").primaryKey().defaultRandom(),
-  tipo: text("tipo").notNull(), // exemplo: "agendamentos", "clientes"
-  payload: json("payload"), // Dados agregados
+  tipo: text("tipo").notNull(),
+  payload: json("payload"),
   geradoEm: timestamp("gerado_em").defaultNow(),
 });

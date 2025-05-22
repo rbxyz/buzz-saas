@@ -1,0 +1,1 @@
+CREATE TYPE link_type_enum AS ENUM ('cliente', 'parceria');
