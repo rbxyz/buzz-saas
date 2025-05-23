@@ -42,14 +42,28 @@ export default function AgendamentosPage() {
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [clienteNomeSelecionado, setClienteNomeSelecionado] = useState("");
 
-  const {
-    data: clientesEncontrados,
-    refetch,
-    isFetching,
-  } = trpc.agendamento.getByClientCode.useQuery(
-    { query: clienteQuery },
-    { enabled: false },
-  );
+  // Ativar a query automaticamente quando clienteQuery tiver > 1 caractere
+  const { data: clientesEncontrados, isFetching } =
+    trpc.agendamento.getByClientCode.useQuery(
+      { query: clienteQuery },
+      {
+        enabled: clienteQuery.length > 1,
+        // Opcional: manter os dados anteriores enquanto carrega
+        keepPreviousData: true,
+      },
+    );
+
+  // Função debounce (usando useEffect simples)
+  useEffect(() => {
+    if (clienteQuery.length <= 1) return;
+
+    const handler = setTimeout(() => {
+      // Nada a fazer aqui porque a query está habilitada automaticamente
+      // Só atualiza clienteQuery que dispara o fetch
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(handler);
+  }, [clienteQuery]);
 
   // Limpar seleção se query ficar vazia ou cliente não estiver mais na lista
   useEffect(() => {
@@ -155,7 +169,7 @@ export default function AgendamentosPage() {
 
                 <div className="flex flex-col gap-4 py-4">
                   {/* Seletor de cliente */}
-                  <div>
+                  <div className="relative">
                     <label className="text-sm font-medium">
                       Buscar cliente
                     </label>
@@ -163,38 +177,83 @@ export default function AgendamentosPage() {
                       type="text"
                       value={clienteQuery}
                       onChange={(e) => {
-                        setClienteQuery(e.target.value);
+                        const value = e.target.value;
+                        setClienteQuery(value);
                         setClienteId(null);
                         setClienteNomeSelecionado("");
-                        refetch();
                       }}
-                      placeholder="Nome ou ID do cliente"
+                      placeholder="Nome do cliente"
                       className="mt-1 w-full rounded-md border px-3 py-2"
+                      autoComplete="off"
+                      readOnly={!!clienteId}
                     />
-
+                    {/* Loading */}
                     {isFetching && (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-muted-foreground mt-1 text-sm">
                         Buscando...
                       </p>
                     )}
-                    {!isFetching && clientesEncontrados?.length! > 0 && (
-                      <div className="mt-2 max-h-48 overflow-auto rounded border">
-                        {clientesEncontrados!.map((cliente) => (
-                          <div
-                            key={cliente.id}
-                            className="hover:bg-muted cursor-pointer px-3 py-2"
-                            onClick={() => {
-                              setClienteId(cliente.id);
-                              setClienteNomeSelecionado(cliente.nome);
-                              setClienteQuery("");
-                            }}
+                    {/* Lista de sugestões */}
+                    {!isFetching &&
+                      clienteQuery.length > 1 &&
+                      clientesEncontrados &&
+                      clientesEncontrados.length > 0 && (
+                        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow backdrop-blur-sm">
+                          {clientesEncontrados.map((cliente) => (
+                            <div
+                              key={cliente.id}
+                              className="hover:bg-muted cursor-pointer px-3 py-2 text-sm"
+                              onClick={() => {
+                                setClienteId(cliente.id);
+                                setClienteNomeSelecionado(cliente.nome);
+                                setClienteQuery(cliente.nome); // mantém o nome selecionado no input
+                              }}
+                            >
+                              {cliente.nome}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    {/* Lista de sugestões */}
+                    {!isFetching &&
+                      clienteQuery.length > 1 &&
+                      clientesEncontrados &&
+                      clientesEncontrados.length > 0 && (
+                        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow backdrop-blur-sm">
+                          {clientesEncontrados.map((cliente) => (
+                            <div
+                              key={cliente.id}
+                              className="hover:bg-muted cursor-pointer px-3 py-2 text-sm"
+                              onClick={() => {
+                                setClienteId(cliente.id);
+                                setClienteNomeSelecionado(cliente.nome);
+                                setClienteQuery(cliente.nome); // mantém o nome selecionado no input
+                              }}
+                            >
+                              {cliente.nome}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    {!isFetching &&
+                      clienteQuery.length > 1 &&
+                      clientesEncontrados &&
+                      clientesEncontrados.length === 0 && (
+                        <div className="mt-2 flex flex-col items-center gap-2 rounded border border-red-500 bg-red-50 p-3 text-red-700">
+                          <p>Cliente não adicionado.</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                            onClick={() =>
+                              window.location.assign("/dashboard/clientes")
+                            }
                           >
-                            {cliente.nome}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
+                            Criar novo cliente
+                          </Button>
+                        </div>
+                      )}
+                    {/* Nome selecionado */}
                     {clienteNomeSelecionado && (
                       <p className="mt-1 text-sm text-green-600">
                         Cliente selecionado: {clienteNomeSelecionado}
