@@ -2,9 +2,9 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import { db } from "@/server/db";
 import { agendamentos, clientes } from "@/server/db/schema";
-import { eq, and, gte, lte, or, like } from "drizzle-orm";
+import { eq, and, gte, lte, or } from "drizzle-orm";
 import dayjs from "dayjs";
-import {sql} from "drizzle-orm";
+import { sql, asc, desc } from "drizzle-orm"; // Importando asc e desc
 
 export const agendamentoRouter = createTRPCRouter({
   getByData: publicProcedure
@@ -48,7 +48,6 @@ export const agendamentoRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const dataHora = dayjs(`${input.data}T${input.horario}`).toDate();
 
-      // Inserção: id UUID será gerado automaticamente pelo banco
       const result = await db.insert(agendamentos).values({
         clienteId: input.clienteId,
         dataHora,
@@ -58,7 +57,7 @@ export const agendamentoRouter = createTRPCRouter({
         id: agendamentos.id,
       });
 
-      return result[0]; // Retorna o novo agendamento criado com o id gerado
+      return result[0];
     }),
 
   atualizarStatus: publicProcedure
@@ -75,11 +74,10 @@ export const agendamentoRouter = createTRPCRouter({
         .where(eq(agendamentos.id, input.id))
         .returning();
 
-      return result[0]; // Retorna o agendamento atualizado
+      return result[0];
     }),
 
-    // Busca cliente pelo código (ID ou parte do nome) - pode ajustar filtro depois
-    getByClientCode: publicProcedure
+  getByClientCode: publicProcedure
     .input(z.object({ query: z.string() }))
     .query(async ({ input }) => {
       const searchTerm = `%${input.query.toLowerCase()}%`;
@@ -92,12 +90,42 @@ export const agendamentoRouter = createTRPCRouter({
         .from(clientes)
         .where(
           or(
-            eq(clientes.id, input.query), // busca exata por UUID, caso query seja um ID
+            eq(clientes.id, input.query),
             sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`
           )
         )
         .limit(10);
 
       return clientesEncontrados;
+    }),
+
+  getCortesDoMes: publicProcedure
+    .input(z.object({ month: z.number(), year: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const startDate = new Date(input.year, input.month - 1, 1);
+      const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+
+      const cortes = await ctx.db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(
+          and(
+            gte(agendamentos.dataHora, startDate),
+            lte(agendamentos.dataHora, endDate),
+            sql`${agendamentos.servico} LIKE '%Corte%'`
+          )
+        )
+        .orderBy(desc(agendamentos.dataHora)); // Usando desc para ordenação decrescente
+
+      return cortes;
     }),
 });

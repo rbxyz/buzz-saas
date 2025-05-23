@@ -28,42 +28,40 @@ import {
 
 export default function AgendamentosPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
   const [open, setOpen] = useState(false);
-
   const [horario, setHorario] = useState<string>("14:00");
   const [servico, setServico] = useState<string>("Corte de cabelo");
 
-  // Estado do input de busca e seleção de cliente
+  const { data: cortesDoMes, isLoading: isLoadingCortesDoMes } =
+    trpc.agendamento.getCortesDoMes.useQuery({
+      month: selectedDate.getMonth() + 1,
+      year: selectedDate.getFullYear(),
+    });
+
   const [clienteQuery, setClienteQuery] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(null);
-  const [clienteNomeSelecionado, setClienteNomeSelecionado] =
-    useState<string>("");
+  const [clienteNomeSelecionado, setClienteNomeSelecionado] = useState("");
 
-  // Busca clientes com debounce simples para autocomplete
   const {
     data: clientesEncontrados,
     refetch,
     isFetching,
   } = trpc.agendamento.getByClientCode.useQuery(
     { query: clienteQuery },
-    {
-      enabled: false,
-    },
+    { enabled: false },
   );
 
-  // Atualiza a busca quando o usuário digita (debounce manual simples)
+  // Limpar seleção se query ficar vazia ou cliente não estiver mais na lista
   useEffect(() => {
-    if (clienteQuery.trim().length === 0) return;
+    if (!clienteQuery && clienteId && clientesEncontrados) {
+      if (!clientesEncontrados.some((c) => c.id === clienteId)) {
+        setClienteId(null);
+        setClienteNomeSelecionado("");
+      }
+    }
+  }, [clienteQuery, clientesEncontrados, clienteId]);
 
-    const handle = setTimeout(() => {
-      refetch();
-    }, 300);
-
-    return () => clearTimeout(handle);
-  }, [clienteQuery, refetch]);
-
-  // Reset cliente selecionado se query mudar e não bater com clienteId atual
+  // Outra verificação para evitar clienteId inválido
   useEffect(() => {
     if (
       clienteId &&
@@ -73,9 +71,8 @@ export default function AgendamentosPage() {
       setClienteId(null);
       setClienteNomeSelecionado("");
     }
-  }, [clienteQuery, clientesEncontrados, clienteId]);
+  }, [clientesEncontrados, clienteId]);
 
-  // Query para carregar agendamentos do dia selecionado
   const { data: agendamentos, refetch: refetchAgendamentos } =
     trpc.agendamento.getByData.useQuery({
       date: selectedDate.toISOString(),
@@ -94,7 +91,7 @@ export default function AgendamentosPage() {
   });
 
   const handleNovoAgendamento = () => {
-    if (createMutation.status === "pending") return;
+    if (createMutation.isLoading) return;
     if (!clienteId) {
       alert("Selecione um cliente válido.");
       return;
@@ -131,7 +128,7 @@ export default function AgendamentosPage() {
           </CardContent>
         </Card>
 
-        {/* Lista de agendamentos do dia */}
+        {/* Lista de agendamentos e botão novo */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -143,7 +140,6 @@ export default function AgendamentosPage() {
               </CardDescription>
             </div>
 
-            {/* Botão que abre o modal */}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="flex items-center">
@@ -152,111 +148,96 @@ export default function AgendamentosPage() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="sm:max-w-[425px]">
+              <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Novo Agendamento</DialogTitle>
                 </DialogHeader>
 
-                {/* Formulário */}
-                <div className="mt-2 flex flex-col gap-4">
-                  <label className="flex flex-col">
-                    Data
+                <div className="flex flex-col gap-4 py-4">
+                  {/* Seletor de cliente */}
+                  <div>
+                    <label className="text-sm font-medium">
+                      Buscar cliente
+                    </label>
                     <input
                       type="text"
-                      value={format(selectedDate, "dd/MM/yyyy")}
-                      disabled
-                      className="cursor-not-allowed rounded border bg-gray-100 px-2 py-1"
+                      value={clienteQuery}
+                      onChange={(e) => {
+                        setClienteQuery(e.target.value);
+                        setClienteId(null);
+                        setClienteNomeSelecionado("");
+                        refetch();
+                      }}
+                      placeholder="Nome ou ID do cliente"
+                      className="mt-1 w-full rounded-md border px-3 py-2"
                     />
-                  </label>
 
-                  <label className="flex flex-col">
-                    Horário
+                    {isFetching && (
+                      <p className="text-muted-foreground text-sm">
+                        Buscando...
+                      </p>
+                    )}
+                    {!isFetching && clientesEncontrados?.length! > 0 && (
+                      <div className="mt-2 max-h-48 overflow-auto rounded border">
+                        {clientesEncontrados!.map((cliente) => (
+                          <div
+                            key={cliente.id}
+                            className="hover:bg-muted cursor-pointer px-3 py-2"
+                            onClick={() => {
+                              setClienteId(cliente.id);
+                              setClienteNomeSelecionado(cliente.nome);
+                              setClienteQuery("");
+                            }}
+                          >
+                            {cliente.nome}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {clienteNomeSelecionado && (
+                      <p className="mt-1 text-sm text-green-600">
+                        Cliente selecionado: {clienteNomeSelecionado}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Horário */}
+                  <div>
+                    <label className="text-sm font-medium">Horário</label>
                     <input
                       type="time"
                       value={horario}
                       onChange={(e) => setHorario(e.target.value)}
-                      className="rounded border px-2 py-1"
+                      className="mt-1 w-full rounded-md border px-3 py-2"
                     />
-                  </label>
+                  </div>
 
-                  <label className="flex flex-col">
-                    Serviço
+                  {/* Serviço */}
+                  <div>
+                    <label className="text-sm font-medium">Serviço</label>
                     <input
                       type="text"
                       value={servico}
                       onChange={(e) => setServico(e.target.value)}
-                      className="rounded border px-2 py-1"
+                      placeholder="Ex: Corte de cabelo"
+                      className="mt-1 w-full rounded-md border px-3 py-2"
                     />
-                  </label>
+                  </div>
 
-                  {/* Campo de busca e seleção de cliente */}
-                  <label className="relative flex flex-col">
-                    Cliente
-                    <input
-                      type="text"
-                      value={clienteNomeSelecionado || clienteQuery}
-                      onChange={(e) => {
-                        setClienteQuery(e.target.value);
-                        setClienteNomeSelecionado("");
-                        setClienteId(null);
-                      }}
-                      placeholder="Digite nome ou ID do cliente"
-                      className="rounded border px-2 py-1"
-                      autoComplete="off"
-                    />
-                    {/* Dropdown autocomplete */}
-                    {clienteQuery.length > 0 && (
-                      <ul className="absolute z-50 max-h-48 w-full overflow-auto rounded border bg-white shadow-md">
-                        {isFetching && (
-                          <li className="p-2 text-center text-sm text-gray-500">
-                            Carregando...
-                          </li>
-                        )}
-
-                        {!isFetching && clientesEncontrados?.length === 0 && (
-                          <li className="p-2 text-center text-sm text-gray-500">
-                            Nenhum cliente encontrado.
-                          </li>
-                        )}
-
-                        {!isFetching &&
-                          clientesEncontrados?.map((cliente) => (
-                            <li
-                              key={cliente.id}
-                              className="cursor-pointer border-b px-2 py-1 hover:bg-gray-100"
-                              onClick={() => {
-                                setClienteId(cliente.id);
-                                setClienteNomeSelecionado(cliente.nome);
-                                setClienteQuery("");
-                              }}
-                            >
-                              {cliente.nome} ({cliente.id.slice(0, 8)}...)
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </label>
-
-                  <div className="flex justify-end space-x-2">
+                  {/* Botões */}
+                  <div className="mt-4 flex justify-end gap-2">
                     <DialogClose asChild>
-                      <Button
-                        variant="outline"
-                        disabled={createMutation.status === "pending"}
-                      >
-                        Cancelar
-                      </Button>
+                      <Button variant="ghost">Cancelar</Button>
                     </DialogClose>
-
                     <Button
                       onClick={handleNovoAgendamento}
-                      disabled={createMutation.status === "pending"}
+                      disabled={createMutation.isLoading}
                     >
-                      {createMutation.status === "pending" ? (
+                      {createMutation.isLoading && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <PlusCircle className="mr-2 h-4 w-4" />
                       )}
-                      Salvar
+                      Confirmar
                     </Button>
                   </div>
                 </div>
@@ -264,30 +245,73 @@ export default function AgendamentosPage() {
             </Dialog>
           </CardHeader>
 
-          <CardContent className="space-y-3">
-            {agendamentos && agendamentos.length > 0 ? (
-              agendamentos.map((agendamento) => (
-                <div
-                  key={agendamento.id}
-                  className="rounded-lg border p-3 shadow-sm"
-                >
-                  <p className="font-semibold">
-                    {dayjs(agendamento.dataHora).format("HH:mm")} —{" "}
-                    {agendamento.servico}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    Cliente: {agendamento.cliente?.nome ?? "N/A"}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Status: {agendamento.status}
-                  </p>
-                </div>
-              ))
-            ) : (
+          <CardContent className="space-y-2">
+            {agendamentos?.length === 0 && (
               <p className="text-muted-foreground text-sm">
-                Nenhum agendamento para este dia.
+                Nenhum agendamento para esta data.
               </p>
             )}
+            {agendamentos?.map((agendamento) => (
+              <div
+                key={agendamento.id}
+                className="flex items-center justify-between rounded border p-2"
+              >
+                <div>
+                  <p className="font-medium">
+                    {agendamento.cliente?.nome ?? "Cliente desconhecido"}
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
+                    {agendamento.servico}
+                  </p>
+                </div>
+                <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                  {agendamento.status}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cortes do mês</CardTitle>
+            <CardDescription>
+              Listagem dos cortes realizados em{" "}
+              {format(selectedDate, "MMMM/yyyy", { locale: ptBR })}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-2">
+            {isLoadingCortesDoMes && (
+              <p className="text-muted-foreground text-sm">
+                Carregando cortes...
+              </p>
+            )}
+            {cortesDoMes?.length === 0 && (
+              <p className="text-muted-foreground text-sm">
+                Nenhum corte registrado neste mês.
+              </p>
+            )}
+            {cortesDoMes?.map((corte) => (
+              <div
+                key={corte.id}
+                className="flex items-center justify-between rounded border p-2"
+              >
+                <div>
+                  <p className="font-medium">
+                    {corte.cliente?.nome ?? "Cliente desconhecido"}
+                  </p>
+                  <p className="text-muted-foreground text-sm">
+                    {dayjs(corte.dataHora).format("DD/MM HH:mm")} -{" "}
+                    {corte.servico}
+                  </p>
+                </div>
+                <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                  {corte.status}
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
