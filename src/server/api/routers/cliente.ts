@@ -20,7 +20,7 @@ export const clienteRouter = createTRPCRouter({
   criar: publicProcedure
     .input(
       z.object({
-        nome: z.string(),
+        nome: z.string().min(1),
         dataNascimento: z.string().refine(
           (val) => !isNaN(Date.parse(val)),
           { message: "Data inválida" }
@@ -33,7 +33,7 @@ export const clienteRouter = createTRPCRouter({
     .mutation(({ input }) =>
       db.insert(clientes).values({
         nome: input.nome,
-        dataNascimento: input.dataNascimento, // <-- string ISO
+        dataNascimento: input.dataNascimento,
         email: input.email ?? "",
         telefone: input.telefone,
         comprasRecentes: input.comprasRecentes ?? null,
@@ -44,7 +44,7 @@ export const clienteRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string().uuid(),
-        nome: z.string(),
+        nome: z.string().min(1),
         dataNascimento: z.string().refine(
           (val) => !isNaN(Date.parse(val)),
           { message: "Data inválida" }
@@ -55,20 +55,23 @@ export const clienteRouter = createTRPCRouter({
       })
     )
     .mutation(({ input }) =>
-      db.update(clientes).set({
-        nome: input.nome,
-        dataNascimento: input.dataNascimento, // <-- string ISO
-        email: input.email ?? "",
-        telefone: input.telefone,
-        comprasRecentes: input.comprasRecentes ?? null,
-        updatedAt: new Date()
-      })
-      .where(eq(clientes.id, input.id))
+      db
+        .update(clientes)
+        .set({
+          nome: input.nome,
+          dataNascimento: input.dataNascimento,
+          email: input.email ?? "",
+          telefone: input.telefone,
+          comprasRecentes: input.comprasRecentes ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(clientes.id, input.id))
     ),
 
   deletar: publicProcedure
-    .input(z.string().uuid())
-    .mutation(({ input }) =>
-      db.delete(clientes).where(eq(clientes.id, input))
-    ),
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input }) => {
+      await db.delete(clientes).where(eq(clientes.id, input.id));
+      return { success: true };
+    }),
 });
