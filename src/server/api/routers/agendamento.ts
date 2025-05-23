@@ -77,11 +77,11 @@ export const agendamentoRouter = createTRPCRouter({
       return result[0];
     }),
 
-  getByClientCode: publicProcedure
+    getByClientCode: publicProcedure
     .input(z.object({ query: z.string() }))
     .query(async ({ input }) => {
       const searchTerm = `%${input.query.toLowerCase()}%`;
-
+  
       const clientesEncontrados = await db
         .select({
           id: clientes.id,
@@ -89,23 +89,20 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .from(clientes)
         .where(
-          or(
-            eq(clientes.id, input.query),
-            sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`
-          )
+          sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`
         )
         .limit(10);
-
+  
       return clientesEncontrados;
     }),
-
+    
   getCortesDoMes: publicProcedure
     .input(z.object({ month: z.number(), year: z.number() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const startDate = new Date(input.year, input.month - 1, 1);
       const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
 
-      const cortes = await ctx.db
+      const cortes = await db
         .select({
           id: agendamentos.id,
           dataHora: agendamentos.dataHora,
@@ -117,15 +114,14 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-        .where(
-          and(
-            gte(agendamentos.dataHora, startDate),
-            lte(agendamentos.dataHora, endDate),
-            sql`${agendamentos.servico} LIKE '%Corte%'`
-          )
-        )
-        .orderBy(desc(agendamentos.dataHora)); // Usando desc para ordenação decrescente
+        .where(and(
+          gte(agendamentos.dataHora, startDate),
+          lte(agendamentos.dataHora, endDate),
+          sql`${agendamentos.servico} ILIKE '%corte%'`
+        ))
+        .orderBy(desc(agendamentos.dataHora)); // Ordena do mais recente para o mais antigo
 
       return cortes;
     }),
+    
 });
