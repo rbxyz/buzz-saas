@@ -8,6 +8,8 @@ import {
   varchar,
   pgEnum,
   customType,
+  numeric,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 // 🔧 Tipo personalizado para campos binários (ex: imagens)
@@ -19,6 +21,9 @@ export const bytea = customType<{ data: Uint8Array }>({
 
 // 🔗 Enum para o tipo de link no Linktree
 export const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"]);
+
+// 💰 Enum para tipos de valor (usado futuramente em serviços com valor fixo)
+export const valorTipoEnum = pgEnum("valor_tipo_enum", ["padrao", "premium", "personalizado"]);
 
 // 🧩 Tabela de Clientes
 export const clientes = pgTable("clientes", {
@@ -41,6 +46,7 @@ export const agendamentos = pgTable("agendamentos", {
   status: text("status", {
     enum: ["agendado", "cancelado", "concluido"],
   }).notNull(),
+  valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -48,8 +54,20 @@ export const agendamentos = pgTable("agendamentos", {
 // ⚙️ Tabela de Configurações
 export const configuracoes = pgTable("configuracoes", {
   id: uuid("id").primaryKey().defaultRandom(),
-  chave: text("chave").notNull().unique(),
-  valor: text("valor").notNull(),
+  nome: text("nome").notNull().default(""),
+  telefone: text("telefone").notNull().default(""),
+  endereco: text("endereco").notNull().default(""),
+  dias: text("dias").notNull().default(""),
+  horaInicio: text("hora_inicio").notNull().default("09:00"),
+  horaFim: text("hora_fim").notNull().default("18:00"),
+  instanceId: text("instance_id").notNull().default(""),
+  token: text("token").notNull().default(""),
+  whatsappAtivo: boolean("whatsapp_ativo").notNull().default(false),
+  modoTreinoAtivo: boolean("modo_treino_ativo").notNull().default(false),
+  contextoIA: text("contexto_ia").notNull().default(""),
+  dadosIA: text("dados_ia").notNull().default(""),
+  servicos: json("servicos").notNull().default("[]"), // Array JSON com { nome, preco }
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

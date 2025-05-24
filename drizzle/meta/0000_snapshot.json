@@ -1,5 +1,5 @@
 {
-  "id": "f5344aaf-2d8d-4fa8-b514-2bd04b144e08",
+  "id": "984c3c03-d3b6-4eb5-b51a-4ad7b20fea12",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -38,6 +38,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "valor_cobrado": {
+          "name": "valor_cobrado",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -151,17 +157,96 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "chave": {
-          "name": "chave",
+        "nome": {
+          "name": "nome",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "''"
         },
-        "valor": {
-          "name": "valor",
+        "telefone": {
+          "name": "telefone",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "''"
+        },
+        "endereco": {
+          "name": "endereco",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "dias": {
+          "name": "dias",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "hora_inicio": {
+          "name": "hora_inicio",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'09:00'"
+        },
+        "hora_fim": {
+          "name": "hora_fim",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'18:00'"
+        },
+        "instance_id": {
+          "name": "instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "whatsapp_ativo": {
+          "name": "whatsapp_ativo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "modo_treino_ativo": {
+          "name": "modo_treino_ativo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "contexto_ia": {
+          "name": "contexto_ia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "dados_ia": {
+          "name": "dados_ia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "servicos": {
+          "name": "servicos",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'"
         },
         "created_at": {
           "name": "created_at",
@@ -181,15 +266,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "configuracoes_chave_unique": {
-          "name": "configuracoes_chave_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "chave"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -320,7 +397,25 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.link_type_enum": {
+      "name": "link_type_enum",
+      "schema": "public",
+      "values": [
+        "cliente",
+        "parceria"
+      ]
+    },
+    "public.valor_tipo_enum": {
+      "name": "valor_tipo_enum",
+      "schema": "public",
+      "values": [
+        "padrao",
+        "premium",
+        "personalizado"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},

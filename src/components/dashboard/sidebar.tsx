@@ -40,7 +40,6 @@ export function DashboardSidebar() {
     { title: "Agendamentos", href: "/dashboard/agendamentos", icon: Calendar },
     { title: "Clientes", href: "/dashboard/clientes", icon: Users },
     { title: "Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
-    { title: "Relatórios", href: "/dashboard/relatorios", icon: BarChart },
     { title: "Linktree", href: "/dashboard/linktree", icon: LinkIcon },
     {
       title: "Configurações",

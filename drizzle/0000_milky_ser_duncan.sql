@@ -1,11 +1,12 @@
-CREATE TYPE "link_type_enum" AS ENUM ('cliente', 'parceria'); -- ✅ adicionado aqui
-
+--CREATE TYPE "public"."link_type_enum" AS ENUM('cliente', 'parceria');--> statement-breakpoint
+--CREATE TYPE "public"."valor_tipo_enum" AS ENUM('padrao', 'premium', 'personalizado');--> statement-breakpoint
 CREATE TABLE "agendamentos" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"cliente_id" uuid NOT NULL,
 	"data_hora" timestamp NOT NULL,
 	"servico" text NOT NULL,
 	"status" text NOT NULL,
+	"valor_cobrado" numeric(10, 2),
 	"created_at" timestamp DEFAULT now(),
 	"updated_at" timestamp DEFAULT now()
 );
@@ -23,11 +24,21 @@ CREATE TABLE "clientes" (
 --> statement-breakpoint
 CREATE TABLE "configuracoes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"chave" text NOT NULL,
-	"valor" text NOT NULL,
+	"nome" text DEFAULT '' NOT NULL,
+	"telefone" text DEFAULT '' NOT NULL,
+	"endereco" text DEFAULT '' NOT NULL,
+	"dias" text DEFAULT '' NOT NULL,
+	"hora_inicio" text DEFAULT '09:00' NOT NULL,
+	"hora_fim" text DEFAULT '18:00' NOT NULL,
+	"instance_id" text DEFAULT '' NOT NULL,
+	"token" text DEFAULT '' NOT NULL,
+	"whatsapp_ativo" boolean DEFAULT false NOT NULL,
+	"modo_treino_ativo" boolean DEFAULT false NOT NULL,
+	"contexto_ia" text DEFAULT '' NOT NULL,
+	"dados_ia" text DEFAULT '' NOT NULL,
+	"servicos" json DEFAULT '[]' NOT NULL,
 	"created_at" timestamp DEFAULT now(),
-	"updated_at" timestamp DEFAULT now(),
-	CONSTRAINT "configuracoes_chave_unique" UNIQUE("chave")
+	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
 CREATE TABLE "links" (

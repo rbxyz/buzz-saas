@@ -19,24 +19,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/utils/trpc";
+import { toast } from "sonner";
+
+// Função para mascarar telefone
+function mascararTelefone(valor: string): string {
+  return valor
+    .replace(/\D/g, "")
+    .replace(/^(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2")
+    .slice(0, 15);
+}
 
 export default function ConfiguracoesPage() {
-  // Estados dos campos
   const [whatsappAtivo, setWhatsappAtivo] = useState(false);
-  const [modalAberto, setModalAberto] = useState(false);
-
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [endereco, setEndereco] = useState("");
@@ -48,106 +45,216 @@ export default function ConfiguracoesPage() {
   const [modoTreinoAtivo, setModoTreinoAtivo] = useState(false);
   const [contextoIA, setContextoIA] = useState("");
   const [dadosIA, setDadosIA] = useState("");
+  const [servicos, setServicos] = useState<{ nome: string; preco: string }[]>(
+    [] as { nome: string; preco: string }[],
+  );
 
-  // Busca as configurações ao montar o componente
   const {
     data: configs,
-    isLoading,
-    error,
+    isPending: isLoading,
     refetch,
   } = trpc.configuracao.listar.useQuery();
 
-  // Atualiza estados com os dados carregados
-  useEffect(() => {
-    if (configs) {
-      // Espera configs ser array com {chave, valor}
-      setNome(configs.find((c) => c.chave === "nome")?.valor || "");
-      setTelefone(configs.find((c) => c.chave === "telefone")?.valor || "");
-      setEndereco(configs.find((c) => c.chave === "endereco")?.valor || "");
-      setDias(configs.find((c) => c.chave === "dias")?.valor || "");
-      setHoraInicio(
-        configs.find((c) => c.chave === "horaInicio")?.valor || "09:00",
-      );
-      setHoraFim(configs.find((c) => c.chave === "horaFim")?.valor || "18:00");
-      setInstanceId(configs.find((c) => c.chave === "instanceId")?.valor || "");
-      setToken(configs.find((c) => c.chave === "token")?.valor || "");
-      setWhatsappAtivo(
-        configs.find((c) => c.chave === "whatsappAtivo")?.valor === "true",
-      );
-      setModoTreinoAtivo(
-        configs.find((c) => c.chave === "modoTreinoAtivo")?.valor === "true",
-      );
-      setContextoIA(configs.find((c) => c.chave === "contextoIA")?.valor || "");
-      setDadosIA(configs.find((c) => c.chave === "dadosIA")?.valor || "");
-    }
+  const valoresIniciais = useMemo(() => {
+    if (!configs) return null;
+    return {
+      id: configs.id,
+      nome: configs.nome,
+      telefone: configs.telefone,
+      endereco: configs.endereco,
+      dias: configs.dias,
+      horaInicio: configs.horaInicio,
+      horaFim: configs.horaFim,
+      instanceId: configs.instanceId,
+      token: configs.token,
+      whatsappAtivo: configs.whatsappAtivo,
+      modoTreinoAtivo: configs.modoTreinoAtivo,
+      contextoIA: configs.contextoIA,
+      dadosIA: configs.dadosIA,
+      servicos: configs.servicos || [],
+    };
   }, [configs]);
 
-  // Mutação para salvar
-  const salvarConfigs = trpc.configuracao.salvar.useMutation({
+  function servicosSaoIguais(
+    a: { nome: string; preco: string }[],
+    b: { nome: string; preco: string }[],
+  ) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].nome !== b[i].nome || a[i].preco !== b[i].preco) return false;
+    }
+    return true;
+  }
+
+  const houveAlteracao = useMemo(() => {
+    if (!valoresIniciais) return false;
+
+    return !(
+      nome === valoresIniciais.nome &&
+      telefone === valoresIniciais.telefone &&
+      endereco === valoresIniciais.endereco &&
+      dias === valoresIniciais.dias &&
+      horaInicio === valoresIniciais.horaInicio &&
+      horaFim === valoresIniciais.horaFim &&
+      instanceId === valoresIniciais.instanceId &&
+      token === valoresIniciais.token &&
+      whatsappAtivo === valoresIniciais.whatsappAtivo &&
+      modoTreinoAtivo === valoresIniciais.modoTreinoAtivo &&
+      contextoIA === valoresIniciais.contextoIA &&
+      dadosIA === valoresIniciais.dadosIA &&
+      servicosSaoIguais(servicos, valoresIniciais.servicos)
+    );
+  }, [
+    nome,
+    telefone,
+    endereco,
+    dias,
+    horaInicio,
+    horaFim,
+    instanceId,
+    token,
+    whatsappAtivo,
+    modoTreinoAtivo,
+    contextoIA,
+    dadosIA,
+    servicos,
+    valoresIniciais,
+  ]);
+
+  useEffect(() => {
+    if (!configs) return;
+    setNome(configs.nome || "");
+    setTelefone(configs.telefone || "");
+    setEndereco(configs.endereco || "");
+    setDias(configs.dias || "");
+    setHoraInicio(configs.horaInicio || "09:00");
+    setHoraFim(configs.horaFim || "18:00");
+    setInstanceId(configs.instanceId || "");
+    setToken(configs.token || "");
+    setWhatsappAtivo(configs.whatsappAtivo || false);
+    setModoTreinoAtivo(configs.modoTreinoAtivo || false);
+    setContextoIA(configs.contextoIA || "");
+    setDadosIA(configs.dadosIA || "");
+    setServicos(configs.servicos || []);
+  }, [configs]);
+
+  const mutation = trpc.configuracao.atualizar.useMutation({
     onSuccess: () => {
-      setModalAberto(true);
+      toast.success("Configurações salvas com sucesso!");
       refetch();
     },
     onError: () => {
-      alert("Erro ao salvar configurações. Tente novamente.");
+      toast.error("Erro ao salvar configurações. Tente novamente.");
     },
   });
 
-  // Função para aplicar máscara manual no telefone
-  function mascararTelefone(valor: string) {
-    // Remove tudo que não for número
-    let numeros = valor.replace(/\D/g, "");
+  const salvarServicosMutation = trpc.configuracao.salvaServicos.useMutation({
+    onSuccess: () => {
+      toast.success("Serviços atualizados com sucesso!");
+      refetch(); // recarrega configs se necessário
+    },
+    onError: () => {
+      toast.error("Erro ao salvar os serviços.");
+    },
+  });
 
-    // Aplica máscara (99) 99999-9999 ou (99) 9999-9999
-    if (numeros.length > 11) numeros = numeros.slice(0, 11);
+  function handleSalvarServicos() {
+    const servicosValidos = servicos
+      .filter((s) => s.nome.trim() && s.preco.trim())
+      .map((s) => ({
+        nome: s.nome.trim(),
+        preco: s.preco.trim(),
+      }));
 
-    if (numeros.length <= 10) {
-      // Formato (99) 9999-9999
-      numeros = numeros.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, "($1) $2-$3");
+    if (configs?.id) {
+      salvarServicosMutation.mutate({
+        id: configs.id,
+        servicos: servicosValidos,
+      });
     } else {
-      // Formato (99) 99999-9999
-      numeros = numeros.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, "($1) $2-$3");
+      toast.error("Configuração não carregada.");
     }
-
-    // Remove traço final se não tiver 4 números no final
-    numeros = numeros.replace(/-$/, "");
-
-    return numeros;
-  }
-
-  // Manipulador para telefone com máscara
-  function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const valor = e.target.value;
-    const valorMascarado = mascararTelefone(valor);
-    setTelefone(valorMascarado);
   }
 
   function handleSalvar() {
-    // Envia todas as configs como array de objetos chave/valor
-    const dados = [
-      { chave: "nome", valor: nome },
-      { chave: "telefone", valor: telefone },
-      { chave: "endereco", valor: endereco },
-      { chave: "dias", valor: dias },
-      { chave: "horaInicio", valor: horaInicio },
-      { chave: "horaFim", valor: horaFim },
-      { chave: "instanceId", valor: instanceId },
-      { chave: "token", valor: token },
-      { chave: "whatsappAtivo", valor: whatsappAtivo ? "true" : "false" },
-      { chave: "modoTreinoAtivo", valor: modoTreinoAtivo ? "true" : "false" },
-      { chave: "contextoIA", valor: contextoIA },
-      { chave: "dadosIA", valor: dadosIA },
-    ];
+    const servicosValidos = servicos
+      .filter((s) => s.nome.trim() && s.preco.trim())
+      .map((s) => ({
+        nome: s.nome.trim(),
+        preco: s.preco.trim(),
+      }));
 
-    salvarConfigs.mutate(dados);
+    const payload = {
+      nome,
+      telefone,
+      endereco,
+      dias,
+      horaInicio,
+      horaFim,
+      instanceId,
+      token,
+      whatsappAtivo,
+      modoTreinoAtivo,
+      contextoIA,
+      dadosIA,
+      servicos: servicosValidos,
+    };
+
+    if (configs?.id) {
+      mutation.mutate({ ...payload, id: configs.id });
+    } else {
+      toast.error("Configuração inicial não carregada.");
+    }
   }
 
-  if (isLoading) return <p>Carregando configurações...</p>;
-  if (error) return <p>Erro ao carregar configurações: {error.message}</p>;
+  function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const valor = e.target.value;
+    setTelefone(mascararTelefone(valor));
+  }
+
+  function adicionarServico() {
+    setServicos([...servicos, { nome: "", preco: "" }]);
+  }
+
+  function removerServico(index: number) {
+    setServicos(servicos.filter((_, i) => i !== index));
+  }
+
+  function atualizarServico(
+    index: number,
+    campo: "nome" | "preco",
+    valor: string,
+  ) {
+    const novosServicos = [...servicos];
+    novosServicos[index][campo] = valor;
+    setServicos(novosServicos);
+  }
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+        <div className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 shadow-lg">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+          <span>Carregando configurações...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+
+      {/* Botão fixo no topo para salvar */}
+      <div className="fixed right-4 z-50">
+        <Button
+          className="cursor-pointer border"
+          onClick={handleSalvar}
+          disabled={mutation.isPending}
+        >
+          {mutation.isPending ? "Salvando..." : "Salvar Alterações"}
+        </Button>
+      </div>
 
       <div className="flex flex-col gap-4 md:flex-row">
         <Card className="flex-1">
@@ -159,7 +266,7 @@ export default function ConfiguracoesPage() {
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="nome">Nome da Barbearia</Label>
+              <Label htmlFor="nome">Nome da Empresa</Label>
               <Input
                 id="nome"
                 placeholder="Ex: Barbearia do João"
@@ -174,7 +281,7 @@ export default function ConfiguracoesPage() {
                 id="telefone"
                 placeholder="(11) 91234-5678"
                 value={telefone}
-                onChange={handleTelefoneChange} // <--- usa a função com máscara
+                onChange={handleTelefoneChange}
               />
             </div>
 
@@ -212,25 +319,24 @@ export default function ConfiguracoesPage() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="inicio">Início</Label>
-                <Input
-                  id="inicio"
-                  type="time"
-                  value={horaInicio}
-                  onChange={(e) => setHoraInicio(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="fim">Fim</Label>
-                <Input
-                  id="fim"
-                  type="time"
-                  value={horaFim}
-                  onChange={(e) => setHoraFim(e.target.value)}
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="horaInicio">Horário Início</Label>
+              <Input
+                type="time"
+                id="horaInicio"
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="horaFim">Horário Fim</Label>
+              <Input
+                type="time"
+                id="horaFim"
+                value={horaFim}
+                onChange={(e) => setHoraFim(e.target.value)}
+              />
             </div>
           </CardContent>
         </Card>
@@ -238,26 +344,79 @@ export default function ConfiguracoesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Integração Z-API</CardTitle>
+          <CardTitle>Serviços</CardTitle>
           <CardDescription>
-            Configure a integração com o WhatsApp
+            Cadastre os serviços oferecidos e seus preços
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="whatsapp">WhatsApp Ativo</Label>
+          {servicos.map((servico, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <Input
+                placeholder="Nome do serviço"
+                value={servico.nome}
+                onChange={(e) =>
+                  atualizarServico(index, "nome", e.target.value)
+                }
+              />
+              <Input
+                placeholder="Preço"
+                value={servico.preco}
+                onChange={(e) =>
+                  atualizarServico(index, "preco", e.target.value)
+                }
+                className="w-24"
+              />
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => removerServico(index)}
+              >
+                Remover
+              </Button>
+            </div>
+          ))}
+
+          <Button onClick={adicionarServico} variant="outline">
+            Adicionar Serviço
+          </Button>
+        </CardContent>
+        <Button
+          className="mb-4 ml-6 cursor-pointer border"
+          variant="secondary"
+          onClick={handleSalvarServicos}
+          disabled={salvarServicosMutation.isPending}
+        >
+          {salvarServicosMutation.isPending
+            ? "Salvando Serviços..."
+            : "Salvar Serviços"}
+        </Button>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Configurações do WhatsApp (Z-API)</CardTitle>
+          <CardDescription>
+            Ative e configure sua integração com WhatsApp
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="flex items-center space-x-2">
             <Switch
-              id="whatsapp"
               checked={whatsappAtivo}
               onCheckedChange={setWhatsappAtivo}
+              id="whatsappAtivo"
             />
+            <Label htmlFor="whatsappAtivo" className="cursor-pointer">
+              WhatsApp Ativo
+            </Label>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="instance">Instance ID</Label>
+            <Label htmlFor="instanceId">Instance ID</Label>
             <Input
-              id="instance"
-              placeholder="ex: abcd1234"
+              id="instanceId"
+              placeholder="ID da instância do Z-API"
               value={instanceId}
               onChange={(e) => setInstanceId(e.target.value)}
             />
@@ -267,7 +426,7 @@ export default function ConfiguracoesPage() {
             <Label htmlFor="token">Token</Label>
             <Input
               id="token"
-              placeholder="ex: zapi-xyz987"
+              placeholder="Token do Z-API"
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
@@ -275,77 +434,47 @@ export default function ConfiguracoesPage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button
-          onClick={handleSalvar}
-          className="mt-4"
-          disabled={salvarConfigs.isLoading}
-        >
-          {salvarConfigs.isLoading ? "Salvando..." : "Salvar configurações"}
-        </Button>
-      </div>
-
       <Card>
         <CardHeader>
-          <CardTitle>Modo Treino da IA</CardTitle>
+          <CardTitle>Modo Treino IA</CardTitle>
           <CardDescription>
-            Permite treinar a IA com contexto e dados personalizados
+            Ative o modo treino para melhorar respostas e defina o contexto e
+            dados da IA
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="modo-treino">Ativar Modo Treino</Label>
+          <div className="flex items-center space-x-2">
             <Switch
-              id="modo-treino"
               checked={modoTreinoAtivo}
               onCheckedChange={setModoTreinoAtivo}
-              className={`relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer rounded-full border-2 border-transparent bg-gray-300 transition-colors duration-200 ease-in-out data-[state=checked]:bg-green-500`}
-            >
-              <span
-                className={`${
-                  modoTreinoAtivo ? "translate-x-5" : "translate-x-0"
-                } pointer-events-none inline-block h-[20px] w-[20px] transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </Switch>
+              id="modoTreinoAtivo"
+            />
+            <Label htmlFor="modoTreinoAtivo" className="cursor-pointer">
+              Modo Treino Ativo
+            </Label>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="contexto">Contexto</Label>
+            <Label htmlFor="contextoIA">Contexto da IA</Label>
             <Textarea
-              id="contexto"
-              placeholder="Descreva o contexto que a IA deve aprender..."
+              id="contextoIA"
+              placeholder="Descreva o papel da IA..."
               value={contextoIA}
               onChange={(e) => setContextoIA(e.target.value)}
-              disabled={!modoTreinoAtivo}
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="dados-novos">Novos dados (opcional)</Label>
+            <Label htmlFor="dadosIA">Dados de Apoio para a IA</Label>
             <Textarea
-              id="dados-novos"
-              placeholder="Dados adicionais que a IA pode usar..."
+              id="dadosIA"
+              placeholder="Ex: Lista de serviços, regras da barbearia, informações úteis..."
               value={dadosIA}
               onChange={(e) => setDadosIA(e.target.value)}
-              disabled={!modoTreinoAtivo}
             />
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={modalAberto} onOpenChange={setModalAberto}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Configurações salvas</DialogTitle>
-            <DialogDescription>
-              As configurações foram registradas com sucesso.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setModalAberto(false)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

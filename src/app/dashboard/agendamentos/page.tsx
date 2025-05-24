@@ -53,6 +53,32 @@ export default function AgendamentosPage() {
       },
     );
 
+  const { data: servicosDisponiveis, isLoading: isLoadingServicos } =
+    trpc.configuracao.getServicos.useQuery();
+
+  const atualizarStatus = trpc.agendamento.atualizarStatus.useMutation({
+    onSuccess: () => {
+      refetchAgendamentos(); // Atualiza a lista
+    },
+  });
+
+  const { data: agendamentos, refetch: refetchAgendamentos } =
+    trpc.agendamento.getByData.useQuery({
+      date: selectedDate.toISOString(),
+    });
+
+  const createMutation = trpc.agendamento.create.useMutation({
+    onSuccess: () => {
+      refetchAgendamentos();
+      setOpen(false);
+      setHorario("14:00");
+      setServico("Corte de cabelo");
+      setClienteId(null);
+      setClienteNomeSelecionado("");
+      setClienteQuery("");
+    },
+  });
+
   // Função debounce (usando useEffect simples)
   useEffect(() => {
     if (clienteQuery.length <= 1) return;
@@ -86,23 +112,6 @@ export default function AgendamentosPage() {
       setClienteNomeSelecionado("");
     }
   }, [clientesEncontrados, clienteId]);
-
-  const { data: agendamentos, refetch: refetchAgendamentos } =
-    trpc.agendamento.getByData.useQuery({
-      date: selectedDate.toISOString(),
-    });
-
-  const createMutation = trpc.agendamento.create.useMutation({
-    onSuccess: () => {
-      refetchAgendamentos();
-      setOpen(false);
-      setHorario("14:00");
-      setServico("Corte de cabelo");
-      setClienteId(null);
-      setClienteNomeSelecionado("");
-      setClienteQuery("");
-    },
-  });
 
   const handleNovoAgendamento = () => {
     if (createMutation.isLoading) return;
@@ -156,7 +165,10 @@ export default function AgendamentosPage() {
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="flex items-center">
+                <Button
+                  variant="outline"
+                  className="flex cursor-pointer items-center"
+                >
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Novo
                 </Button>
@@ -275,13 +287,25 @@ export default function AgendamentosPage() {
                   {/* Serviço */}
                   <div>
                     <label className="text-sm font-medium">Serviço</label>
-                    <input
-                      type="text"
-                      value={servico}
-                      onChange={(e) => setServico(e.target.value)}
-                      placeholder="Ex: Corte de cabelo"
-                      className="mt-1 w-full rounded-md border px-3 py-2"
-                    />
+
+                    {isLoadingServicos ? (
+                      <p>Carregando serviços...</p>
+                    ) : (
+                      <select
+                        value={servico}
+                        onChange={(e) => setServico(e.target.value)}
+                        className="mt-1 w-full rounded-md border px-3 py-2"
+                      >
+                        <option value="" disabled>
+                          Selecione um serviço
+                        </option>
+                        {servicosDisponiveis?.map((s) => (
+                          <option key={s.nome} value={s.nome}>
+                            {s.nome} - R$ {s.preco}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
 
                   {/* Botões */}
@@ -313,20 +337,54 @@ export default function AgendamentosPage() {
             {agendamentos?.map((agendamento) => (
               <div
                 key={agendamento.id}
-                className="flex items-center justify-between rounded border p-2"
+                className="flex flex-col gap-2 rounded border p-2"
               >
-                <div>
-                  <p className="font-medium">
-                    {agendamento.cliente?.nome ?? "Cliente desconhecido"}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
-                    {agendamento.servico}
-                  </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {agendamento.cliente?.nome ?? "Cliente desconhecido"}
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
+                      {agendamento.servico}
+                    </p>
+                  </div>
+                  <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                    {agendamento.status}
+                  </span>
                 </div>
-                <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
-                  {agendamento.status}
-                </span>
+
+                {/* Ações: Confirmar ou Cancelar */}
+                {agendamento.status === "agendado" && (
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      className="cursor-pointer"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        atualizarStatus.mutate({
+                          id: agendamento.id,
+                          status: "concluido",
+                        })
+                      }
+                    >
+                      Confirmar
+                    </Button>
+                    <Button
+                      className="cursor-pointer"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() =>
+                        atualizarStatus.mutate({
+                          id: agendamento.id,
+                          status: "cancelado",
+                        })
+                      }
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
               </div>
             ))}
           </CardContent>
