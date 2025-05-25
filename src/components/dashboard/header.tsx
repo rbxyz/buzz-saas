@@ -26,13 +26,13 @@ export function DashboardHeader() {
         <Menu className="h-6 w-6" />
       </Button>
 
-      <div className="text-lg font-semibold">Dashboard</div>
+      <div className="text-lg font-semibold"></div>
 
       <div className="flex items-center gap-2">
         {/* Toggle Theme */}
         <Button
           variant="ghost"
-          className="p-2"
+          className="cursor-pointer p-2"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           {theme === "dark" ? (

@@ -21,36 +21,54 @@ export const clienteRouter = createTRPCRouter({
     .input(
       z.object({
         nome: z.string().min(1),
-        dataNascimento: z.string().refine(
-          (val) => !isNaN(Date.parse(val)),
-          { message: "Data inválida" }
-        ),
-        email: z.string().email().optional().default(""),
-        telefone: z.string().max(20),
+        dataNascimento: z
+          .string()
+          .refine(
+            (val) => val === "" || !isNaN(Date.parse(val)),
+            { message: "Data inválida" }
+          )
+          .optional()
+          .default(""),
+        email: z
+          .string()
+          .email()
+          .or(z.literal("")) // aceita string vazia
+          .optional()
+          .default(""),
+        telefone: z.string().max(20).optional().default(""),
         comprasRecentes: z.any().optional(),
       })
     )
     .mutation(({ input }) =>
       db.insert(clientes).values({
         nome: input.nome,
-        dataNascimento: input.dataNascimento,
-        email: input.email ?? "",
-        telefone: input.telefone,
+        dataNascimento: input.dataNascimento === "" ? null : input.dataNascimento,
+        email: input.email === "" ? null : input.email,
+        telefone: input.telefone === "" ? "" : input.telefone,
         comprasRecentes: input.comprasRecentes ?? null,
       })
-    ),
+    ),  
 
   editar: publicProcedure
     .input(
       z.object({
         id: z.string().uuid(),
         nome: z.string().min(1),
-        dataNascimento: z.string().refine(
-          (val) => !isNaN(Date.parse(val)),
-          { message: "Data inválida" }
-        ),
-        email: z.string().email().optional().default(""),
-        telefone: z.string().max(20),
+        dataNascimento: z
+          .string()
+          .refine(
+            (val) => val === "" || !isNaN(Date.parse(val)),
+            { message: "Data inválida" }
+          )
+          .optional()
+          .default(""),
+        email: z
+          .string()
+          .email()
+          .or(z.literal(""))
+          .optional()
+          .default(""),
+        telefone: z.string().max(20).optional().default(""),
         comprasRecentes: z.any().optional(),
       })
     )
@@ -59,9 +77,9 @@ export const clienteRouter = createTRPCRouter({
         .update(clientes)
         .set({
           nome: input.nome,
-          dataNascimento: input.dataNascimento,
-          email: input.email ?? "",
-          telefone: input.telefone,
+          dataNascimento: input.dataNascimento === "" ? null : input.dataNascimento,
+          email: input.email === "" ? null : input.email,
+          telefone: input.telefone === "" ? "" : input.telefone,
           comprasRecentes: input.comprasRecentes ?? null,
           updatedAt: new Date(),
         })
@@ -74,4 +92,4 @@ export const clienteRouter = createTRPCRouter({
       await db.delete(clientes).where(eq(clientes.id, input.id));
       return { success: true };
     }),
-});
+}); // <-- aqui estava faltando

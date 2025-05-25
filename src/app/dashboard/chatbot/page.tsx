@@ -23,6 +23,7 @@ export default function ChatbotPage() {
     { remetente: "bot", texto: "Temos vagas das 10h às 12h e das 14h às 18h." },
   ]);
   const [novaMensagem, setNovaMensagem] = useState("");
+  const [isLoading, setIsLoading] = useState(false); // estado de loading
 
   function enviarMensagem() {
     if (!novaMensagem.trim()) return;
@@ -42,8 +43,28 @@ export default function ChatbotPage() {
     }, 1000);
   }
 
+  if (isLoading) {
+    return (
+      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
+          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
+          <span className="text-foreground text-sm font-medium">
+            Carregando agente inteligente...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
+      style={{
+        backgroundColor: "hsl(var(--background))",
+        color: "hsl(var(--foreground))",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
       <h1 className="text-3xl font-bold tracking-tight">Chatbot WhatsApp</h1>
 
       <Card>
@@ -55,7 +76,7 @@ export default function ChatbotPage() {
         </CardHeader>
 
         <CardContent>
-          <div className="flex h-[500px] flex-col overflow-hidden rounded-md border">
+          <div className="border-border bg-card text-card-foreground flex h-[500px] flex-col overflow-hidden rounded-md border">
             {/* Mensagens */}
             <div className="bg-muted flex-1 space-y-2 overflow-y-auto p-4">
               {mensagens.map((mensagem, index) => (
@@ -63,8 +84,8 @@ export default function ChatbotPage() {
                   key={index}
                   className={`max-w-[75%] rounded-lg px-4 py-2 text-sm whitespace-pre-line ${
                     mensagem.remetente === "bot"
-                      ? "self-start bg-white text-black"
-                      : "self-end bg-green-500 text-white"
+                      ? "bg-secondary text-secondary-foreground self-start"
+                      : "bg-primary text-primary-foreground self-end"
                   }`}
                 >
                   {mensagem.texto}
@@ -78,7 +99,7 @@ export default function ChatbotPage() {
                 e.preventDefault();
                 enviarMensagem();
               }}
-              className="flex gap-2 border-t p-4"
+              className="border-border bg-background flex gap-2 border-t p-4"
             >
               <Input
                 placeholder="Digite uma mensagem..."

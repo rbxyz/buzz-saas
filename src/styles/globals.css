@@ -10,110 +10,112 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-
-    --primary: 220 70% 50%;
+    --primary: 274 100% 34%;
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --accent: 270 100% 20%;
+    --accent-foreground: 0 0% 98%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 13%; /* preto suave */
 
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 274 100% 34%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 270 100% 20%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 270 100% 92%;
+    --sidebar-ring: 274 100% 34%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
+    --card-background: 0 0% 20%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
 
-    --radius: 0.5rem;
-
-    /* Sidebar específico */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 240 10% 3.9%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 240 5.9% 90%;
-    --sidebar-ring: 220 70% 50%;
-
-    --rdp-accent-color: hsl(var(--primary));
-    --rdp-background-color: hsl(var(--background));
-    --rdp-color: hsl(var(--foreground));
-  
   }
 
   .dark {
-    --background: 240 10% 3.9%;
+    --background: 0 0% 13%;
     --foreground: 0 0% 98%;
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 220 70% 50%;
+    --primary: 274 100% 34%;
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-
-    --accent: 240 3.7% 15.9%;
+    --accent: 270 100% 20%;
     --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
-
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-
-    /* Sidebar específico */
-    --sidebar-background: 240 10% 3.9%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 13%;
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 0 0% 98%;
-    --sidebar-primary-foreground: 240 10% 3.9%;
-    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-primary: 274 100% 34%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 270 100% 20%;
     --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 220 70% 50%;
+    --sidebar-border: 270 100% 30%;
+    --sidebar-ring: 274 100% 34%;
 
-    --rdp-background-color: hsl(var(--background));
-    --rdp-color: hsl(var(--foreground));
-    --rdp-accent-color: hsl(var(--primary));
-  
+    --card-background: 0 0% 75%;
+
   }
+}
+
+@layer components {
+  .bg-primary {
+    background-color: hsl(var(--primary));
+  }
+  .bg-primary-foreground {
+    background-color: hsl(var(--primary-foreground));
+  }
+  .text-primary-foreground {
+    color: hsl(var(--primary-foreground));
+  }
+  .text-accent {
+    color: hsl(var(--accent));
+  }
+  .bg-accent {
+    background-color: hsl(var(--accent));
+  }
+  .text-accent-foreground {
+    color: hsl(var(--accent-foreground));
+  }
+  .bg-muted {
+    background-color: hsl(var(--sidebar-border));
+  }
+  .text-muted {
+    color: hsl(var(--sidebar-foreground));
+  }
+  .ring-ring {
+    --tw-ring-color: hsl(var(--sidebar-ring));
+  }
+  .border-sidebar-border {
+    border-color: hsl(var(--sidebar-border));
+  }
+  
+  .text-sidebar-foreground {
+    color: hsl(var(--sidebar-foreground));
+  }
+  
+  .hover\:bg-sidebar-border:hover {
+    background-color: hsl(var(--sidebar-border));
+  }
+  
+  .hover\:text-accent-foreground:hover {
+    color: hsl(var(--accent-foreground));
+  }
+  
 }
 
 @layer base {
-  * {
-  }
   body {
+    font-family: var(--font-sans);
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
+
 /* Animações */
 @keyframes fadeIn {
   from {

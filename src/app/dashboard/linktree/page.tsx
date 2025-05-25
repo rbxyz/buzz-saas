@@ -33,6 +33,15 @@ import { toast } from "sonner";
 import { Menu, MenuItem, MenuButton } from "@szhsin/react-menu";
 import "@szhsin/react-menu/dist/index.css"; // estilos básicos para o menu
 
+interface LinkItem {
+  id: string;
+  titulo: string;
+  url: string;
+  descricao?: string;
+  tipo: "cliente" | "parceria";
+  imagem?: string | null;
+}
+
 export default function LinktreePage() {
   const utils = trpc.useUtils();
   const { data: links = [], isLoading } = trpc.linktree.listar.useQuery();
@@ -128,7 +137,7 @@ export default function LinktreePage() {
     }
   }
 
-  function abrirEditar(link: any) {
+  function abrirEditar(link: LinkItem) {
     setEditandoId(link.id);
     setTitulo(link.titulo);
     setUrl(link.url);
@@ -146,15 +155,35 @@ export default function LinktreePage() {
   const clientes = links.filter((link) => link.tipo === "cliente");
   const parcerias = links.filter((link) => link.tipo === "parceria");
 
+  if (isLoading) {
+    return (
+      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
+          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
+          <span className="text-foreground text-sm font-medium">
+            Carregando clientes e parceiros...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
+      style={{
+        backgroundColor: "hsl(var(--background))",
+        color: "hsl(var(--foreground))",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
       <h1 className="text-3xl font-bold tracking-tight">Linktree Manager</h1>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Gerenciar Links</CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[hsl(var(--foreground)/0.7)]">
               Adicione seus clientes e parceiros que aparecerão na sua página
               pública.
             </CardDescription>
@@ -168,7 +197,12 @@ export default function LinktreePage() {
             }}
           >
             <DialogTrigger asChild>
-              <Button variant="outline">Adicionar</Button>
+              <Button
+                variant="outline"
+                className="border-sidebar-border text-sidebar-foreground hover:bg-sidebar-border hover:text-accent-foreground flex cursor-pointer items-center border transition-colors"
+              >
+                Adicionar
+              </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -223,7 +257,7 @@ export default function LinktreePage() {
                         type="button"
                         onClick={() => setImagem(null)}
                         aria-label="Remover imagem"
-                        className="absolute top-0 right-0 rounded bg-red-600 px-1.5 py-0.5 text-white hover:bg-red-700"
+                        className="absolute top-0 right-0 rounded bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[hsl(var(--destructive-foreground))] hover:bg-[hsl(var(--destructive)/0.9)]"
                         style={{ transform: "translate(50%, -50%)" }}
                       >
                         ×
@@ -240,7 +274,13 @@ export default function LinktreePage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
+                      <SelectValue>
+                        {tipo
+                          ? tipo === "cliente"
+                            ? "Cliente"
+                            : "Parceria"
+                          : "Selecione o tipo"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cliente">Cliente</SelectItem>
@@ -270,18 +310,22 @@ export default function LinktreePage() {
             ["Parcerias", parcerias],
           ].map(([tituloSecao, lista]) => (
             <div key={tituloSecao as string}>
-              <h2 className="mb-2 text-lg font-semibold">{tituloSecao}</h2>
+              <h2 className="mb-2 text-lg font-semibold text-[hsl(var(--foreground))]">
+                {tituloSecao}
+              </h2>
               {isLoading ? (
-                <p className="text-muted-foreground text-sm">Carregando...</p>
+                <p className="text-sm text-[hsl(var(--foreground)/0.6)]">
+                  Carregando...
+                </p>
               ) : lista.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   Nenhum {tituloSecao.toLowerCase()} adicionado.
                 </p>
               ) : (
-                lista.map((link: any) => (
+                lista.map((link: LinkItem) => (
                   <Card
                     key={link.id}
-                    className="group hover:bg-muted relative flex flex-row items-center gap-4 border p-4"
+                    className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
                   >
                     {link.imagem && (
                       <img
@@ -293,7 +337,7 @@ export default function LinktreePage() {
                     <div className="flex flex-grow flex-col">
                       <p className="font-semibold">{link.titulo}</p>
                       {link.descricao && (
-                        <p className="text-muted-foreground line-clamp-2 text-sm">
+                        <p className="text-muted-foreground overflow-hidden text-sm text-ellipsis whitespace-nowrap">
                           {link.descricao}
                         </p>
                       )}

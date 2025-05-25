@@ -61,7 +61,13 @@ export function DashboardSidebar() {
       </Button>
 
       {/* Sidebar desktop */}
-      <Sidebar className="bg-background hidden w-64 flex-col md:flex">
+      <Sidebar
+        style={{
+          backgroundColor: "hsl(var(--sidebar-background))",
+          color: "hsl(var(--sidebar-foreground))",
+        }}
+        className="hidden w-64 flex-col md:flex"
+      >
         <SidebarHeader className="flex items-center gap-3 px-4 py-3">
           <Image
             src="/logo.svg"
@@ -108,7 +114,13 @@ export function DashboardSidebar() {
 
       {/* Sidebar mobile */}
       {isOpen && (
-        <aside className="bg-background fixed inset-0 z-40 flex w-64 flex-col shadow-md md:hidden">
+        <aside
+          style={{
+            backgroundColor: "hsl(var(--sidebar-background))",
+            color: "hsl(var(--sidebar-foreground))",
+          }}
+          className="fixed inset-0 z-40 flex w-64 flex-col shadow-md md:hidden"
+        >
           <SidebarHeader className="flex items-center justify-between gap-3 border-b px-4 py-3">
             <div className="flex items-center gap-3">
               <Image

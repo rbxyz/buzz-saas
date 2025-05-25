@@ -8,6 +8,20 @@
       "when": 1748104213063,
       "tag": "0000_milky_ser_duncan",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1748192769113,
+      "tag": "0001_friendly_forge",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748198942751,
+      "tag": "0002_early_gamora",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -10,6 +11,7 @@ import {
   customType,
   numeric,
   boolean,
+  PgArray,
 } from "drizzle-orm/pg-core";
 
 // 🔧 Tipo personalizado para campos binários (ex: imagens)
@@ -24,6 +26,17 @@ export const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"]);
 
 // 💰 Enum para tipos de valor (usado futuramente em serviços com valor fixo)
 export const valorTipoEnum = pgEnum("valor_tipo_enum", ["padrao", "premium", "personalizado"]);
+
+// Enum para dias da semana (domingo a sábado)
+export const diasSemanaEnum = pgEnum("dias_semana", [
+  "segunda",
+  "terca",
+  "quarta",
+  "quinta",
+  "sexta",
+  "sabado",
+  "domingo",
+]);
 
 // 🧩 Tabela de Clientes
 export const clientes = pgTable("clientes", {
@@ -46,7 +59,7 @@ export const agendamentos = pgTable("agendamentos", {
   status: text("status", {
     enum: ["agendado", "cancelado", "concluido"],
   }).notNull(),
-  valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }),
+  valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }).$type<number>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -57,9 +70,17 @@ export const configuracoes = pgTable("configuracoes", {
   nome: text("nome").notNull().default(""),
   telefone: text("telefone").notNull().default(""),
   endereco: text("endereco").notNull().default(""),
-  dias: text("dias").notNull().default(""),
+  dias: diasSemanaEnum("dias")
+    .array()
+    .notNull()
+    .default(
+      sql`ARRAY['segunda','terca','quarta','quinta','sexta']::dias_semana[]`
+    ),
   horaInicio: text("hora_inicio").notNull().default("09:00"),
   horaFim: text("hora_fim").notNull().default("18:00"),
+  horariosPersonalizados: json("horarios_personalizados")
+  .notNull()
+  .default(sql`'[]'::jsonb`),
   instanceId: text("instance_id").notNull().default(""),
   token: text("token").notNull().default(""),
   whatsappAtivo: boolean("whatsapp_ativo").notNull().default(false),

@@ -22,8 +22,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="bg-background text-foreground min-h-screen antialiased">
+    <html lang="pt-br" suppressHydrationWarning className={`${geist.variable}`}>
+      <body className="bg-background text-foreground min-h-screen font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Toaster richColors />
           <TRPCReactProvider>{children}</TRPCReactProvider>

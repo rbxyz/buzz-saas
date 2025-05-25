@@ -13,6 +13,10 @@ export function DashboardStats() {
   const [mensagensWhatsApp, setMensagensWhatsApp] = useState(0);
   const [faturamentoEstimado, setFaturamentoEstimado] = useState(0);
 
+  const [variacaoAgendamentos, setVariacaoAgendamentos] = useState(0);
+  const [variacaoNovosClientes, setVariacaoNovosClientes] = useState(0);
+  const [variacaoFaturamento, setVariacaoFaturamento] = useState(0);
+
   // Atualizar estados locais quando os dados do backend chegarem
   useEffect(() => {
     if (!data) return;
@@ -21,6 +25,10 @@ export function DashboardStats() {
     setNovosClientes(data.novosClientes ?? 0);
     setMensagensWhatsApp(data.mensagensWhatsApp ?? 0);
     setFaturamentoEstimado(data.faturamentoEstimado ?? 0);
+
+    setVariacaoAgendamentos(data.variacaoAgendamentos ?? 0);
+    setVariacaoNovosClientes(data.variacaoNovosClientes ?? 0);
+    setVariacaoFaturamento(data.variacaoFaturamento ?? 0);
   }, [data]);
 
   if (isLoading) return <div>Carregando estatísticas...</div>;
@@ -38,7 +46,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">{agendamentosHoje}</div>
           <p className="text-muted-foreground text-xs">
-            +2.1% em relação a ontem
+            {variacaoAgendamentos >= 0 ? "+" : ""}
+            {variacaoAgendamentos.toFixed(1)}% em relação a ontem
           </p>
         </CardContent>
       </Card>
@@ -51,7 +60,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">+{novosClientes}</div>
           <p className="text-muted-foreground text-xs">
-            +10.1% em relação à semana passada
+            {variacaoNovosClientes >= 0 ? "+" : ""}
+            {variacaoNovosClientes.toFixed(1)}% em relação à semana passada
           </p>
         </CardContent>
       </Card>
@@ -66,7 +76,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">{mensagensWhatsApp}</div>
           <p className="text-muted-foreground text-xs">
-            +12% em relação a ontem
+            {variacaoFaturamento >= 0 ? "+" : ""}
+            {variacaoFaturamento.toFixed(1)}% em relação à semana passada
           </p>
         </CardContent>
       </Card>

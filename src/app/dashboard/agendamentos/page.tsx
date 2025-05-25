@@ -31,6 +31,7 @@ export default function AgendamentosPage() {
   const [open, setOpen] = useState(false);
   const [horario, setHorario] = useState<string>("14:00");
   const [servico, setServico] = useState<string>("Corte de cabelo");
+  const [isLoading, setIsLoading] = useState(false); // estado de loading
 
   const { data: cortesDoMes, isLoading: isLoadingCortesDoMes } =
     trpc.agendamento.getCortesDoMes.useQuery({
@@ -129,24 +130,44 @@ export default function AgendamentosPage() {
     });
   };
 
+  if (isLoading) {
+    return (
+      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
+          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
+          <span className="text-foreground text-sm font-medium">
+            Carregando agendamentos...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
+      style={{
+        backgroundColor: "hsl(var(--background))",
+        color: "hsl(var(--foreground))",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
       <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
         {/* Calendário */}
-        <Card>
+        <Card className="w-full max-w-full">
           <CardHeader>
             <CardTitle>Calendário de Agendamentos</CardTitle>
             <CardDescription>Gerencie os agendamentos por dia</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative flex w-full flex-col overflow-visible">
             <DayPicker
               mode="single"
               selected={selectedDate}
               onSelect={(date) => date && setSelectedDate(date)}
               locale={ptBR}
-              className="rounded-md border"
+              className="border-border bg-card text-card-foreground block w-full max-w-full rounded-md border"
             />
           </CardContent>
         </Card>
@@ -167,7 +188,7 @@ export default function AgendamentosPage() {
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="flex cursor-pointer items-center"
+                  className="border-sidebar-border text-sidebar-foreground hover:bg-sidebar-border hover:text-accent-foreground flex cursor-pointer items-center border transition-colors"
                 >
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Novo
@@ -195,7 +216,7 @@ export default function AgendamentosPage() {
                         setClienteNomeSelecionado("");
                       }}
                       placeholder="Nome do cliente"
-                      className="mt-1 w-full rounded-md border px-3 py-2"
+                      className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
                       autoComplete="off"
                       readOnly={!!clienteId}
                     />
@@ -210,7 +231,7 @@ export default function AgendamentosPage() {
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length > 0 && (
-                        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow backdrop-blur-sm">
+                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-sm">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
@@ -231,7 +252,7 @@ export default function AgendamentosPage() {
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length > 0 && (
-                        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow backdrop-blur-sm">
+                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-sm">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
@@ -251,7 +272,7 @@ export default function AgendamentosPage() {
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length === 0 && (
-                        <div className="mt-2 flex flex-col items-center gap-2 rounded border border-red-500 bg-red-50 p-3 text-red-700">
+                        <div className="border-destructive bg-destructive/10 text-destructive mt-2 flex flex-col items-center gap-2 rounded border p-3">
                           <p>Cliente não adicionado.</p>
                           <Button
                             variant="outline"
@@ -280,7 +301,7 @@ export default function AgendamentosPage() {
                       type="time"
                       value={horario}
                       onChange={(e) => setHorario(e.target.value)}
-                      className="mt-1 w-full rounded-md border px-3 py-2"
+                      className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
                     />
                   </div>
 
@@ -294,7 +315,7 @@ export default function AgendamentosPage() {
                       <select
                         value={servico}
                         onChange={(e) => setServico(e.target.value)}
-                        className="mt-1 w-full rounded-md border px-3 py-2"
+                        className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
                       >
                         <option value="" disabled>
                           Selecione um serviço
@@ -337,7 +358,7 @@ export default function AgendamentosPage() {
             {agendamentos?.map((agendamento) => (
               <div
                 key={agendamento.id}
-                className="flex flex-col gap-2 rounded border p-2"
+                className="border-border bg-card text-card-foreground flex flex-col gap-2 rounded border p-2"
               >
                 <div className="flex items-center justify-between">
                   <div>
