@@ -26,6 +26,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
+// Configurações de cache otimizadas
+const CACHE_CONFIG = {
+  agendamentos: { staleTime: 30 * 1000, cacheTime: 5 * 60 * 1000 },
+  clientes: { staleTime: 2 * 60 * 1000, cacheTime: 10 * 60 * 1000 },
+  servicos: { staleTime: 10 * 60 * 1000, cacheTime: 30 * 60 * 1000 },
+};
+
 export default function AgendamentosPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [open, setOpen] = useState(false);
@@ -33,11 +40,15 @@ export default function AgendamentosPage() {
   const [servico, setServico] = useState<string>("Corte de cabelo");
   const [isLoading, setIsLoading] = useState(false); // estado de loading
 
+  // Substitua as queries existentes por estas versões otimizadas:
   const { data: cortesDoMes, isLoading: isLoadingCortesDoMes } =
-    trpc.agendamento.getCortesDoMes.useQuery({
-      month: selectedDate.getMonth() + 1,
-      year: selectedDate.getFullYear(),
-    });
+    trpc.agendamento.getCortesDoMes.useQuery(
+      {
+        month: selectedDate.getMonth() + 1,
+        year: selectedDate.getFullYear(),
+      },
+      CACHE_CONFIG.agendamentos,
+    );
 
   const [clienteQuery, setClienteQuery] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(null);
@@ -49,13 +60,13 @@ export default function AgendamentosPage() {
       { query: clienteQuery },
       {
         enabled: clienteQuery.length > 1,
-        // Opcional: manter os dados anteriores enquanto carrega
         keepPreviousData: true,
+        ...CACHE_CONFIG.clientes,
       },
     );
 
   const { data: servicosDisponiveis, isLoading: isLoadingServicos } =
-    trpc.configuracao.getServicos.useQuery();
+    trpc.configuracao.getServicos.useQuery(undefined, CACHE_CONFIG.servicos);
 
   const atualizarStatus = trpc.agendamento.atualizarStatus.useMutation({
     onSuccess: () => {
@@ -64,9 +75,10 @@ export default function AgendamentosPage() {
   });
 
   const { data: agendamentos, refetch: refetchAgendamentos } =
-    trpc.agendamento.getByData.useQuery({
-      date: selectedDate.toISOString(),
-    });
+    trpc.agendamento.getByData.useQuery(
+      { date: selectedDate.toISOString() },
+      CACHE_CONFIG.agendamentos,
+    );
 
   const createMutation = trpc.agendamento.create.useMutation({
     onSuccess: () => {
@@ -158,17 +170,67 @@ export default function AgendamentosPage() {
         {/* Calendário */}
         <Card className="w-full max-w-full">
           <CardHeader>
-            <CardTitle>Calendário de Agendamentos</CardTitle>
-            <CardDescription>Gerencie os agendamentos por dia</CardDescription>
+            <CardTitle>Agendamentos</CardTitle>
+            <CardDescription>
+              Calendário e cortes do mês selecionado
+            </CardDescription>
           </CardHeader>
-          <CardContent className="relative flex w-full flex-col overflow-visible">
-            <DayPicker
-              mode="single"
-              selected={selectedDate}
-              onSelect={(date) => date && setSelectedDate(date)}
-              locale={ptBR}
-              className="border-border bg-card text-card-foreground block w-full max-w-full rounded-md border"
-            />
+
+          <CardContent className="flex flex-col gap-6 md:flex-row">
+            {/* Lado esquerdo: Calendário */}
+            <div className="w-full md:w-1/2">
+              <h3 className="mb-2 text-lg font-semibold">Calendário</h3>
+              <DayPicker
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => date && setSelectedDate(date)}
+                locale={ptBR}
+                className="border-border bg-card w-full rounded-md border p-4 text-[16px] [&_.rdp]:p-4 [&_.rdp]:text-base [&_.rdp-caption_label]:text-xl [&_.rdp-day]:h-10 [&_.rdp-day]:w-10 [&_.rdp-day]:text-base"
+              />
+            </div>
+
+            {/* Lado direito: Cortes do mês */}
+            <div className="w-full md:w-1/2">
+              <h3 className="mb-2 text-lg font-semibold">Cortes do mês</h3>
+              <p className="text-muted-foreground mb-4 text-sm">
+                Listagem dos cortes realizados em{" "}
+                {format(selectedDate, "MMMM/yyyy", { locale: ptBR })}
+              </p>
+
+              {isLoadingCortesDoMes && (
+                <p className="text-muted-foreground text-sm">
+                  Carregando cortes...
+                </p>
+              )}
+
+              {cortesDoMes?.length === 0 && (
+                <p className="text-muted-foreground text-sm">
+                  Nenhum corte registrado neste mês.
+                </p>
+              )}
+
+              <div className="space-y-2">
+                {cortesDoMes?.map((corte) => (
+                  <div
+                    key={corte.id}
+                    className="flex items-center justify-between rounded border p-2"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {corte.cliente?.nome ?? "Cliente desconhecido"}
+                      </p>
+                      <p className="text-muted-foreground text-sm">
+                        {dayjs(corte.dataHora).format("DD/MM HH:mm")} -{" "}
+                        {corte.servico}
+                      </p>
+                    </div>
+                    <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                      {corte.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -423,48 +485,6 @@ export default function AgendamentosPage() {
                     </Button>
                   </div>
                 )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Cortes do mês</CardTitle>
-            <CardDescription>
-              Listagem dos cortes realizados em{" "}
-              {format(selectedDate, "MMMM/yyyy", { locale: ptBR })}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-2">
-            {isLoadingCortesDoMes && (
-              <p className="text-muted-foreground text-sm">
-                Carregando cortes...
-              </p>
-            )}
-            {cortesDoMes?.length === 0 && (
-              <p className="text-muted-foreground text-sm">
-                Nenhum corte registrado neste mês.
-              </p>
-            )}
-            {cortesDoMes?.map((corte) => (
-              <div
-                key={corte.id}
-                className="flex items-center justify-between rounded border p-2"
-              >
-                <div>
-                  <p className="font-medium">
-                    {corte.cliente?.nome ?? "Cliente desconhecido"}
-                  </p>
-                  <p className="text-muted-foreground text-sm">
-                    {dayjs(corte.dataHora).format("DD/MM HH:mm")} -{" "}
-                    {corte.servico}
-                  </p>
-                </div>
-                <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
-                  {corte.status}
-                </span>
               </div>
             ))}
           </CardContent>

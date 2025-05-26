@@ -27,7 +27,6 @@ function formatDate(dateInput: string | Date) {
   return date.toLocaleDateString("pt-BR") + ", " + time;
 }
 
-// Alinhar status conforme tipos que o backend usa
 function formatStatus(status: "agendado" | "cancelado" | "concluido" | string) {
   switch (status) {
     case "agendado":
@@ -39,7 +38,6 @@ function formatStatus(status: "agendado" | "cancelado" | "concluido" | string) {
     case "concluido":
       return "Concluído";
     default:
-      // Capitaliza qualquer outro texto
       return status.charAt(0).toUpperCase() + status.slice(1);
   }
 }
@@ -53,15 +51,46 @@ function getInitials(name: string) {
 }
 
 export function RecentAppointments() {
-  const { data, isLoading, error } =
-    trpc.dashboard.getUltimosAgendamentos.useQuery();
+  // Query otimizada com cache de 1 minuto
+  const { data, isLoading, error, isStale } =
+    trpc.dashboard.getUltimosAgendamentos.useQuery(undefined, {
+      staleTime: 60 * 1000, // 1 minuto
+      cacheTime: 5 * 60 * 1000, // 5 minutos
+      refetchOnWindowFocus: false,
+      refetchInterval: 2 * 60 * 1000, // Atualiza a cada 2 minutos
+    });
 
-  if (isLoading) return <div>Carregando agendamentos...</div>;
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex animate-pulse items-center">
+            <div className="bg-muted h-9 w-9 rounded-full"></div>
+            <div className="ml-4 flex-1 space-y-1">
+              <div className="bg-muted h-4 w-24 rounded"></div>
+              <div className="bg-muted h-3 w-32 rounded"></div>
+            </div>
+            <div className="text-right">
+              <div className="bg-muted mb-1 h-4 w-20 rounded"></div>
+              <div className="bg-muted h-5 w-16 rounded"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (error) return <div>Erro ao carregar agendamentos: {error.message}</div>;
   if (!data || data.length === 0) return <div>Nenhum agendamento recente.</div>;
 
   return (
-    <div className="space-y-8">
+    <div className={`space-y-8 ${isStale ? "opacity-75" : ""}`}>
+      {isStale && (
+        <div className="text-muted-foreground mb-4 text-center text-xs">
+          Atualizando dados...
+        </div>
+      )}
       {data.map((appointment) => {
         const clientName = appointment.clienteNome || "Cliente";
         const initials = getInitials(clientName);

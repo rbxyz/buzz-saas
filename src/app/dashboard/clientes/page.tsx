@@ -21,6 +21,12 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/utils/trpc";
 import dayjs from "dayjs";
 
+// Configurações de cache otimizadas
+const CACHE_CONFIG = {
+  clientes: { staleTime: 2 * 60 * 1000, cacheTime: 10 * 60 * 1000 },
+  historico: { staleTime: 5 * 60 * 1000, cacheTime: 15 * 60 * 1000 },
+};
+
 export default function ClientesPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
@@ -31,16 +37,20 @@ export default function ClientesPage() {
   const [modalConfirmarDeleteAberto, setModalConfirmarDeleteAberto] =
     useState(false);
 
+  // Substitua as queries existentes:
   const {
     data: clientes,
     isLoading,
     error,
     refetch,
-  } = trpc.cliente.listar.useQuery();
+  } = trpc.cliente.listar.useQuery(undefined, CACHE_CONFIG.clientes);
 
   const { data: clienteSelecionado } = trpc.cliente.getById.useQuery(
     clienteSelecionadoId ?? "",
-    { enabled: !!clienteSelecionadoId },
+    {
+      enabled: !!clienteSelecionadoId,
+      ...CACHE_CONFIG.clientes,
+    },
   );
 
   const criarCliente = trpc.cliente.criar.useMutation({
@@ -70,6 +80,7 @@ export default function ClientesPage() {
       { clienteId: clienteSelecionadoId ?? "" },
       {
         enabled: !!clienteSelecionadoId,
+        ...CACHE_CONFIG.historico,
       },
     );
 

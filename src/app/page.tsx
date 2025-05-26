@@ -458,7 +458,7 @@ export default function LandingPage() {
             </p>
           ) : clientes && clientes.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {clientes.slice(-5).map((cliente) => (
+              {clientes.map((cliente) => (
                 <Card
                   key={cliente.id}
                   className="group border-gray-700 bg-gray-800/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800/70"

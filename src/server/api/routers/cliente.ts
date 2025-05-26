@@ -92,4 +92,4 @@ export const clienteRouter = createTRPCRouter({
       await db.delete(clientes).where(eq(clientes.id, input.id));
       return { success: true };
     }),
-}); // <-- aqui estava faltando
+});

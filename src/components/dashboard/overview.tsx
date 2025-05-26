@@ -12,7 +12,7 @@ import {
 import { trpc } from "@/utils/trpc";
 
 type OverviewDataItem = {
-  date: string; // ex: "2025-05-10"
+  date: string;
   total: number;
 };
 
@@ -29,7 +29,7 @@ function CustomTooltip({
     return (
       <div className="bg-primary-foreground text-primary border-sidebar-border rounded border p-2 shadow-lg">
         <p className="text-sm font-semibold">{label}</p>
-        <p className="text-accent">{payload[0].value}</p>
+        <p className="text-accent">{payload[0].value} agendamentos</p>
       </div>
     );
   }
@@ -38,7 +38,14 @@ function CustomTooltip({
 }
 
 export function Overview() {
-  const { data, isLoading, error } = trpc.dashboard.getOverviewData.useQuery();
+  // Query otimizada com cache de 2 minutos
+  const { data, isLoading, error, isStale } =
+    trpc.dashboard.getOverviewData.useQuery(undefined, {
+      staleTime: 2 * 60 * 1000, // 2 minutos
+      cacheTime: 10 * 60 * 1000, // 10 minutos
+      refetchOnWindowFocus: false,
+      refetchInterval: 5 * 60 * 1000, // Atualiza a cada 5 minutos
+    });
 
   const [chartData, setChartData] = useState<{ name: string; total: number }[]>(
     [],
@@ -61,19 +68,35 @@ export function Overview() {
     setChartData(formattedData);
   }, [data]);
 
-  if (isLoading)
+  // Loading skeleton
+  if (isLoading) {
     return (
-      <div className="text-muted p-4 text-center">Carregando gráfico...</div>
+      <div className="text-muted p-4 text-center">
+        <div className="animate-pulse">
+          <div className="bg-muted mb-4 h-64 rounded"></div>
+          <div className="bg-muted mx-auto h-4 w-32 rounded"></div>
+        </div>
+      </div>
     );
-  if (error)
+  }
+
+  if (error) {
     return (
       <div className="text-destructive p-4 text-center">
         Erro ao carregar gráfico: {error.message}
       </div>
     );
+  }
 
   return (
-    <div className="bg-background text-foreground border-sidebar-border animate-fade-in rounded border p-4 shadow">
+    <div
+      className={`bg-background text-foreground border-sidebar-border animate-fade-in rounded border p-4 shadow ${isStale ? "opacity-75" : ""}`}
+    >
+      {isStale && (
+        <div className="text-muted-foreground mb-2 text-center text-xs">
+          Atualizando dados...
+        </div>
+      )}
       <ResponsiveContainer width="100%" height={350}>
         <BarChart data={chartData}>
           <XAxis

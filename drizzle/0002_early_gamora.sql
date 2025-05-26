@@ -1,1 +1,0 @@
-ALTER TABLE "configuracoes" ADD COLUMN "horarios_personalizados" json DEFAULT '[]'::jsonb NOT NULL;

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { db } from "@/lib/utils";
-import { configuracoes } from "@/lib";
+import { db } from "@/server/db";
+import { configuracoes } from "@/server/db/schema";
 
 type ConfigsObj = Record<string, string>;
 
