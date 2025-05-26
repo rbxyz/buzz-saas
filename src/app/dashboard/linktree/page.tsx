@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import type React from "react";
+
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -27,11 +29,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { trpc } from "@/utils/trpc";
+import { api } from "@/trpc/react";
 import { toast } from "sonner";
 
-import { Menu, MenuItem, MenuButton } from "@szhsin/react-menu";
-import "@szhsin/react-menu/dist/index.css"; // estilos básicos para o menu
+import { Menu, MenuItem } from "@szhsin/react-menu";
+import "@szhsin/react-menu/dist/index.css";
 
 interface LinkItem {
   id: string;
@@ -40,11 +42,12 @@ interface LinkItem {
   descricao?: string;
   tipo: "cliente" | "parceria";
   imagem?: string | null;
+  mimeType?: string;
 }
 
 export default function LinktreePage() {
-  const utils = trpc.useUtils();
-  const { data: links = [], isLoading } = trpc.linktree.listar.useQuery();
+  const utils = api.useContext();
+  const { data: links = [], isLoading } = api.linktree.listar.useQuery();
 
   // Estados para criação/edição
   const [titulo, setTitulo] = useState("");
@@ -54,41 +57,47 @@ export default function LinktreePage() {
   const [imagem, setImagem] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
-  // Estado para controle dos modais
+  // Controle dos modais
   const [openModal, setOpenModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [deletarId, setDeletarId] = useState<string | null>(null);
 
   // Mutations
-  const adicionarLink = trpc.linktree.criar.useMutation({
-    onSuccess: () => {
+  const adicionarLink = api.linktree.criar.useMutation({
+    onSuccess() {
       toast.success("Link adicionado com sucesso!");
       utils.linktree.listar.invalidate();
       limparCampos();
       setOpenModal(false);
     },
-    onError: () => toast.error("Erro ao adicionar link."),
+    onError(error) {
+      toast.error("Erro ao adicionar link: " + error.message);
+    },
   });
 
-  const editarLink = trpc.linktree.editar.useMutation({
-    onSuccess: () => {
+  const editarLink = api.linktree.editar.useMutation({
+    onSuccess() {
       toast.success("Link editado com sucesso!");
       utils.linktree.listar.invalidate();
       limparCampos();
       setEditandoId(null);
       setOpenModal(false);
     },
-    onError: () => toast.error("Erro ao editar link."),
+    onError(error) {
+      toast.error("Erro ao editar link: " + error.message);
+    },
   });
 
-  const deletarLink = trpc.linktree.deletar.useMutation({
-    onSuccess: () => {
+  const deletarLink = api.linktree.deletar.useMutation({
+    onSuccess() {
       toast.success("Link deletado com sucesso!");
       utils.linktree.listar.invalidate();
       setDeletarId(null);
       setOpenDeleteModal(false);
     },
-    onError: () => toast.error("Erro ao deletar link."),
+    onError() {
+      toast.error("Erro ao deletar link.");
+    },
   });
 
   function limparCampos() {
@@ -103,47 +112,77 @@ export default function LinktreePage() {
   function handleImagemUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      // Validar tamanho do arquivo (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Imagem muito grande. Máximo 5MB.");
+        return;
+      }
+
+      // Validar tipo do arquivo
+      if (!file.type.startsWith("image/")) {
+        toast.error("Arquivo deve ser uma imagem.");
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagem(reader.result as string); // base64 string
+        setImagem(reader.result as string);
+        console.log("Imagem carregada:", file.name, file.size, "bytes");
+      };
+      reader.onerror = () => {
+        toast.error("Erro ao carregar imagem.");
       };
       reader.readAsDataURL(file);
     }
   }
 
   function handleSubmit() {
-    if (!titulo.trim() || !url.trim() || !tipo) {
+    if (!titulo.trim() || !tipo) {
       toast.error("Preencha todos os campos obrigatórios.");
       return;
     }
 
+    if (tipo === "parceria" && !url.trim()) {
+      toast.error("URL é obrigatória para parcerias.");
+      return;
+    }
+
+    const payload = {
+      titulo: titulo.trim(),
+      // Para clientes, não enviamos URL (undefined)
+      // Para parcerias, enviamos a URL se fornecida
+      url: tipo === "parceria" ? url.trim() : undefined,
+      descricao: descricao.trim() || undefined,
+      tipo,
+      imagem: imagem ?? undefined,
+    };
+
+    console.log("Enviando payload:", {
+      ...payload,
+      imagem: imagem ? "imagem presente" : "sem imagem",
+    });
+
     if (editandoId) {
-      editarLink.mutate({
-        id: editandoId,
-        titulo,
-        url,
-        descricao: descricao || "",
-        tipo,
-        imagem: imagem || undefined,
-      });
+      editarLink.mutate({ id: editandoId, ...payload });
     } else {
-      adicionarLink.mutate({
-        titulo,
-        url,
-        descricao: descricao || "",
-        tipo,
-        imagem: imagem || undefined,
-      });
+      adicionarLink.mutate(payload);
     }
   }
 
   function abrirEditar(link: LinkItem) {
     setEditandoId(link.id);
     setTitulo(link.titulo);
-    setUrl(link.url);
+    setUrl(link.url || "");
     setDescricao(link.descricao || "");
     setTipo(link.tipo);
-    setImagem(link.imagem || null);
+
+    // Reconstrói a data URL se há imagem
+    if (link.imagem && link.mimeType) {
+      setImagem(`data:${link.mimeType};base64,${link.imagem}`);
+    } else {
+      setImagem(null);
+    }
+
     setOpenModal(true);
   }
 
@@ -169,7 +208,7 @@ export default function LinktreePage() {
   }
 
   return (
-    <div
+    <main
       className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
       style={{
         backgroundColor: "hsl(var(--background))",
@@ -204,31 +243,68 @@ export default function LinktreePage() {
                 Adicionar
               </Button>
             </DialogTrigger>
-            <DialogContent>
+
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>
                   {editandoId ? "Editar Link" : "Novo Link"}
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSubmit();
+                }}
+              >
                 <div>
-                  <Label htmlFor="titulo">Título</Label>
+                  <Label>Tipo</Label>
+                  <Select
+                    value={tipo}
+                    onValueChange={(value) =>
+                      setTipo(value as "cliente" | "parceria")
+                    }
+                  >
+                    <SelectTrigger className="cursor-pointer">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cliente">Cliente</SelectItem>
+                      <SelectItem value="parceria">Parceria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="titulo">
+                    {tipo === "cliente" ? "Nome do cliente" : "Título"}
+                  </Label>
                   <Input
                     id="titulo"
-                    placeholder="Ex: Loja Exemplo"
+                    placeholder={
+                      tipo === "cliente"
+                        ? "Nome do cliente aqui"
+                        : "Ex: Loja Exemplo"
+                    }
                     value={titulo}
                     onChange={(e) => setTitulo(e.target.value)}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="url">URL</Label>
-                  <Input
-                    id="url"
-                    placeholder="https://example.com"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                  />
-                </div>
+
+                {tipo === "parceria" && (
+                  <div>
+                    <Label htmlFor="url">URL *</Label>
+                    <Input
+                      id="url"
+                      placeholder="https://example.com"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
                 <div>
                   <Label htmlFor="descricao">Descrição</Label>
                   <Textarea
@@ -238,8 +314,9 @@ export default function LinktreePage() {
                     onChange={(e) => setDescricao(e.target.value)}
                   />
                 </div>
+
                 <div>
-                  <Label htmlFor="imagem">Imagem</Label>
+                  <Label htmlFor="imagem">Imagem (máximo 5MB)</Label>
                   <Input
                     id="imagem"
                     type="file"
@@ -247,50 +324,31 @@ export default function LinktreePage() {
                     onChange={handleImagemUpload}
                   />
                   {imagem && (
-                    <div className="relative mt-2 inline-block max-h-20 w-auto">
+                    <div className="relative mt-2 inline-block">
                       <img
-                        src={imagem}
+                        src={imagem || "/placeholder.svg"}
                         alt="Prévia da imagem"
-                        className="max-h-20 w-auto rounded object-contain"
+                        className="h-20 w-20 rounded border-2 border-gray-300 object-cover"
+                        onError={(e) => {
+                          console.error("Erro ao exibir prévia da imagem");
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setImagem(null)}
                         aria-label="Remover imagem"
-                        className="absolute top-0 right-0 rounded bg-[hsl(var(--destructive))] px-1.5 py-0.5 text-[hsl(var(--destructive-foreground))] hover:bg-[hsl(var(--destructive)/0.9)]"
-                        style={{ transform: "translate(50%, -50%)" }}
+                        className="absolute -top-2 -right-2 cursor-pointer rounded-full bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
                       >
                         ×
                       </button>
                     </div>
                   )}
                 </div>
-                <div>
-                  <Label>Tipo</Label>
-                  <Select
-                    value={tipo}
-                    onValueChange={(value) =>
-                      setTipo(value as "cliente" | "parceria")
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue>
-                        {tipo
-                          ? tipo === "cliente"
-                            ? "Cliente"
-                            : "Parceria"
-                          : "Selecione o tipo"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cliente">Cliente</SelectItem>
-                      <SelectItem value="parceria">Parceria</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
                 <Button
-                  onClick={handleSubmit}
-                  className="w-full"
+                  type="submit"
+                  className="w-full cursor-pointer"
                   disabled={adicionarLink.isLoading || editarLink.isLoading}
                 >
                   {adicionarLink.isLoading || editarLink.isLoading
@@ -299,7 +357,7 @@ export default function LinktreePage() {
                       ? "Salvar alterações"
                       : "Adicionar"}
                 </Button>
-              </div>
+              </form>
             </DialogContent>
           </Dialog>
         </CardHeader>
@@ -309,101 +367,129 @@ export default function LinktreePage() {
             ["Clientes", clientes],
             ["Parcerias", parcerias],
           ].map(([tituloSecao, lista]) => (
-            <div key={tituloSecao as string}>
-              <h2 className="mb-2 text-lg font-semibold text-[hsl(var(--foreground))]">
+            <section key={tituloSecao as string}>
+              <h2 className="mb-4 text-lg font-semibold text-[hsl(var(--foreground))]">
                 {tituloSecao}
               </h2>
-              {isLoading ? (
-                <p className="text-sm text-[hsl(var(--foreground)/0.6)]">
-                  Carregando...
-                </p>
-              ) : lista.length === 0 ? (
+
+              {lista.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   Nenhum {tituloSecao.toLowerCase()} adicionado.
                 </p>
               ) : (
-                lista.map((link: LinkItem) => (
-                  <Card
-                    key={link.id}
-                    className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
-                  >
-                    {link.imagem && (
-                      <img
-                        src={link.imagem}
-                        alt={`Imagem de ${link.titulo}`}
-                        className="h-20 w-36 flex-shrink-0 rounded object-cover"
-                      />
-                    )}
-                    <div className="flex flex-grow flex-col">
-                      <p className="font-semibold">{link.titulo}</p>
-                      {link.descricao && (
-                        <p className="text-muted-foreground overflow-hidden text-sm text-ellipsis whitespace-nowrap">
-                          {link.descricao}
-                        </p>
-                      )}
-                      <p className="text-primary max-w-full cursor-default text-xs break-all underline">
-                        {link.url}
-                      </p>
-                    </div>
-
-                    {/* Botão 3 bolinhas com menu */}
-                    <Menu
-                      menuButton={
-                        <Button
-                          variant="ghost"
-                          className="ml-auto h-8 w-8 p-0 text-xl font-bold"
-                          aria-label="Ações"
-                        >
-                          &#8942;
-                        </Button>
-                      }
-                      direction="bottom"
-                      align="end"
-                      className="z-50"
+                <div className="space-y-3">
+                  {lista.map((link: LinkItem) => (
+                    <Card
+                      key={link.id}
+                      className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
                     >
-                      <MenuItem onClick={() => abrirEditar(link)}>
-                        Editar
-                      </MenuItem>
-                      <MenuItem onClick={() => abrirDeletar(link.id)}>
-                        Deletar
-                      </MenuItem>
-                    </Menu>
-                  </Card>
-                ))
+                      <div className="flex-shrink-0">
+                        {link.imagem && link.mimeType ? (
+                          <img
+                            src={`data:${link.mimeType};base64,${link.imagem}`}
+                            alt={`Imagem de ${link.titulo}`}
+                            className="h-16 w-16 rounded border-2 border-gray-300 object-cover"
+                            onError={(e) => {
+                              console.error(
+                                "Erro ao carregar imagem:",
+                                link.titulo,
+                              );
+                              e.currentTarget.style.display = "none";
+                            }}
+                            onLoad={() => {
+                              console.log(
+                                "Imagem carregada com sucesso:",
+                                link.titulo,
+                              );
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
+                            Sem imagem
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-grow flex-col">
+                        <p className="truncate font-semibold">{link.titulo}</p>
+                        {link.descricao && (
+                          <p className="text-muted-foreground truncate text-sm">
+                            {link.descricao}
+                          </p>
+                        )}
+                        {link.url && (
+                          <p className="text-primary truncate text-xs underline">
+                            {link.url}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Botão 3 bolinhas com menu */}
+                      <Menu
+                        menuButton={
+                          <Button
+                            variant="ghost"
+                            className="ml-auto h-8 w-8 flex-shrink-0 p-0 text-xl font-bold"
+                            aria-label="Ações do link"
+                          >
+                            ⋮
+                          </Button>
+                        }
+                        arrow
+                        align="end"
+                        theming="dark"
+                        transition
+                      >
+                        <MenuItem onClick={() => abrirEditar(link)}>
+                          Editar
+                        </MenuItem>
+                        <MenuItem onClick={() => abrirDeletar(link.id)}>
+                          Deletar
+                        </MenuItem>
+                      </Menu>
+                    </Card>
+                  ))}
+                </div>
               )}
-            </div>
+            </section>
           ))}
         </CardContent>
-      </Card>
 
-      {/* Modal para deletar */}
-      <Dialog open={openDeleteModal} onOpenChange={setOpenDeleteModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar exclusão</DialogTitle>
-          </DialogHeader>
-          <p className="mb-4">
-            Tem certeza que deseja deletar este link? Essa ação não pode ser
-            desfeita.
-          </p>
-          <div className="flex justify-end gap-4">
-            <DialogClose asChild>
-              <Button variant="outline">Cancelar</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (deletarId) {
-                  deletarLink.mutate(deletarId);
-                }
-              }}
-              disabled={deletarLink.isLoading}
-            >
-              {deletarLink.isLoading ? "Deletando..." : "Deletar"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Modal de confirmação de exclusão */}
+        <Dialog open={openDeleteModal} onOpenChange={setOpenDeleteModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar exclusão</DialogTitle>
+            </DialogHeader>
+
+            <p>Tem certeza que deseja deletar este link?</p>
+
+            <div className="mt-4 flex justify-end gap-4">
+              <DialogClose asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeletarId(null);
+                    setOpenDeleteModal(false);
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </DialogClose>
+
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deletarId) deletarLink.mutate(deletarId);
+                }}
+                disabled={deletarLink.isLoading}
+              >
+                {deletarLink.isLoading ? "Deletando..." : "Deletar"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </Card>
+    </main>
   );
 }

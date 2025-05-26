@@ -97,7 +97,7 @@ export const configuracoes = pgTable("configuracoes", {
 export const links = pgTable("links", {
   id: uuid("id").primaryKey().defaultRandom(),
   titulo: text("titulo").notNull(),
-  url: text("url").notNull(),
+  url: text("url"),
   descricao: text("descricao").default(""),
   clienteId: uuid("cliente_id").references(() => clientes.id),
   tipo: linkTypeEnum("tipo").notNull(),

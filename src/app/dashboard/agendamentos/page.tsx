@@ -184,7 +184,20 @@ export default function AgendamentosPage() {
               </CardDescription>
             </div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={open}
+              onOpenChange={(isOpen) => {
+                setOpen(isOpen);
+                if (!isOpen) {
+                  // Limpa estados ao fechar o modal para esconder dropdown e resetar campos
+                  setClienteQuery("");
+                  setClienteId(null);
+                  setClienteNomeSelecionado("");
+                  setHorario("");
+                  setServico("");
+                }
+              }}
+            >
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
@@ -195,14 +208,22 @@ export default function AgendamentosPage() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md backdrop-blur-sm">
                 <DialogHeader>
                   <DialogTitle>Novo Agendamento</DialogTitle>
                 </DialogHeader>
 
                 <div className="flex flex-col gap-4 py-4">
                   {/* Seletor de cliente */}
-                  <div className="relative">
+                  <div
+                    className={`relative ${
+                      clientesEncontrados &&
+                      clientesEncontrados.length > 0 &&
+                      !clienteId
+                        ? "mb-8"
+                        : "mb-0"
+                    }`}
+                  >
                     <label className="text-sm font-medium">
                       Buscar cliente
                     </label>
@@ -220,18 +241,21 @@ export default function AgendamentosPage() {
                       autoComplete="off"
                       readOnly={!!clienteId}
                     />
+
                     {/* Loading */}
                     {isFetching && (
                       <p className="text-muted-foreground mt-1 text-sm">
                         Buscando...
                       </p>
                     )}
+
                     {/* Lista de sugestões */}
                     {!isFetching &&
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
-                      clientesEncontrados.length > 0 && (
-                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-sm">
+                      clientesEncontrados.length > 0 &&
+                      !clienteId && (
+                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-2 max-h-48 w-full overflow-auto rounded border shadow-sm">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
@@ -239,7 +263,7 @@ export default function AgendamentosPage() {
                               onClick={() => {
                                 setClienteId(cliente.id);
                                 setClienteNomeSelecionado(cliente.nome);
-                                setClienteQuery(cliente.nome); // mantém o nome selecionado no input
+                                setClienteQuery(cliente.nome);
                               }}
                             >
                               {cliente.nome}
@@ -247,27 +271,8 @@ export default function AgendamentosPage() {
                           ))}
                         </div>
                       )}
-                    {/* Lista de sugestões */}
-                    {!isFetching &&
-                      clienteQuery.length > 1 &&
-                      clientesEncontrados &&
-                      clientesEncontrados.length > 0 && (
-                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-sm">
-                          {clientesEncontrados.map((cliente) => (
-                            <div
-                              key={cliente.id}
-                              className="hover:bg-muted cursor-pointer px-3 py-2 text-sm"
-                              onClick={() => {
-                                setClienteId(cliente.id);
-                                setClienteNomeSelecionado(cliente.nome);
-                                setClienteQuery(cliente.nome); // mantém o nome selecionado no input
-                              }}
-                            >
-                              {cliente.nome}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+
+                    {/* Cliente não encontrado */}
                     {!isFetching &&
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
@@ -286,6 +291,7 @@ export default function AgendamentosPage() {
                           </Button>
                         </div>
                       )}
+
                     {/* Nome selecionado */}
                     {clienteNomeSelecionado && (
                       <p className="mt-1 text-sm text-green-600">
@@ -308,14 +314,13 @@ export default function AgendamentosPage() {
                   {/* Serviço */}
                   <div>
                     <label className="text-sm font-medium">Serviço</label>
-
                     {isLoadingServicos ? (
                       <p>Carregando serviços...</p>
                     ) : (
                       <select
                         value={servico}
                         onChange={(e) => setServico(e.target.value)}
-                        className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
+                        className="border-input text-foreground focus:ring-accent mt-1 w-full cursor-pointer rounded-md border bg-black/90 px-3 py-2 shadow-sm backdrop-blur-sm transition duration-200 focus:ring-2 focus:ring-offset-1 focus:outline-none"
                       >
                         <option value="" disabled>
                           Selecione um serviço
@@ -332,10 +337,22 @@ export default function AgendamentosPage() {
                   {/* Botões */}
                   <div className="mt-4 flex justify-end gap-2">
                     <DialogClose asChild>
-                      <Button variant="ghost">Cancelar</Button>
+                      <Button className="cursor-pointer" variant="ghost">
+                        Cancelar
+                      </Button>
                     </DialogClose>
                     <Button
-                      onClick={handleNovoAgendamento}
+                      className="cursor-pointer"
+                      onClick={async () => {
+                        await handleNovoAgendamento();
+                        // Após confirmar, limpa estados e fecha modal
+                        setClienteQuery("");
+                        setClienteId(null);
+                        setClienteNomeSelecionado("");
+                        setHorario("");
+                        setServico("");
+                        setOpen(false);
+                      }}
                       disabled={createMutation.isLoading}
                     >
                       {createMutation.isLoading && (

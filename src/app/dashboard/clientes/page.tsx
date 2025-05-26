@@ -174,7 +174,7 @@ export default function ClientesPage() {
             Visualize e gerencie todos os seus clientes
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {clientes?.length ? (
             clientes.map((cliente) => (
               <Card
@@ -371,6 +371,7 @@ export default function ClientesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
       <Dialog open={modalEditarAberto} onOpenChange={setModalEditarAberto}>
         <DialogContent className="border-border bg-card text-card-foreground max-w-lg border backdrop-blur-sm">
           <DialogHeader>
@@ -445,6 +446,7 @@ export default function ClientesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
       <Dialog
         open={modalConfirmarDeleteAberto}
         onOpenChange={setModalConfirmarDeleteAberto}

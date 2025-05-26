@@ -22,6 +22,13 @@
       "when": 1748198942751,
       "tag": "0002_early_gamora",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1748207752471,
+      "tag": "0003_nappy_karnak",
+      "breakpoints": true
     }
   ]
 }
