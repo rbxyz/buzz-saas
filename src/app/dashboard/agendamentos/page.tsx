@@ -142,19 +142,6 @@ export default function AgendamentosPage() {
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
-          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
-          <span className="text-foreground text-sm font-medium">
-            Carregando agendamentos...
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
