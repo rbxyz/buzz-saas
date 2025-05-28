@@ -80,8 +80,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">{agendamentosHoje}</div>
           <p className="text-muted-foreground text-xs">
-            {variacaoAgendamentos >= 0 ? "+" : ""}
-            {variacaoAgendamentos.toFixed(1)}% em relação a ontem
+            {variacaoAgendamentos >= 0}
+            Agendamentos para hoje
           </p>
         </CardContent>
       </Card>

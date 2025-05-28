@@ -1,14 +1,11 @@
 "use client";
-
-import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
   Calendar,
   Users,
   MessageSquare,
-  BarChart,
   Settings,
   LinkIcon,
   Home,
@@ -29,6 +26,7 @@ import { Button } from "@/components/ui/button";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -47,6 +45,24 @@ export function DashboardSidebar() {
       icon: Settings,
     },
   ];
+
+  // Função para navegação instantânea
+  const handleNavigation = (href: string) => {
+    if (pathname === href) return; // Não navega se já está na página
+
+    // Dispara evento de início de navegação
+    window.dispatchEvent(new Event("navigation-start"));
+
+    // Navega imediatamente
+    router.push(href);
+  };
+
+  // Prefetch todas as rotas ao montar o componente
+  useEffect(() => {
+    routes.forEach((route) => {
+      router.prefetch(route.href);
+    });
+  }, [router]);
 
   return (
     <>
@@ -77,9 +93,12 @@ export function DashboardSidebar() {
             priority
             className="select-none"
           />
-          <Link href="/dashboard" className="text-xl font-bold select-none">
-            Duzz
-          </Link>
+          <button
+            onClick={() => handleNavigation("/dashboard")}
+            className="cursor-pointer text-xl font-bold select-none"
+          >
+            Buzz | o Saas para o seu Business
+          </button>
         </SidebarHeader>
 
         <SidebarContent className="flex-1 overflow-y-auto">
@@ -87,17 +106,13 @@ export function DashboardSidebar() {
             {routes.map((route) => (
               <SidebarMenuItem key={route.href}>
                 <SidebarMenuButton
-                  asChild
                   isActive={pathname === route.href}
                   tooltip={route.title}
+                  onClick={() => handleNavigation(route.href)}
+                  className="flex cursor-pointer items-center gap-4 text-lg font-semibold"
                 >
-                  <Link
-                    href={route.href}
-                    className="flex items-center gap-4 text-lg font-semibold"
-                  >
-                    <route.icon className="h-6 w-6" />
-                    <span>{route.title}</span>
-                  </Link>
+                  <route.icon className="h-6 w-6" />
+                  <span>{route.title}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
@@ -131,9 +146,15 @@ export function DashboardSidebar() {
                 priority
                 className="select-none"
               />
-              <Link href="/dashboard" className="text-xl font-bold select-none">
+              <button
+                onClick={() => {
+                  handleNavigation("/dashboard");
+                  setIsOpen(false);
+                }}
+                className="cursor-pointer text-xl font-bold select-none"
+              >
                 Duzz
-              </Link>
+              </button>
             </div>
             <Button
               variant="ghost"
@@ -150,18 +171,16 @@ export function DashboardSidebar() {
               {routes.map((route) => (
                 <SidebarMenuItem key={route.href}>
                   <SidebarMenuButton
-                    asChild
                     isActive={pathname === route.href}
                     tooltip={route.title}
+                    onClick={() => {
+                      handleNavigation(route.href);
+                      setIsOpen(false);
+                    }}
+                    className="flex cursor-pointer items-center gap-4 text-lg font-semibold"
                   >
-                    <Link
-                      href={route.href}
-                      className="flex items-center gap-4 text-lg font-semibold"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      <route.icon className="h-6 w-6" />
-                      <span>{route.title}</span>
-                    </Link>
+                    <route.icon className="h-6 w-6" />
+                    <span>{route.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

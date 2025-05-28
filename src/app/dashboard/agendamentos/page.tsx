@@ -13,9 +13,10 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { trpc } from "@/utils/trpc";
-import { Loader2, PlusCircle } from "lucide-react";
+import { api } from "@/trpc/react";
+import { Loader2, PlusCircle, Clock, AlertCircle } from "lucide-react";
 import dayjs from "dayjs";
+import { toast } from "sonner";
 
 import {
   Dialog,
@@ -26,110 +27,123 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 
-// Configurações de cache otimizadas
-const CACHE_CONFIG = {
-  agendamentos: { staleTime: 30 * 1000, cacheTime: 5 * 60 * 1000 },
-  clientes: { staleTime: 2 * 60 * 1000, cacheTime: 10 * 60 * 1000 },
-  servicos: { staleTime: 10 * 60 * 1000, cacheTime: 30 * 60 * 1000 },
-};
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function AgendamentosPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [open, setOpen] = useState(false);
-  const [horario, setHorario] = useState<string>("14:00");
-  const [servico, setServico] = useState<string>("Corte de cabelo");
-  const [isLoading, setIsLoading] = useState(false); // estado de loading
+  const [horario, setHorario] = useState<string>("");
+  const [servico, setServico] = useState<string>("");
 
-  // Substitua as queries existentes por estas versões otimizadas:
-  const { data: cortesDoMes, isLoading: isLoadingCortesDoMes } =
-    trpc.agendamento.getCortesDoMes.useQuery(
-      {
-        month: selectedDate.getMonth() + 1,
-        year: selectedDate.getFullYear(),
-      },
-      CACHE_CONFIG.agendamentos,
-    );
-
+  // Estados para busca de cliente
   const [clienteQuery, setClienteQuery] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(null);
   const [clienteNomeSelecionado, setClienteNomeSelecionado] = useState("");
 
-  // Ativar a query automaticamente quando clienteQuery tiver > 1 caractere
+  // Queries
+  const { data: cortesDoMes } = api.agendamento.getCortesDoMes.useQuery({
+    month: selectedDate.getMonth() + 1,
+    year: selectedDate.getFullYear(),
+  });
+
   const { data: clientesEncontrados, isFetching } =
-    trpc.agendamento.getByClientCode.useQuery(
+    api.agendamento.getByClientCode.useQuery(
       { query: clienteQuery },
       {
         enabled: clienteQuery.length > 1,
         keepPreviousData: true,
-        ...CACHE_CONFIG.clientes,
       },
     );
 
-  const { data: servicosDisponiveis, isLoading: isLoadingServicos } =
-    trpc.configuracao.getServicos.useQuery(undefined, CACHE_CONFIG.servicos);
+  const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
 
-  const atualizarStatus = trpc.agendamento.atualizarStatus.useMutation({
+  // Nova query para horários disponíveis
+  const { data: horariosData, isLoading: loadingHorarios } =
+    api.agendamento.getHorariosDisponiveis.useQuery(
+      {
+        data: dayjs(selectedDate).format("YYYY-MM-DD"),
+        servico: servico || "",
+      },
+      {
+        enabled: !!servico,
+      },
+    );
+
+  const { data: agendamentos, refetch: refetchAgendamentos } =
+    api.agendamento.getByData.useQuery({
+      date: selectedDate.toISOString(),
+    });
+
+  // Mutations
+  const atualizarStatus = api.agendamento.atualizarStatus.useMutation({
     onSuccess: () => {
-      refetchAgendamentos(); // Atualiza a lista
+      refetchAgendamentos();
+      toast.success("Status atualizado com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(error.message);
     },
   });
 
-  const { data: agendamentos, refetch: refetchAgendamentos } =
-    trpc.agendamento.getByData.useQuery(
-      { date: selectedDate.toISOString() },
-      CACHE_CONFIG.agendamentos,
-    );
-
-  const createMutation = trpc.agendamento.create.useMutation({
+  const createMutation = api.agendamento.create.useMutation({
     onSuccess: () => {
       refetchAgendamentos();
       setOpen(false);
-      setHorario("14:00");
-      setServico("Corte de cabelo");
-      setClienteId(null);
-      setClienteNomeSelecionado("");
-      setClienteQuery("");
+      resetForm();
+      toast.success("Agendamento criado com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(error.message);
     },
   });
 
-  // Função debounce (usando useEffect simples)
+  const resetForm = () => {
+    setHorario("");
+    setServico("");
+    setClienteId(null);
+    setClienteNomeSelecionado("");
+    setClienteQuery("");
+  };
+
+  // Função debounce para busca de clientes
   useEffect(() => {
     if (clienteQuery.length <= 1) return;
 
     const handler = setTimeout(() => {
-      // Nada a fazer aqui porque a query está habilitada automaticamente
-      // Só atualiza clienteQuery que dispara o fetch
-    }, 300); // 300ms debounce
+      // Query automática via enabled
+    }, 300);
 
     return () => clearTimeout(handler);
   }, [clienteQuery]);
 
-  // Limpar seleção se query ficar vazia ou cliente não estiver mais na lista
+  // Reset horário quando serviço muda
   useEffect(() => {
-    if (!clienteQuery && clienteId && clientesEncontrados) {
-      if (!clientesEncontrados.some((c) => c.id === clienteId)) {
-        setClienteId(null);
-        setClienteNomeSelecionado("");
-      }
-    }
-  }, [clienteQuery, clientesEncontrados, clienteId]);
-
-  // Outra verificação para evitar clienteId inválido
-  useEffect(() => {
-    if (
-      clienteId &&
-      (!clientesEncontrados ||
-        !clientesEncontrados.some((c) => c.id === clienteId))
-    ) {
-      setClienteId(null);
-      setClienteNomeSelecionado("");
-    }
-  }, [clientesEncontrados, clienteId]);
+    setHorario("");
+  }, [servico]);
 
   const handleNovoAgendamento = () => {
-    if (createMutation.isLoading) return;
+    if (createMutation.isPending) return;
+
     if (!clienteId) {
-      alert("Selecione um cliente válido.");
+      toast.error("Selecione um cliente válido.");
+      return;
+    }
+
+    if (!servico) {
+      toast.error("Selecione um serviço.");
+      return;
+    }
+
+    if (!horario) {
+      toast.error("Selecione um horário.");
       return;
     }
 
@@ -142,37 +156,53 @@ export default function AgendamentosPage() {
     });
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "agendado":
+        return "bg-blue-100 text-blue-800";
+      case "concluido":
+        return "bg-green-100 text-green-800";
+      case "cancelado":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
   return (
-    <div
-      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
-      style={{
-        backgroundColor: "hsl(var(--background))",
-        color: "hsl(var(--foreground))",
-        fontFamily: "var(--font-sans)",
-      }}
-    >
+    <div className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
       <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
 
       <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
         {/* Calendário */}
         <Card className="w-full max-w-full">
           <CardHeader>
-            <CardTitle>Agendamentos</CardTitle>
+            <CardTitle>Calendário</CardTitle>
             <CardDescription>
-              Calendário e cortes do mês selecionado
+              Navegue entre as datas para ver os agendamentos
             </CardDescription>
           </CardHeader>
 
           <CardContent className="flex flex-col gap-6 md:flex-row">
             {/* Lado esquerdo: Calendário */}
             <div className="w-full md:w-1/2">
-              <h3 className="mb-2 text-lg font-semibold">Calendário</h3>
               <DayPicker
                 mode="single"
                 selected={selectedDate}
                 onSelect={(date) => date && setSelectedDate(date)}
                 locale={ptBR}
-                className="border-border bg-card w-full rounded-md border p-4 text-[16px] [&_.rdp]:p-4 [&_.rdp]:text-base [&_.rdp-caption_label]:text-xl [&_.rdp-day]:h-10 [&_.rdp-day]:w-10 [&_.rdp-day]:text-base"
+                className="border-border bg-card w-full rounded-md border p-4 text-[16px]"
+                modifiers={{
+                  hasAppointments:
+                    cortesDoMes?.map((corte) => new Date(corte.dataHora)) || [],
+                }}
+                modifiersStyles={{
+                  hasAppointments: {
+                    backgroundColor: "hsl(var(--primary))",
+                    color: "hsl(var(--primary-foreground))",
+                    fontWeight: "bold",
+                  },
+                }}
               />
             </div>
 
@@ -184,19 +214,13 @@ export default function AgendamentosPage() {
                 {format(selectedDate, "MMMM/yyyy", { locale: ptBR })}
               </p>
 
-              {isLoadingCortesDoMes && (
-                <p className="text-muted-foreground text-sm">
-                  Carregando cortes...
-                </p>
-              )}
-
               {cortesDoMes?.length === 0 && (
                 <p className="text-muted-foreground text-sm">
                   Nenhum corte registrado neste mês.
                 </p>
               )}
 
-              <div className="space-y-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto">
                 {cortesDoMes?.map((corte) => (
                   <div
                     key={corte.id}
@@ -211,7 +235,9 @@ export default function AgendamentosPage() {
                         {corte.servico}
                       </p>
                     </div>
-                    <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                    <span
+                      className={`rounded px-2 py-1 text-xs capitalize ${getStatusColor(corte.status)}`}
+                    >
                       {corte.status}
                     </span>
                   </div>
@@ -238,43 +264,30 @@ export default function AgendamentosPage() {
               onOpenChange={(isOpen) => {
                 setOpen(isOpen);
                 if (!isOpen) {
-                  // Limpa estados ao fechar o modal para esconder dropdown e resetar campos
-                  setClienteQuery("");
-                  setClienteId(null);
-                  setClienteNomeSelecionado("");
-                  setHorario("");
-                  setServico("");
+                  resetForm();
                 }
               }}
             >
               <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="border-sidebar-border text-sidebar-foreground hover:bg-sidebar-border hover:text-accent-foreground flex cursor-pointer items-center border transition-colors"
+                  className="flex cursor-pointer items-center gap-2"
                 >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Novo
+                  <PlusCircle className="h-4 w-4" />
+                  Novo Agendamento
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-md backdrop-blur-sm">
+              <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Novo Agendamento</DialogTitle>
                 </DialogHeader>
 
                 <div className="flex flex-col gap-4 py-4">
                   {/* Seletor de cliente */}
-                  <div
-                    className={`relative ${
-                      clientesEncontrados &&
-                      clientesEncontrados.length > 0 &&
-                      !clienteId
-                        ? "mb-8"
-                        : "mb-0"
-                    }`}
-                  >
+                  <div className="relative">
                     <label className="text-sm font-medium">
-                      Buscar cliente
+                      Buscar cliente *
                     </label>
                     <input
                       type="text"
@@ -285,26 +298,24 @@ export default function AgendamentosPage() {
                         setClienteId(null);
                         setClienteNomeSelecionado("");
                       }}
-                      placeholder="Nome do cliente"
+                      placeholder="Digite o nome do cliente..."
                       className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
                       autoComplete="off"
                       readOnly={!!clienteId}
                     />
 
-                    {/* Loading */}
                     {isFetching && (
                       <p className="text-muted-foreground mt-1 text-sm">
                         Buscando...
                       </p>
                     )}
 
-                    {/* Lista de sugestões */}
                     {!isFetching &&
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length > 0 &&
                       !clienteId && (
-                        <div className="border-border bg-popover text-popover-foreground absolute z-50 mt-2 max-h-48 w-full overflow-auto rounded border shadow-sm">
+                        <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-md">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
@@ -321,93 +332,158 @@ export default function AgendamentosPage() {
                         </div>
                       )}
 
-                    {/* Cliente não encontrado */}
                     {!isFetching &&
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length === 0 && (
-                        <div className="border-destructive bg-destructive/10 text-destructive mt-2 flex flex-col items-center gap-2 rounded border p-3">
-                          <p>Cliente não adicionado.</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="cursor-pointer"
-                            onClick={() =>
-                              window.location.assign("/dashboard/clientes")
-                            }
-                          >
-                            Criar novo cliente
-                          </Button>
-                        </div>
+                        <Alert className="mt-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Cliente não encontrado.{" "}
+                            <Button
+                              variant="link"
+                              className="text-primary h-auto p-0 underline"
+                              onClick={() =>
+                                window.open("/dashboard/clientes", "_blank")
+                              }
+                            >
+                              Criar novo cliente
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
                       )}
 
-                    {/* Nome selecionado */}
                     {clienteNomeSelecionado && (
                       <p className="mt-1 text-sm text-green-600">
-                        Cliente selecionado: {clienteNomeSelecionado}
+                        ✓ Cliente selecionado: {clienteNomeSelecionado}
                       </p>
                     )}
                   </div>
 
-                  {/* Horário */}
-                  <div>
-                    <label className="text-sm font-medium">Horário</label>
-                    <input
-                      type="time"
-                      value={horario}
-                      onChange={(e) => setHorario(e.target.value)}
-                      className="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2"
-                    />
-                  </div>
-
                   {/* Serviço */}
                   <div>
-                    <label className="text-sm font-medium">Serviço</label>
-                    {isLoadingServicos ? (
-                      <p>Carregando serviços...</p>
-                    ) : (
-                      <select
-                        value={servico}
-                        onChange={(e) => setServico(e.target.value)}
-                        className="border-input text-foreground focus:ring-accent mt-1 w-full cursor-pointer rounded-md border bg-black/90 px-3 py-2 shadow-sm backdrop-blur-sm transition duration-200 focus:ring-2 focus:ring-offset-1 focus:outline-none"
-                      >
-                        <option value="" disabled>
-                          Selecione um serviço
-                        </option>
+                    <label className="text-sm font-medium">Serviço *</label>
+                    <Select value={servico} onValueChange={setServico}>
+                      <SelectTrigger className="mt-1 cursor-pointer">
+                        <SelectValue placeholder="Selecione um serviço" />
+                      </SelectTrigger>
+                      <SelectContent className="cursor-pointer bg-black/50 backdrop-blur-sm">
                         {servicosDisponiveis?.map((s) => (
-                          <option key={s.nome} value={s.nome}>
-                            {s.nome} - R$ {s.preco}
-                          </option>
+                          <SelectItem
+                            className="cursor-pointer"
+                            key={s.nome}
+                            value={s.nome}
+                          >
+                            {s.nome} - R$ {s.preco.toFixed(2)} (
+                            {s.duracaoMinutos}min)
+                          </SelectItem>
                         ))}
-                      </select>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Horário */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <Clock className="h-4 w-4" />
+                      Horário *
+                    </label>
+
+                    {!servico ? (
+                      <div className="mt-1 rounded-md border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500">
+                        Selecione um serviço primeiro
+                      </div>
+                    ) : loadingHorarios ? (
+                      <div className="mt-1 flex items-center justify-center rounded-md border border-dashed border-gray-300 p-4">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span className="text-sm text-gray-500">
+                          Carregando horários...
+                        </span>
+                      </div>
+                    ) : horariosData?.erro ? (
+                      <Alert className="mt-1" variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{horariosData.erro}</AlertDescription>
+                      </Alert>
+                    ) : horariosData?.horarios.length === 0 ? (
+                      <Alert className="mt-1">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Nenhum horário disponível para esta data. Todos os
+                          horários estão ocupados ou fora do horário de
+                          funcionamento.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Select value={horario} onValueChange={setHorario}>
+                        <SelectTrigger className="mt-1 cursor-pointer">
+                          <SelectValue placeholder="Selecione um horário" />
+                        </SelectTrigger>
+                        <SelectContent className="cursor-pointer bg-black/50 backdrop-blur-sm">
+                          {horariosData?.horarios.map((h) => (
+                            <SelectItem
+                              className="cursor-pointer"
+                              key={h}
+                              value={h}
+                            >
+                              {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
                   </div>
 
+                  {/* Resumo do agendamento */}
+                  {clienteId && servico && horario && (
+                    <div className="bg-muted/50 rounded-lg border p-3">
+                      <h4 className="mb-2 text-sm font-medium">
+                        Resumo do Agendamento
+                      </h4>
+                      <div className="text-muted-foreground space-y-1 text-xs">
+                        <p>
+                          <strong>Cliente:</strong> {clienteNomeSelecionado}
+                        </p>
+                        <p>
+                          <strong>Serviço:</strong> {servico}
+                        </p>
+                        <p>
+                          <strong>Data:</strong>{" "}
+                          {format(selectedDate, "dd/MM/yyyy")}
+                        </p>
+                        <p>
+                          <strong>Horário:</strong> {horario}
+                        </p>
+                        {servicosDisponiveis && (
+                          <p>
+                            <strong>Valor:</strong> R${" "}
+                            {servicosDisponiveis
+                              .find((s) => s.nome === servico)
+                              ?.preco.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Botões */}
-                  <div className="mt-4 flex justify-end gap-2">
+                  <div className="flex justify-end gap-2 pt-4">
                     <DialogClose asChild>
-                      <Button className="cursor-pointer" variant="ghost">
-                        Cancelar
-                      </Button>
+                      <Button variant="ghost">Cancelar</Button>
                     </DialogClose>
                     <Button
-                      className="cursor-pointer"
-                      onClick={async () => {
-                        await handleNovoAgendamento();
-                        // Após confirmar, limpa estados e fecha modal
-                        setClienteQuery("");
-                        setClienteId(null);
-                        setClienteNomeSelecionado("");
-                        setHorario("");
-                        setServico("");
-                        setOpen(false);
-                      }}
-                      disabled={createMutation.isLoading}
+                      onClick={handleNovoAgendamento}
+                      disabled={
+                        !clienteId ||
+                        !servico ||
+                        !horario ||
+                        createMutation.isPending
+                      }
                     >
-                      {createMutation.isLoading && (
+                      {createMutation.isPending && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
-                      Confirmar
+                      Criar Agendamento
                     </Button>
                   </div>
                 </div>
@@ -415,7 +491,7 @@ export default function AgendamentosPage() {
             </Dialog>
           </CardHeader>
 
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
             {agendamentos?.length === 0 && (
               <p className="text-muted-foreground text-sm">
                 Nenhum agendamento para esta data.
@@ -424,7 +500,7 @@ export default function AgendamentosPage() {
             {agendamentos?.map((agendamento) => (
               <div
                 key={agendamento.id}
-                className="border-border bg-card text-card-foreground flex flex-col gap-2 rounded border p-2"
+                className="border-border bg-card flex flex-col gap-3 rounded border p-3"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -435,17 +511,20 @@ export default function AgendamentosPage() {
                       {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
                       {agendamento.servico}
                     </p>
+                    <p className="text-muted-foreground text-xs">
+                      Duração: {agendamento.duracaoMinutos} minutos
+                    </p>
                   </div>
-                  <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                  <span
+                    className={`rounded px-2 py-1 text-xs capitalize ${getStatusColor(agendamento.status)}`}
+                  >
                     {agendamento.status}
                   </span>
                 </div>
 
-                {/* Ações: Confirmar ou Cancelar */}
                 {agendamento.status === "agendado" && (
                   <div className="flex justify-end gap-2">
                     <Button
-                      className="cursor-pointer"
                       variant="outline"
                       size="sm"
                       onClick={() =>
@@ -454,11 +533,11 @@ export default function AgendamentosPage() {
                           status: "concluido",
                         })
                       }
+                      disabled={atualizarStatus.isPending}
                     >
                       Confirmar
                     </Button>
                     <Button
-                      className="cursor-pointer"
                       variant="destructive"
                       size="sm"
                       onClick={() =>
@@ -467,6 +546,7 @@ export default function AgendamentosPage() {
                           status: "cancelado",
                         })
                       }
+                      disabled={atualizarStatus.isPending}
                     >
                       Cancelar
                     </Button>

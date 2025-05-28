@@ -1,17 +1,27 @@
-import { createTRPCRouter } from "../api/trpc";
-import { agendamentoRouter } from "./routers/agendamento";
-import { clienteRouter } from "./routers/cliente";
-import { configuracaoRouter } from "./routers/configuracao";
-import { dashboardRouter } from "./routers/dashboard";
-import { linktreeRouter } from "./routers/linktree";
+import { createCallerFactory, createTRPCRouter } from "@/server/api/trpc"
+import { configuracaoRouter } from "./routers/configuracao"
+import { agendamentoRouter } from "./routers/agendamento"
+import { clienteRouter } from "./routers/cliente"
+import { dashboardRouter } from "./routers/dashboard"
+import { linktreeRouter } from "./routers/linktree"
+import { agendamentoOptimizedRouter } from "./routers/agendamento-optimized"
+import { intervalosTrabalhoRouter } from "./routers/intervalo-trabalho"
 
+/**
+ * This is the primary router for your server.
+ *
+ * All routers added in /api/routers should be manually added here.
+ */
 export const appRouter = createTRPCRouter({
-  agendamento: agendamentoRouter,
-  cliente: clienteRouter,
   configuracao: configuracaoRouter,
-  linktree: linktreeRouter,
+  agendamento: agendamentoRouter,
+  agendamentoOptimized: agendamentoOptimizedRouter,
+  intervalosTrabalho: intervalosTrabalhoRouter,
+  cliente: clienteRouter,
   dashboard: dashboardRouter,
-});
+  linktree: linktreeRouter,
+})
 
-
-export type AppRouter = typeof appRouter;
+// export type definition of API
+export type AppRouter = typeof appRouter
+export const createCaller = createCallerFactory(appRouter)

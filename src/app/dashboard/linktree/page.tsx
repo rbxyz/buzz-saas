@@ -31,23 +31,24 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-
+import Image from "next/image";
 import { Menu, MenuItem } from "@szhsin/react-menu";
 import "@szhsin/react-menu/dist/index.css";
 
 interface LinkItem {
   id: string;
   titulo: string;
-  url: string;
-  descricao?: string;
+  url: string | null;
+  descricao: string | null;
   tipo: "cliente" | "parceria";
-  imagem?: string | null;
-  mimeType?: string;
+  imagem: string | null;
+  mimeType: string | null;
 }
 
 export default function LinktreePage() {
   const utils = api.useContext();
-  const { data: links = [], isLoading } = api.linktree.listar.useQuery();
+  // Apenas consome dados já em cache (sem loading states)
+  const { data: links, isLoading, isError } = api.linktree.listar.useQuery();
 
   // Estados para criação/edição
   const [titulo, setTitulo] = useState("");
@@ -64,9 +65,9 @@ export default function LinktreePage() {
 
   // Mutations
   const adicionarLink = api.linktree.criar.useMutation({
-    onSuccess() {
+    onSuccess: async () => {
       toast.success("Link adicionado com sucesso!");
-      utils.linktree.listar.invalidate();
+      await utils.linktree.listar.invalidate();
       limparCampos();
       setOpenModal(false);
     },
@@ -76,9 +77,9 @@ export default function LinktreePage() {
   });
 
   const editarLink = api.linktree.editar.useMutation({
-    onSuccess() {
+    onSuccess: async () => {
       toast.success("Link editado com sucesso!");
-      utils.linktree.listar.invalidate();
+      await utils.linktree.listar.invalidate();
       limparCampos();
       setEditandoId(null);
       setOpenModal(false);
@@ -89,9 +90,9 @@ export default function LinktreePage() {
   });
 
   const deletarLink = api.linktree.deletar.useMutation({
-    onSuccess() {
+    onSuccess: async () => {
       toast.success("Link deletado com sucesso!");
-      utils.linktree.listar.invalidate();
+      await utils.linktree.listar.invalidate();
       setDeletarId(null);
       setOpenDeleteModal(false);
     },
@@ -99,6 +100,11 @@ export default function LinktreePage() {
       toast.error("Erro ao deletar link.");
     },
   });
+
+  const isSalvando =
+    adicionarLink.status === "pending" || editarLink.status === "pending";
+
+  const isDeletando = deletarLink.status === "pending";
 
   function limparCampos() {
     setTitulo("");
@@ -112,13 +118,11 @@ export default function LinktreePage() {
   function handleImagemUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      // Validar tamanho do arquivo (máximo 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast.error("Imagem muito grande. Máximo 5MB.");
         return;
       }
 
-      // Validar tipo do arquivo
       if (!file.type.startsWith("image/")) {
         toast.error("Arquivo deve ser uma imagem.");
         return;
@@ -127,7 +131,6 @@ export default function LinktreePage() {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagem(reader.result as string);
-        console.log("Imagem carregada:", file.name, file.size, "bytes");
       };
       reader.onerror = () => {
         toast.error("Erro ao carregar imagem.");
@@ -149,18 +152,11 @@ export default function LinktreePage() {
 
     const payload = {
       titulo: titulo.trim(),
-      // Para clientes, não enviamos URL (undefined)
-      // Para parcerias, enviamos a URL se fornecida
       url: tipo === "parceria" ? url.trim() : undefined,
       descricao: descricao.trim() || undefined,
       tipo,
       imagem: imagem ?? undefined,
     };
-
-    console.log("Enviando payload:", {
-      ...payload,
-      imagem: imagem ? "imagem presente" : "sem imagem",
-    });
 
     if (editandoId) {
       editarLink.mutate({ id: editandoId, ...payload });
@@ -172,11 +168,10 @@ export default function LinktreePage() {
   function abrirEditar(link: LinkItem) {
     setEditandoId(link.id);
     setTitulo(link.titulo);
-    setUrl(link.url || "");
-    setDescricao(link.descricao || "");
+    setUrl(link.url ?? "");
+    setDescricao(link.descricao ?? "");
     setTipo(link.tipo);
 
-    // Reconstrói a data URL se há imagem
     if (link.imagem && link.mimeType) {
       setImagem(`data:${link.mimeType};base64,${link.imagem}`);
     } else {
@@ -191,21 +186,105 @@ export default function LinktreePage() {
     setOpenDeleteModal(true);
   }
 
-  const clientes = links.filter((link) => link.tipo === "cliente");
-  const parcerias = links.filter((link) => link.tipo === "parceria");
-
-  if (isLoading) {
-    return (
-      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
-          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
-          <span className="text-foreground text-sm font-medium">
-            Carregando clientes e parceiros...
-          </span>
+  function renderSecaoConteudo(
+    titulo: string,
+    lista: LinkItem[],
+    isLoading: boolean,
+  ) {
+    if (isLoading) {
+      return (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card
+              key={i}
+              className="flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4"
+            >
+              <div className="flex-shrink-0">
+                <div className="h-16 w-16 animate-pulse rounded bg-gray-300" />
+              </div>
+              <div className="flex min-w-0 flex-grow flex-col space-y-2">
+                <div className="h-4 w-32 animate-pulse rounded bg-gray-300" />
+                <div className="h-3 w-40 animate-pulse rounded bg-gray-300" />
+                <div className="h-3 w-28 animate-pulse rounded bg-gray-300" />
+              </div>
+              <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded bg-gray-300" />
+            </Card>
+          ))}
         </div>
+      );
+    }
+
+    if (lista.length === 0) {
+      return (
+        <p className="text-muted-foreground text-sm">
+          Nenhum {titulo.toLowerCase()} adicionado.
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {lista.map((link: LinkItem) => (
+          <Card
+            key={link.id}
+            className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
+          >
+            <div className="flex-shrink-0">
+              {link.imagem && link.mimeType ? (
+                <Image
+                  src={`data:${link.mimeType};base64,${link.imagem}`}
+                  alt={`Imagem de ${link.titulo}`}
+                  width={64}
+                  height={64}
+                  className="rounded border-2 border-gray-300 object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
+                  Sem imagem
+                </div>
+              )}
+            </div>
+
+            <div className="flex min-w-0 flex-grow flex-col">
+              <p className="truncate font-semibold">{link.titulo}</p>
+              {link.descricao && (
+                <p className="text-muted-foreground truncate text-sm">
+                  {link.descricao}
+                </p>
+              )}
+              {link.url && (
+                <p className="text-primary truncate text-xs underline">
+                  {link.url}
+                </p>
+              )}
+            </div>
+
+            <Menu
+              menuButton={
+                <Button
+                  variant="ghost"
+                  className="ml-auto h-8 w-8 flex-shrink-0 p-0 text-xl font-bold"
+                  aria-label="Ações do link"
+                >
+                  ⋮
+                </Button>
+              }
+              arrow
+              align="end"
+              theming="dark"
+              transition
+            >
+              <MenuItem onClick={() => abrirEditar(link)}>Editar</MenuItem>
+              <MenuItem onClick={() => abrirDeletar(link.id)}>Deletar</MenuItem>
+            </Menu>
+          </Card>
+        ))}
       </div>
     );
   }
+
+  const clientes = links?.filter((link) => link.tipo === "cliente") || [];
+  const parcerias = links?.filter((link) => link.tipo === "parceria") || [];
 
   return (
     <main
@@ -217,6 +296,14 @@ export default function LinktreePage() {
       }}
     >
       <h1 className="text-3xl font-bold tracking-tight">Linktree Manager</h1>
+      {isError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="font-medium">Erro ao carregar links</p>
+          <p className="text-sm">
+            Tente recarregar a página ou entre em contato com o suporte.
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -325,13 +412,14 @@ export default function LinktreePage() {
                   />
                   {imagem && (
                     <div className="relative mt-2 inline-block">
-                      <img
+                      <Image
                         src={imagem || "/placeholder.svg"}
                         alt="Prévia da imagem"
+                        width={80}
+                        height={80}
                         className="h-20 w-20 rounded border-2 border-gray-300 object-cover"
                         onError={(e) => {
-                          console.error("Erro ao exibir prévia da imagem");
-                          e.currentTarget.style.display = "none";
+                          (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
                       <button
@@ -349,9 +437,9 @@ export default function LinktreePage() {
                 <Button
                   type="submit"
                   className="w-full cursor-pointer"
-                  disabled={adicionarLink.isLoading || editarLink.isLoading}
+                  disabled={isSalvando}
                 >
-                  {adicionarLink.isLoading || editarLink.isLoading
+                  {isSalvando
                     ? "Salvando..."
                     : editandoId
                       ? "Salvar alterações"
@@ -364,93 +452,14 @@ export default function LinktreePage() {
 
         <CardContent className="grid gap-6 md:grid-cols-2">
           {[
-            ["Clientes", clientes],
-            ["Parcerias", parcerias],
-          ].map(([tituloSecao, lista]) => (
-            <section key={tituloSecao as string}>
+            { titulo: "Clientes", lista: clientes },
+            { titulo: "Parcerias", lista: parcerias },
+          ].map(({ titulo, lista }) => (
+            <section key={titulo}>
               <h2 className="mb-4 text-lg font-semibold text-[hsl(var(--foreground))]">
-                {tituloSecao}
+                {titulo}
               </h2>
-
-              {lista.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Nenhum {tituloSecao.toLowerCase()} adicionado.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {lista.map((link: LinkItem) => (
-                    <Card
-                      key={link.id}
-                      className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
-                    >
-                      <div className="flex-shrink-0">
-                        {link.imagem && link.mimeType ? (
-                          <img
-                            src={`data:${link.mimeType};base64,${link.imagem}`}
-                            alt={`Imagem de ${link.titulo}`}
-                            className="h-16 w-16 rounded border-2 border-gray-300 object-cover"
-                            onError={(e) => {
-                              console.error(
-                                "Erro ao carregar imagem:",
-                                link.titulo,
-                              );
-                              e.currentTarget.style.display = "none";
-                            }}
-                            onLoad={() => {
-                              console.log(
-                                "Imagem carregada com sucesso:",
-                                link.titulo,
-                              );
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
-                            Sem imagem
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex min-w-0 flex-grow flex-col">
-                        <p className="truncate font-semibold">{link.titulo}</p>
-                        {link.descricao && (
-                          <p className="text-muted-foreground truncate text-sm">
-                            {link.descricao}
-                          </p>
-                        )}
-                        {link.url && (
-                          <p className="text-primary truncate text-xs underline">
-                            {link.url}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Botão 3 bolinhas com menu */}
-                      <Menu
-                        menuButton={
-                          <Button
-                            variant="ghost"
-                            className="ml-auto h-8 w-8 flex-shrink-0 p-0 text-xl font-bold"
-                            aria-label="Ações do link"
-                          >
-                            ⋮
-                          </Button>
-                        }
-                        arrow
-                        align="end"
-                        theming="dark"
-                        transition
-                      >
-                        <MenuItem onClick={() => abrirEditar(link)}>
-                          Editar
-                        </MenuItem>
-                        <MenuItem onClick={() => abrirDeletar(link.id)}>
-                          Deletar
-                        </MenuItem>
-                      </Menu>
-                    </Card>
-                  ))}
-                </div>
-              )}
+              {renderSecaoConteudo(titulo, lista, isLoading)}
             </section>
           ))}
         </CardContent>
@@ -476,15 +485,14 @@ export default function LinktreePage() {
                   Cancelar
                 </Button>
               </DialogClose>
-
               <Button
                 variant="destructive"
                 onClick={() => {
                   if (deletarId) deletarLink.mutate(deletarId);
                 }}
-                disabled={deletarLink.isLoading}
+                disabled={isDeletando}
               >
-                {deletarLink.isLoading ? "Deletando..." : "Deletar"}
+                {isDeletando ? "Deletando..." : "Deletar"}
               </Button>
             </div>
           </DialogContent>

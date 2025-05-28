@@ -106,6 +106,58 @@ export const linktreeRouter = createTRPCRouter({
     })
   }),
 
+  listarClientesLanding: publicProcedure.query(async () => {
+    const result = await db.query.links.findMany({
+      where: eq(links.tipo, "cliente"),
+      limit: 5, // Máximo 5 clientes para a landing page
+      orderBy: [links.createdAt], // Ordena pelos mais recentes
+    })
+
+    return result.map((link) => {
+      let imagemBase64 = null
+      let mimeType = "image/png"
+
+      if (link.imagem) {
+        try {
+          const buffer = Buffer.from(link.imagem)
+          imagemBase64 = buffer.toString("base64")
+
+          // Detecta o tipo de imagem
+          if (buffer.length > 0) {
+            const firstBytes = buffer.subarray(0, 4)
+            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
+              mimeType = "image/jpeg"
+            } else if (
+              firstBytes[0] === 0x89 &&
+              firstBytes[1] === 0x50 &&
+              firstBytes[2] === 0x4e &&
+              firstBytes[3] === 0x47
+            ) {
+              mimeType = "image/png"
+            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
+              mimeType = "image/gif"
+            } else if (
+              firstBytes[0] === 0x52 &&
+              firstBytes[1] === 0x49 &&
+              firstBytes[2] === 0x46 &&
+              firstBytes[3] === 0x46
+            ) {
+              mimeType = "image/webp"
+            }
+          }
+        } catch (error) {
+          console.error(`Erro ao processar imagem do cliente ${link.titulo}:`, error)
+        }
+      }
+
+      return {
+        ...link,
+        imagem: imagemBase64,
+        mimeType,
+      }
+    })
+  }),
+
   listarParcerias: publicProcedure.query(async () => {
     const result = await db.query.links.findMany({
       where: eq(links.tipo, "parceria"),

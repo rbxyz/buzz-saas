@@ -21,12 +21,6 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/utils/trpc";
 import dayjs from "dayjs";
 
-// Configurações de cache otimizadas
-const CACHE_CONFIG = {
-  clientes: { staleTime: 2 * 60 * 1000, cacheTime: 10 * 60 * 1000 },
-  historico: { staleTime: 5 * 60 * 1000, cacheTime: 15 * 60 * 1000 },
-};
-
 export default function ClientesPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
@@ -37,65 +31,61 @@ export default function ClientesPage() {
   const [modalConfirmarDeleteAberto, setModalConfirmarDeleteAberto] =
     useState(false);
 
-  // Substitua as queries existentes:
-  const {
-    data: clientes,
-    isLoading,
-    error,
-    refetch,
-  } = trpc.cliente.listar.useQuery(undefined, CACHE_CONFIG.clientes);
+  // Apenas consome dados já em cache (sem loading states)
+  const { data: clientes, refetch } = trpc.cliente.listar.useQuery();
 
   const { data: clienteSelecionado } = trpc.cliente.getById.useQuery(
     clienteSelecionadoId ?? "",
     {
       enabled: !!clienteSelecionadoId,
-      ...CACHE_CONFIG.clientes,
     },
   );
 
   const criarCliente = trpc.cliente.criar.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setModalCriarAberto(false);
-      refetch();
+      await refetch();
     },
   });
 
   const editarCliente = trpc.cliente.editar.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setModalEditarAberto(false);
-      refetch();
+      await refetch();
     },
   });
 
   const deletarCliente = trpc.cliente.deletar.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       setModalConfirmarDeleteAberto(false);
       setClienteSelecionadoId(null);
-      refetch();
+      await refetch();
     },
   });
 
-  const { data: historico, isLoading: isHistoricoLoading } =
-    trpc.agendamento.getHistoricoPorCliente.useQuery(
-      { clienteId: clienteSelecionadoId ?? "" },
-      {
-        enabled: !!clienteSelecionadoId,
-        ...CACHE_CONFIG.historico,
-      },
-    );
+  const { data: historico } = trpc.agendamento.getHistoricoPorCliente.useQuery(
+    { clienteId: clienteSelecionadoId ?? "" },
+    {
+      enabled: !!clienteSelecionadoId,
+    },
+  );
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    nome: string;
+    telefone: string;
+    email: string;
+    dataNascimento: string;
+  }>({
     nome: "",
     telefone: "",
     email: "",
     dataNascimento: "",
   });
 
-  // Função para mascarar telefone no padrão brasileiro (ex: (12) 34567-8901)
   function mascararTelefone(valor: string) {
     const numeros = valor.replace(/\D/g, "");
 
-    if (numeros.length <= 2) return numeros; // só DDD incompleto
+    if (numeros.length <= 2) return numeros;
     if (numeros.length <= 6) {
       return `(${numeros.slice(0, 2)}) ${numeros.slice(2)}`;
     }
@@ -103,18 +93,12 @@ export default function ClientesPage() {
       return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 6)}-${numeros.slice(6)}`;
     }
 
-    // (99) 99999-9999 para celulares com 9 dígitos
     return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7, 11)}`;
   }
 
   function abrirModal(id: string) {
     setClienteSelecionadoId(id);
     setModalAberto(true);
-  }
-
-  function fecharModal() {
-    setModalAberto(false);
-    setClienteSelecionadoId(null);
   }
 
   function limparEmail(email: string) {
@@ -138,26 +122,11 @@ export default function ClientesPage() {
         telefone: clienteSelecionado.telefone ?? "",
         email: clienteSelecionado.email ?? "",
         dataNascimento: clienteSelecionado.dataNascimento
-          ? new Date(clienteSelecionado.dataNascimento)
-              .toISOString()
-              .split("T")[0]
+          ? dayjs(clienteSelecionado.dataNascimento).format("YYYY-MM-DD")
           : "",
       });
     }
   }, [clienteSelecionado, modalEditarAberto]);
-
-  if (isLoading) {
-    return (
-      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
-          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
-          <span className="text-foreground text-sm font-medium">
-            Carregando clientes...
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -273,9 +242,7 @@ export default function ClientesPage() {
 
               <div className="col-span-2 mt-2">
                 <Label>Histórico de Agendamentos</Label>
-                {isHistoricoLoading ? (
-                  <p>Carregando histórico...</p>
-                ) : historico?.length === 0 ? (
+                {historico?.length === 0 ? (
                   <p>Nenhum serviço registrado ainda.</p>
                 ) : (
                   <ul className="text-muted-foreground list-disc pl-5 text-sm">
@@ -306,7 +273,6 @@ export default function ClientesPage() {
         onOpenChange={(open) => {
           setModalCriarAberto(open);
           if (!open) {
-            // Limpa os campos ao fechar o modal
             setFormData({
               nome: "",
               telefone: "",
@@ -340,7 +306,7 @@ export default function ClientesPage() {
                     telefone: mascararTelefone(e.target.value),
                   })
                 }
-                maxLength={15} // máximo para (99) 99999-9999
+                maxLength={15}
               />
             </div>
             <div>
@@ -375,6 +341,7 @@ export default function ClientesPage() {
             <Button
               className="cursor-pointer"
               onClick={handleCriarCliente}
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               disabled={!formData.nome || criarCliente.isLoading}
             >
               {criarCliente.isLoading ? "Salvando..." : "Salvar"}
@@ -450,6 +417,7 @@ export default function ClientesPage() {
                   ...formData,
                 });
               }}
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
               disabled={editarCliente.isLoading}
             >
               {editarCliente.isLoading ? "Salvando..." : "Salvar alterações"}

@@ -15,29 +15,26 @@ import {
   Users,
   Award,
   Sparkles,
+  Calendar,
 } from "lucide-react";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { CalendarDays } from "lucide-react";
 import Image from "next/image";
+import FormularioAgendamento from "@/components/agendamentos/formulario-agendamento";
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
+  const [showAgendamento, setShowAgendamento] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 30); // Apenas 30 dias depois da data atual
 
-  // Busca parceiros (tipo "parceria")
+  // Busca parceiros (tipo "parceria") - todas as parcerias para carrossel
   const { data: parcerias } = api.linktree.listarParcerias.useQuery();
 
-  // Busca clientes (tipo "cliente")
+  // Busca clientes (tipo "cliente") - máximo 5 para landing page
   const {
     data: clientes,
     isLoading: loadingClientes,
     isError: errorClientes,
-  } = api.linktree.listarClientes.useQuery();
+  } = api.linktree.listarClientesLanding.useQuery();
 
   // Busca configurações da barbearia
   const { data: configs } = api.configuracao.listar.useQuery();
@@ -49,18 +46,23 @@ export default function LandingPage() {
   };
 
   const nextSlide = useCallback(() => {
-    if (parcerias && !isTransitioning) {
+    const parceriasComImagem =
+      parcerias?.filter((p) => p.imagem && p.mimeType) || [];
+    if (parceriasComImagem.length > 0 && !isTransitioning) {
       setIsTransitioning(true);
-      setCurrentSlide((prev) => (prev + 1) % parcerias.length);
+      setCurrentSlide((prev) => (prev + 1) % parceriasComImagem.length);
       setTimeout(() => setIsTransitioning(false), 400);
     }
   }, [parcerias, isTransitioning]);
 
   const prevSlide = () => {
-    if (parcerias && !isTransitioning) {
+    const parceriasComImagem =
+      parcerias?.filter((p) => p.imagem && p.mimeType) || [];
+    if (parceriasComImagem.length > 0 && !isTransitioning) {
       setIsTransitioning(true);
       setCurrentSlide(
-        (prev) => (prev - 1 + parcerias.length) % parcerias.length,
+        (prev) =>
+          (prev - 1 + parceriasComImagem.length) % parceriasComImagem.length,
       );
       setTimeout(() => setIsTransitioning(false), 400);
     }
@@ -75,12 +77,19 @@ export default function LandingPage() {
   };
 
   const getSlideIndex = (offset: number) => {
-    if (!parcerias) return 0;
-    return (currentSlide + offset + parcerias.length) % parcerias.length;
+    const parceriasComImagem =
+      parcerias?.filter((p) => p.imagem && p.mimeType) || [];
+    if (parceriasComImagem.length === 0) return 0;
+    return (
+      (currentSlide + offset + parceriasComImagem.length) %
+      parceriasComImagem.length
+    );
   };
 
   useEffect(() => {
-    if (parcerias && parcerias.length > 1) {
+    const parceriasComImagem =
+      parcerias?.filter((p) => p.imagem && p.mimeType) || [];
+    if (parceriasComImagem.length > 1) {
       const interval = setInterval(nextSlide, 6000);
       return () => clearInterval(interval);
     }
@@ -119,8 +128,16 @@ export default function LandingPage() {
               Parceiros
             </a>
             <Button
-              onClick={() => setShowLogin(true)}
+              onClick={() => setShowAgendamento(true)}
               className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              Agendar
+            </Button>
+            <Button
+              onClick={() => setShowLogin(true)}
+              variant="outline"
+              className="border-gray-600 text-gray-300 hover:bg-gray-800"
             >
               Entrar
             </Button>
@@ -153,8 +170,10 @@ export default function LandingPage() {
           <div className="flex cursor-pointer flex-col gap-4 sm:flex-row sm:justify-center">
             <Button
               size="lg"
+              onClick={() => setShowAgendamento(true)}
               className="cursor-pointer bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-3 font-semibold text-white hover:from-amber-600 hover:to-orange-600"
             >
+              <Calendar className="mr-2 h-5 w-5" />
               Agendar Horário
               <ChevronRight className="ml-2 h-5 w-5" />
             </Button>
@@ -241,260 +260,279 @@ export default function LandingPage() {
       )}
 
       {/* Carrossel de Parceiros */}
-      {parcerias && parcerias.length > 0 && (
-        <section className="px-6 py-20">
-          <div className="container mx-auto max-w-[90rem]">
-            <div className="mb-16 text-center">
-              <h2 className="mb-4 text-4xl font-bold text-white">
-                <Award className="mr-3 inline h-8 w-8 text-amber-400" />
-                Nossos Parceiros
-              </h2>
-              <p className="text-lg text-gray-400">
-                Parcerias que fortalecem nosso compromisso com a excelência
-              </p>
-            </div>
+      {parcerias &&
+        parcerias.filter((p) => p.imagem && p.mimeType).length > 0 && (
+          <section className="px-6 py-20">
+            <div className="container mx-auto max-w-[90rem]">
+              <div className="mb-16 text-center">
+                <h2 className="mb-4 text-4xl font-bold text-white">
+                  <Award className="mr-3 inline h-8 w-8 text-amber-400" />
+                  Nossos Parceiros
+                </h2>
+                <p className="text-lg text-gray-400">
+                  Parcerias que fortalecem nosso compromisso com a excelência
+                </p>
+              </div>
 
-            {/* Carrossel com cards mais largos */}
-            <div className="relative mx-auto w-full">
-              <div className="flex items-center justify-center gap-8 overflow-hidden px-4">
-                {/* Card Anterior (Esquerda) */}
-                {parcerias.length > 1 && (
-                  <div
-                    className={`hidden w-[28%] cursor-pointer transition-all duration-300 ease-out lg:block ${
-                      isTransitioning
-                        ? "opacity-30"
-                        : "opacity-60 hover:opacity-80"
-                    }`}
-                    onClick={() => goToSlide(getSlideIndex(-1))}
-                  >
-                    <div className="relative aspect-[16/9] transform overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 hover:scale-[1.02]">
-                      {parcerias[getSlideIndex(-1)]?.imagem &&
-                      parcerias[getSlideIndex(-1)]?.mimeType ? (
-                        <Image
-                          src={`data:${parcerias[getSlideIndex(-1)]?.mimeType};base64,${parcerias[getSlideIndex(-1)]?.imagem}`}
-                          alt={parcerias[getSlideIndex(-1)]?.titulo ?? "Imagem"}
-                          fill
-                          className="object-cover transition-transform duration-300"
-                          priority={true} // ou loading="eager" caso queira carregar antes
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Award className="h-12 w-12 text-amber-400" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                      <div className="absolute right-4 bottom-4 left-4">
-                        <h4 className="truncate text-lg font-bold text-white">
-                          {parcerias[getSlideIndex(-1)]?.titulo}
-                        </h4>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-300">
-                          {parcerias[getSlideIndex(-1)]?.descricao}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Card Principal (Centro) */}
-                <div
-                  className={`w-full transition-all duration-400 ease-out lg:w-[44%] ${
-                    isTransitioning ? "opacity-95" : "opacity-100"
-                  }`}
-                >
-                  <div className="relative aspect-[16/10] transform overflow-hidden rounded-3xl shadow-2xl transition-all duration-400">
-                    {parcerias[currentSlide]?.imagem &&
-                    parcerias[currentSlide]?.mimeType ? (
-                      <div className="relative h-full w-full">
-                        <Image
-                          src={`data:${parcerias[currentSlide]?.mimeType};base64,${parcerias[currentSlide]?.imagem}`}
-                          alt={
-                            parcerias[currentSlide]?.titulo ||
-                            "Imagem da parceria"
-                          }
-                          fill
-                          className={`object-cover transition-all duration-400 ${
-                            isTransitioning ? "scale-[1.01]" : "scale-100"
-                          }`}
-                          onError={(e) => {
-                            console.error(
-                              "Erro ao carregar imagem da parceria:",
-                              parcerias[currentSlide]?.titulo,
-                            );
-                            // Oculta a imagem quebrada
-                            (e.target as HTMLImageElement).style.display =
-                              "none";
-                          }}
-                          priority
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                        <Award className="h-16 w-16 text-amber-400" />
-                      </div>
-                    )}
-
-                    {/* Overlay com informações */}
-                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent">
-                      <div
-                        className={`w-full p-6 text-white transition-all duration-400 lg:p-8 ${
-                          isTransitioning
-                            ? "translate-y-1 opacity-90"
-                            : "translate-y-0 opacity-100"
-                        }`}
-                      >
-                        <h3 className="mb-3 text-2xl leading-tight font-bold lg:text-3xl">
-                          {parcerias[currentSlide]?.titulo}
-                        </h3>
-                        <p className="mb-4 line-clamp-2 text-base leading-relaxed text-gray-200 lg:mb-6 lg:text-lg">
-                          {parcerias[currentSlide]?.descricao}
-                        </p>
-                        {parcerias[currentSlide]?.url && (
-                          <a
-                            href={parcerias[currentSlide]?.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
-                          >
-                            Visitar Site
-                            <ChevronRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Borda sutil para o card principal */}
-                    <div className="absolute inset-0 rounded-3xl ring-1 ring-amber-500/20" />
-                  </div>
-                </div>
-
-                {/* Card Posterior (Direita) */}
-                {parcerias.length > 1 && (
-                  <div
-                    className={`hidden w-[28%] cursor-pointer transition-all duration-300 ease-out lg:block ${
-                      isTransitioning
-                        ? "opacity-30"
-                        : "opacity-60 hover:opacity-80"
-                    }`}
-                    onClick={() => goToSlide(getSlideIndex(1))}
-                  >
-                    <div className="relative aspect-[16/9] transform overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 hover:scale-[1.02]">
-                      {parcerias[getSlideIndex(1)]?.imagem &&
-                      parcerias[getSlideIndex(1)]?.mimeType ? (
-                        <div className="relative h-full w-full">
+              {/* Carrossel com cards mais largos */}
+              <div className="relative mx-auto w-full">
+                <div className="flex items-center justify-center gap-8 overflow-hidden px-4">
+                  {/* Card Anterior (Esquerda) */}
+                  {parcerias.filter((p) => p.imagem && p.mimeType).length >
+                    1 && (
+                    <div
+                      className={`hidden w-[28%] cursor-pointer transition-all duration-300 ease-out lg:block ${
+                        isTransitioning
+                          ? "opacity-30"
+                          : "opacity-60 hover:opacity-80"
+                      }`}
+                      onClick={() => goToSlide(getSlideIndex(-1))}
+                    >
+                      <div className="relative aspect-[16/9] transform overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 hover:scale-[1.02]">
+                        {parcerias.filter((p) => p.imagem && p.mimeType)[
+                          getSlideIndex(-1)
+                        ]?.imagem &&
+                        parcerias.filter((p) => p.imagem && p.mimeType)[
+                          getSlideIndex(-1)
+                        ]?.mimeType ? (
                           <Image
-                            src={`data:${parcerias[getSlideIndex(1)]?.mimeType};base64,${parcerias[getSlideIndex(1)]?.imagem}`}
+                            src={`data:${parcerias.filter((p) => p.imagem && p.mimeType)[getSlideIndex(-1)]?.mimeType};base64,${parcerias.filter((p) => p.imagem && p.mimeType)[getSlideIndex(-1)]?.imagem}`}
                             alt={
-                              parcerias[getSlideIndex(1)]?.titulo ??
-                              "Imagem da parceria seguinte"
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                getSlideIndex(-1)
+                              ]?.titulo ?? "Imagem"
                             }
                             fill
                             className="object-cover transition-transform duration-300"
+                            priority={true}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                            <Award className="h-12 w-12 text-amber-400" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                        <div className="absolute right-4 bottom-4 left-4">
+                          <h4 className="truncate text-lg font-bold text-white">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                getSlideIndex(-1)
+                              ]?.titulo
+                            }
+                          </h4>
+                          <p className="mt-1 line-clamp-2 text-sm text-gray-300">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                getSlideIndex(-1)
+                              ]?.descricao
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Card Principal (Centro) */}
+                  <div
+                    className={`w-full transition-all duration-400 ease-out lg:w-[44%] ${
+                      isTransitioning ? "opacity-95" : "opacity-100"
+                    }`}
+                  >
+                    <div className="relative aspect-[16/10] transform overflow-hidden rounded-3xl shadow-2xl transition-all duration-400">
+                      {parcerias.filter((p) => p.imagem && p.mimeType)[
+                        currentSlide
+                      ]?.imagem &&
+                      parcerias.filter((p) => p.imagem && p.mimeType)[
+                        currentSlide
+                      ]?.mimeType ? (
+                        <div className="relative h-full w-full">
+                          <Image
+                            src={`data:${parcerias.filter((p) => p.imagem && p.mimeType)[currentSlide]?.mimeType};base64,${parcerias.filter((p) => p.imagem && p.mimeType)[currentSlide]?.imagem}`}
+                            alt={
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                currentSlide
+                              ]?.titulo || "Imagem da parceria"
+                            }
+                            fill
+                            className={`object-cover transition-all duration-400 ${
+                              isTransitioning ? "scale-[1.01]" : "scale-100"
+                            }`}
                             onError={(e) => {
                               console.error(
-                                "Erro ao carregar imagem da parceria (seguinte):",
-                                parcerias[getSlideIndex(1)]?.titulo,
+                                "Erro ao carregar imagem da parceria:",
+                                parcerias.filter((p) => p.imagem && p.mimeType)[
+                                  currentSlide
+                                ]?.titulo,
                               );
                               (e.target as HTMLImageElement).style.display =
                                 "none";
                             }}
+                            priority
                           />
                         </div>
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Award className="h-12 w-12 text-amber-400" />
+                          <Award className="h-16 w-16 text-amber-400" />
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                      <div className="absolute right-4 bottom-4 left-4">
-                        <h4 className="truncate text-lg font-bold text-white">
-                          {parcerias[getSlideIndex(1)]?.titulo}
-                        </h4>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-300">
-                          {parcerias[getSlideIndex(1)]?.descricao}
-                        </p>
+
+                      <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent">
+                        <div
+                          className={`w-full p-6 text-white transition-all duration-400 lg:p-8 ${
+                            isTransitioning
+                              ? "translate-y-1 opacity-90"
+                              : "translate-y-0 opacity-100"
+                          }`}
+                        >
+                          <h3 className="mb-3 text-2xl leading-tight font-bold lg:text-3xl">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                currentSlide
+                              ]?.titulo
+                            }
+                          </h3>
+                          <p className="mb-4 line-clamp-2 text-base leading-relaxed text-gray-200 lg:mb-6 lg:text-lg">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                currentSlide
+                              ]?.descricao
+                            }
+                          </p>
+                          {parcerias.filter((p) => p.imagem && p.mimeType)[
+                            currentSlide
+                          ]?.url && (
+                            <a
+                              href={
+                                parcerias.filter((p) => p.imagem && p.mimeType)[
+                                  currentSlide
+                                ]?.url
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
+                            >
+                              Visitar Site
+                              <ChevronRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" />
+                            </a>
+                          )}
+                        </div>
                       </div>
+
+                      <div className="absolute inset-0 rounded-3xl ring-1 ring-amber-500/20" />
                     </div>
                   </div>
+
+                  {/* Card Posterior (Direita) */}
+                  {parcerias.filter((p) => p.imagem && p.mimeType).length >
+                    1 && (
+                    <div
+                      className={`hidden w-[28%] cursor-pointer transition-all duration-300 ease-out lg:block ${
+                        isTransitioning
+                          ? "opacity-30"
+                          : "opacity-60 hover:opacity-80"
+                      }`}
+                      onClick={() => goToSlide(getSlideIndex(1))}
+                    >
+                      <div className="relative aspect-[16/9] transform overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 hover:scale-[1.02]">
+                        {parcerias.filter((p) => p.imagem && p.mimeType)[
+                          getSlideIndex(1)
+                        ]?.imagem &&
+                        parcerias.filter((p) => p.imagem && p.mimeType)[
+                          getSlideIndex(1)
+                        ]?.mimeType ? (
+                          <div className="relative h-full w-full">
+                            <Image
+                              src={`data:${parcerias.filter((p) => p.imagem && p.mimeType)[getSlideIndex(1)]?.mimeType};base64,${parcerias.filter((p) => p.imagem && p.mimeType)[getSlideIndex(1)]?.imagem}`}
+                              alt={
+                                parcerias.filter((p) => p.imagem && p.mimeType)[
+                                  getSlideIndex(1)
+                                ]?.titulo ?? "Imagem da parceria seguinte"
+                              }
+                              fill
+                              className="object-cover transition-transform duration-300"
+                              onError={(e) => {
+                                console.error(
+                                  "Erro ao carregar imagem da parceria (seguinte):",
+                                  parcerias.filter(
+                                    (p) => p.imagem && p.mimeType,
+                                  )[getSlideIndex(1)]?.titulo,
+                                );
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
+                            <Award className="h-12 w-12 text-amber-400" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                        <div className="absolute right-4 bottom-4 left-4">
+                          <h4 className="truncate text-lg font-bold text-white">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                getSlideIndex(1)
+                              ]?.titulo
+                            }
+                          </h4>
+                          <p className="mt-1 line-clamp-2 text-sm text-gray-300">
+                            {
+                              parcerias.filter((p) => p.imagem && p.mimeType)[
+                                getSlideIndex(1)
+                              ]?.descricao
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Navegação do carrossel */}
+                {parcerias.filter((p) => p.imagem && p.mimeType).length > 1 && (
+                  <>
+                    <button
+                      onClick={prevSlide}
+                      disabled={isTransitioning}
+                      className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:left-4"
+                      aria-label="Slide anterior"
+                    >
+                      <ChevronLeft className="h-5 w-5 lg:h-6 lg:w-6" />
+                    </button>
+                    <button
+                      onClick={nextSlide}
+                      disabled={isTransitioning}
+                      className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:right-4"
+                      aria-label="Próximo slide"
+                    >
+                      <ChevronRight className="h-5 w-5 lg:h-6 lg:w-6" />
+                    </button>
+
+                    {/* Indicadores */}
+                    <div className="mt-8 flex justify-center space-x-3">
+                      {parcerias
+                        .filter((p) => p.imagem && p.mimeType)
+                        .map((_, index) => (
+                          <button
+                            key={index}
+                            onClick={() => goToSlide(index)}
+                            disabled={isTransitioning}
+                            className={`h-3 w-3 rounded-full transition-all duration-300 disabled:cursor-not-allowed ${
+                              index === currentSlide
+                                ? "scale-110 bg-amber-500 shadow-md shadow-amber-500/30"
+                                : "bg-gray-400 hover:scale-105 hover:bg-gray-300"
+                            }`}
+                            aria-label={`Ir para slide ${index + 1}`}
+                          />
+                        ))}
+                    </div>
+                  </>
                 )}
               </div>
-
-              {/* Navegação do carrossel */}
-              {parcerias.length > 1 && (
-                <>
-                  <button
-                    onClick={prevSlide}
-                    disabled={isTransitioning}
-                    className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:left-4"
-                    aria-label="Slide anterior"
-                  >
-                    <ChevronLeft className="h-5 w-5 lg:h-6 lg:w-6" />
-                  </button>
-                  <button
-                    onClick={nextSlide}
-                    disabled={isTransitioning}
-                    className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:right-4"
-                    aria-label="Próximo slide"
-                  >
-                    <ChevronRight className="h-5 w-5 lg:h-6 lg:w-6" />
-                  </button>
-
-                  {/* Indicadores */}
-                  <div className="mt-8 flex justify-center space-x-3">
-                    {parcerias.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => goToSlide(index)}
-                        disabled={isTransitioning}
-                        className={`h-3 w-3 rounded-full transition-all duration-300 disabled:cursor-not-allowed ${
-                          index === currentSlide
-                            ? "scale-110 bg-amber-500 shadow-md shadow-amber-500/30"
-                            : "bg-gray-400 hover:scale-105 hover:bg-gray-300"
-                        }`}
-                        aria-label={`Ir para slide ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* Section de Agendamento */}
-      <section id="agendamento" className="bg-gray-900 px-6 py-20 text-white">
-        <div className="container mx-auto max-w-xl text-center">
-          <h2 className="mb-6 text-4xl font-bold text-white">
-            <CalendarDays className="mr-2 inline-block h-8 w-8 text-amber-400" />
-            Agende Seu Horário
-          </h2>
-          <p className="mb-6 text-lg text-gray-300">
-            Escolha uma data a partir de{" "}
-            <strong>{minDate.toLocaleDateString()}</strong>.
-          </p>
-
-          <div className="mx-auto max-w-sm">
-            <DatePicker
-              selected={selectedDate}
-              onChange={(date) => setSelectedDate(date)}
-              minDate={minDate}
-              dateFormat="dd/MM/yyyy"
-              placeholderText="Selecione uma data"
-              className="w-full rounded-lg border border-gray-600 bg-gray-800 p-3 text-white placeholder-gray-400 focus:outline-none"
-            />
-          </div>
-
-          {selectedDate && (
-            <div className="mt-4 text-green-400">
-              Você selecionou: {selectedDate.toLocaleDateString()}
-            </div>
-          )}
-
-          <Button className="mt-6 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
-            Confirmar Agendamento
-          </Button>
-        </div>
-      </section>
+          </section>
+        )}
 
       {/* Casos de Sucesso - Clientes */}
       <section id="clientes" className="bg-black/20 px-6 py-16">
@@ -520,14 +558,16 @@ export default function LandingPage() {
             </p>
           ) : clientes && clientes.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {clientes.map((cliente) => (
-                <Card
-                  key={cliente.id}
-                  className="group border-gray-700 bg-gray-800/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800/70"
-                >
-                  <CardContent className="p-6 text-center">
-                    <div className="mb-4 flex justify-center">
-                      {cliente.imagem && cliente.mimeType ? (
+              {clientes
+                .filter((cliente) => cliente.imagem && cliente.mimeType) // Só mostra clientes com imagem
+                .slice(0, 5) // Garante máximo 5 clientes
+                .map((cliente) => (
+                  <Card
+                    key={cliente.id}
+                    className="group border-gray-700 bg-gray-800/50 backdrop-blur-sm transition-all duration-300 hover:bg-gray-800/70"
+                  >
+                    <CardContent className="p-6 text-center">
+                      <div className="mb-4 flex justify-center">
                         <div className="relative h-20 w-20">
                           <Image
                             src={`data:${cliente.mimeType};base64,${cliente.imagem}`}
@@ -544,27 +584,24 @@ export default function LandingPage() {
                             }}
                           />
                         </div>
-                      ) : (
-                        <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Users className="h-8 w-8 text-amber-400" />
-                        </div>
-                      )}
-                    </div>
-                    <h3 className="mb-2 text-xl font-semibold text-white">
-                      {cliente.titulo}
-                    </h3>
-                    <p className="text-sm text-gray-400">{cliente.descricao}</p>
-                    <div className="mt-4 flex justify-center">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className="h-4 w-4 fill-current text-amber-400"
-                        />
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </div>
+                      <h3 className="mb-2 text-xl font-semibold text-white">
+                        {cliente.titulo}
+                      </h3>
+                      <p className="text-sm text-gray-400">
+                        {cliente.descricao}
+                      </p>
+                      <div className="mt-4 flex justify-center">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            className="h-4 w-4 fill-current text-amber-400"
+                          />
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
             </div>
           ) : (
             <div className="text-center">
@@ -578,6 +615,28 @@ export default function LandingPage() {
           )}
         </div>
       </section>
+
+      {/* Seção de Agendamento */}
+      {showAgendamento && (
+        <section className="bg-black/30 px-6 py-16">
+          <div className="container mx-auto max-w-7xl">
+            <div className="mb-8 flex items-center justify-between">
+              <h2 className="text-3xl font-bold text-white">
+                <Calendar className="mr-3 inline h-8 w-8 text-amber-400" />
+                Solicitar Agendamento
+              </h2>
+              <Button
+                onClick={() => setShowAgendamento(false)}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                Fechar
+              </Button>
+            </div>
+            <FormularioAgendamento modo="publico" />
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-black/40 px-6 py-8">
@@ -639,7 +698,6 @@ export default function LandingPage() {
                   type="password"
                   required
                   className="w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                  placeholder="••••••••"
                 />
               </div>
 

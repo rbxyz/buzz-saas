@@ -3,7 +3,8 @@ import type React from "react";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { type Metadata } from "next";
+import { NavigationOverlay } from "@/components/navigation/navigation-overlay";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Buzz | Saas",
@@ -30,6 +31,9 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+
+        {/* Overlay de navegação global */}
+        <NavigationOverlay />
       </div>
     </SidebarProvider>
   );
