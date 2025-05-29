@@ -133,7 +133,6 @@ export const agendamentoRouter = createTRPCRouter({
       return result[0]
     }),
 
-  // Novas funcionalidades públicas
   getServicos: publicProcedure.query(async () => {
     const configuracao = await db.query.configuracoes.findFirst()
     if (!configuracao) return []
@@ -337,7 +336,6 @@ export const agendamentoRouter = createTRPCRouter({
       return result[0]
     }),
 
-  // Nova mutation para solicitação de agendamento público
   criarSolicitacaoAgendamento: publicProcedure
     .input(
       z.object({
@@ -361,7 +359,7 @@ export const agendamentoRouter = createTRPCRouter({
           .values({
             nome: input.nome,
             telefone: input.telefone,
-            email: null, // Email não é obrigatório na solicitação pública
+            email: null,
           })
           .returning()
         cliente = novoCliente[0]!
@@ -372,12 +370,6 @@ export const agendamentoRouter = createTRPCRouter({
           await db.update(clientes).set({ nome: input.nome, updatedAt: new Date() }).where(eq(clientes.id, cliente.id))
         }
       }
-
-      // Por enquanto, vamos apenas retornar sucesso
-      // Em uma implementação real, você poderia:
-      // 1. Salvar a solicitação em uma tabela separada
-      // 2. Enviar notificação para o admin
-      // 3. Integrar com WhatsApp/SMS para contato
 
       return {
         success: true,
@@ -481,7 +473,6 @@ export const agendamentoRouter = createTRPCRouter({
     return resultado
   }),
 
-  // Nova mutation para agendamento manual (admin)
   criarAgendamentoManual: publicProcedure
     .input(
       z.object({
@@ -559,7 +550,6 @@ export const agendamentoRouter = createTRPCRouter({
       return result[0]
     }),
 
-  // Novo procedimento para buscar horários disponíveis baseado na data e serviço
   getHorariosDisponiveisPorData: publicProcedure
     .input(
       z.object({
@@ -686,7 +676,7 @@ export const agendamentoRouter = createTRPCRouter({
       }
     }),
 
-  // Também adicionar um procedimento para verificar conflito específico
+  // Procedimento verificarConflito CORRIGIDO
   verificarConflito: publicProcedure
     .input(
       z.object({
@@ -696,25 +686,101 @@ export const agendamentoRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
-      const dataHora = dayjs(`${input.data}T${input.horario}`)
+      const { data, horario, servico } = input
 
-      const configuracao = await db.query.configuracoes.findFirst()
-      if (!configuracao) {
-        return { temConflito: true, proximoDisponivel: null, erro: "Configuração não encontrada" }
+      // Validar formato do horário
+      const horarioRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      if (!horarioRegex.test(horario)) {
+        return {
+          temConflito: true,
+          motivo: "Formato de horário inválido",
+          proximoDisponivel: null,
+        }
       }
 
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
-      if (!servicoSelecionado) {
-        return { temConflito: true, proximoDisponivel: null, erro: "Serviço não encontrado" }
+      // Buscar configurações da barbearia usando a estrutura correta do Drizzle
+      const config = await db.query.configuracoes.findFirst()
+      if (!config) {
+        return {
+          temConflito: true,
+          motivo: "Configurações não encontradas",
+          proximoDisponivel: null,
+        }
       }
 
-      const duracaoServico = servicoSelecionado.duracaoMinutos || 30
-      const fimAgendamento = dataHora.add(duracaoServico, "minute")
+      // Buscar duração do serviço no array de serviços da configuração
+      const servicos = config.servicos as ServicoConfigurado[]
+      const servicoInfo = servicos.find((s) => s.nome === servico)
+      const duracaoMinutos = servicoInfo?.duracaoMinutos || 30
 
-      // Buscar agendamentos existentes para este dia
-      const start = dataHora.startOf("day").toDate()
-      const end = dataHora.endOf("day").toDate()
+      // Converter horário para minutos para facilitar cálculos
+      const [horas, minutos] = horario.split(":").map(Number)
+      const horarioMinutos = horas! * 60 + minutos!
+      const horarioFimMinutos = horarioMinutos + duracaoMinutos
+
+      // Buscar intervalos de trabalho para este dia
+      const dataObj = dayjs(data)
+      const diaSemana = getDiaSemana(dataObj.toDate()) as any
+
+      const intervalos = await db.query.intervalosTrabalho.findMany({
+        where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
+        orderBy: [intervalosTrabalho.horaInicio],
+      })
+
+      // Verificar se está dentro de algum intervalo de trabalho
+      let dentroIntervalo = false
+      for (const intervalo of intervalos) {
+        const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
+        const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+
+        const inicioMinutos = horaInicio! * 60 + minutoInicio!
+        const fimMinutos = horaFim! * 60 + minutoFim!
+
+        if (horarioMinutos >= inicioMinutos && horarioFimMinutos <= fimMinutos) {
+          dentroIntervalo = true
+          break
+        }
+      }
+
+      // Se não está dentro de nenhum intervalo, encontrar próximo início
+      if (!dentroIntervalo) {
+        let proximoInicioMinutos = null
+
+        // Buscar próximo início de intervalo após o horário atual
+        for (const intervalo of intervalos) {
+          const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
+          const inicioMinutos = horaInicio! * 60 + minutoInicio!
+
+          if (inicioMinutos > horarioMinutos) {
+            proximoInicioMinutos = inicioMinutos
+            break
+          }
+        }
+
+        // Se não encontrou, pegar o primeiro intervalo do dia
+        if (proximoInicioMinutos === null && intervalos.length > 0) {
+          const primeiroIntervalo = intervalos[0]!
+          const [horaInicio, minutoInicio] = primeiroIntervalo.horaInicio.split(":").map(Number)
+          proximoInicioMinutos = horaInicio! * 60 + minutoInicio!
+        }
+
+        // Converter de volta para formato HH:MM
+        if (proximoInicioMinutos !== null) {
+          const proximaHora = Math.floor(proximoInicioMinutos / 60)
+          const proximoMinuto = proximoInicioMinutos % 60
+          const proximoDisponivel = `${proximaHora.toString().padStart(2, "0")}:${proximoMinuto.toString().padStart(2, "0")}`
+
+          return {
+            temConflito: true,
+            motivo: "Horário fora do período de trabalho",
+            proximoDisponivel,
+          }
+        }
+      }
+
+      // Verificar conflitos com agendamentos existentes
+      const start = dataObj.startOf("day").toDate()
+      const end = dataObj.endOf("day").toDate()
 
       const agendamentosExistentes = await db
         .select({
@@ -726,91 +792,75 @@ export const agendamentoRouter = createTRPCRouter({
           and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
         )
 
-      const temConflito = agendamentosExistentes.some((agendamento) => {
-        const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
+      // Verificar sobreposição de horários
+      for (const agendamento of agendamentosExistentes) {
+        const inicioAgendamento = dayjs(agendamento.dataHora)
+        const horasExistente = inicioAgendamento.hour()
+        const minutosExistente = inicioAgendamento.minute()
+        const horarioExistenteMinutos = horasExistente * 60 + minutosExistente
+        const horarioExistenteFimMinutos = horarioExistenteMinutos + agendamento.duracaoMinutos
 
-        return dataHora.isBefore(fimExistente) && fimAgendamento.isAfter(inicioExistente)
-      })
+        // Verificar sobreposição
+        const temSobreposicao =
+          (horarioMinutos >= horarioExistenteMinutos && horarioMinutos < horarioExistenteFimMinutos) ||
+          (horarioFimMinutos > horarioExistenteMinutos && horarioFimMinutos <= horarioExistenteFimMinutos) ||
+          (horarioMinutos <= horarioExistenteMinutos && horarioFimMinutos >= horarioExistenteFimMinutos)
 
-      let proximoDisponivel = null
-      if (temConflito) {
-        // Buscar horários disponíveis para encontrar o próximo
-        const { horarios } = await db.query.intervalosTrabalho
-          .findMany({
-            where: and(
-              eq(intervalosTrabalho.diaSemana, getDiaSemana(dataHora.toDate()) as any),
-              eq(intervalosTrabalho.ativo, true),
-            ),
-            orderBy: [intervalosTrabalho.horaInicio],
-          })
-          .then(async (intervalos) => {
-            if (intervalos.length === 0) return { horarios: [] }
+        if (temSobreposicao) {
+          // Encontrar próximo horário disponível
+          let proximoDisponivel = null
 
-            const horariosDisponiveis: string[] = []
-            for (const intervalo of intervalos) {
-              const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-              const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+          // Gerar horários possíveis em intervalos de 30 minutos
+          for (const intervalo of intervalos) {
+            const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
+            const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
 
-              const inicioMinutos = horaInicio! * 60 + minutoInicio!
-              const fimMinutos = horaFim! * 60 + minutoFim!
+            const inicioMinutos = horaInicio! * 60 + minutoInicio!
+            const fimMinutos = horaFim! * 60 + minutoFim!
 
-              for (let minutos = inicioMinutos; minutos + duracaoServico <= fimMinutos; minutos += 10) {
-                const hora = Math.floor(minutos / 60)
-                const minuto = minutos % 60
-                horariosDisponiveis.push(`${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`)
+            for (let minuto = inicioMinutos; minuto <= fimMinutos - duracaoMinutos; minuto += 30) {
+              if (minuto <= horarioMinutos) continue // Só horários após o solicitado
+
+              // Verificar se este horário não conflita com nenhum agendamento
+              let temConflito = false
+              for (const agend of agendamentosExistentes) {
+                const inicioAgend = dayjs(agend.dataHora)
+                const agendMinutos = inicioAgend.hour() * 60 + inicioAgend.minute()
+                const agendFimMinutos = agendMinutos + agend.duracaoMinutos
+
+                if (
+                  (minuto >= agendMinutos && minuto < agendFimMinutos) ||
+                  (minuto + duracaoMinutos > agendMinutos && minuto + duracaoMinutos <= agendFimMinutos) ||
+                  (minuto <= agendMinutos && minuto + duracaoMinutos >= agendFimMinutos)
+                ) {
+                  temConflito = true
+                  break
+                }
+              }
+
+              if (!temConflito) {
+                const hora = Math.floor(minuto / 60)
+                const min = minuto % 60
+                proximoDisponivel = `${hora.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`
+                break
               }
             }
+            if (proximoDisponivel) break
+          }
 
-            return { horarios: horariosDisponiveis }
-          })
-
-        // Encontrar próximo horário disponível após o horário solicitado
-        const horarioSolicitado = input.horario
-        const horariosPosteriores = horarios.filter((h) => h > horarioSolicitado)
-
-        for (const horario of horariosPosteriores) {
-          const testeDataHora = dayjs(`${input.data}T${horario}`)
-          const testeFim = testeDataHora.add(duracaoServico, "minute")
-
-          const testeConflito = agendamentosExistentes.some((agendamento) => {
-            const inicioExistente = dayjs(agendamento.dataHora)
-            const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
-
-            return testeDataHora.isBefore(fimExistente) && testeFim.isAfter(inicioExistente)
-          })
-
-          if (!testeConflito) {
-            proximoDisponivel = horario
-            break
+          return {
+            temConflito: true,
+            motivo: "Horário já ocupado por outro agendamento",
+            proximoDisponivel,
           }
         }
       }
 
+      // Se chegou até aqui, não há conflito
       return {
-        temConflito,
-        proximoDisponivel,
-        erro: null,
+        temConflito: false,
+        motivo: null,
+        proximoDisponivel: null,
       }
     }),
-    searchClienteByTelefone: publicProcedure
-    .input(z.object({ telefone: z.string() }))
-    .query(async ({ input }) => {
-      const { telefone } = input;
-      const formattedTelefone = formatPhoneNumber(telefone);
-
-      const cliente = await prisma.cliente.findUnique({
-        where: { telefone: formattedTelefone },
-      });
-
-      return cliente;
-    }),
-
 })
-
-
-// Utility function to format phone numbers
-function formatPhoneNumber(phoneNumber: string): string {
-  // Implement phone number formatting logic here
-  return phoneNumber.replace(/\D/g, ''); // Example: remove all non-digit characters
-}
