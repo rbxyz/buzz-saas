@@ -793,4 +793,24 @@ export const agendamentoRouter = createTRPCRouter({
         erro: null,
       }
     }),
+    searchClienteByTelefone: publicProcedure
+    .input(z.object({ telefone: z.string() }))
+    .query(async ({ input }) => {
+      const { telefone } = input;
+      const formattedTelefone = formatPhoneNumber(telefone);
+
+      const cliente = await prisma.cliente.findUnique({
+        where: { telefone: formattedTelefone },
+      });
+
+      return cliente;
+    }),
+
 })
+
+
+// Utility function to format phone numbers
+function formatPhoneNumber(phoneNumber: string): string {
+  // Implement phone number formatting logic here
+  return phoneNumber.replace(/\D/g, ''); // Example: remove all non-digit characters
+}

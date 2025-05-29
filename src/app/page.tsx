@@ -5,6 +5,8 @@ import { api } from "@/trpc/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ChevronRight,
   ChevronLeft,
@@ -16,16 +18,33 @@ import {
   Award,
   Sparkles,
   Calendar,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  User,
+  CalendarDays,
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
-import FormularioAgendamento from "@/components/agendamentos/formulario-agendamento";
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  // Estados para agendamento
+  const [telefoneAgendamento, setTelefoneAgendamento] = useState("");
+  const [clienteEncontrado, setClienteEncontrado] = useState<any>(null);
+  const [nomeNovoCliente, setNomeNovoCliente] = useState("");
+  const [dataAgendamento, setDataAgendamento] = useState<Date | null>(null);
+  const [servicoSelecionado, setServicoSelecionado] = useState("");
+  const [horarioSelecionado, setHorarioSelecionado] = useState("");
+  const [etapaAgendamento, setEtapaAgendamento] = useState<
+    "telefone" | "dados" | "servico" | "horario" | "confirmacao"
+  >("telefone");
+  const [agendamentoSucesso, setAgendamentoSucesso] = useState(false);
+
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 30); // Apenas 30 dias depois da data atual
 
@@ -42,10 +61,86 @@ export default function LandingPage() {
   // Busca configurações da barbearia
   const { data: configs } = api.configuracao.listar.useQuery();
 
+  // Queries para agendamento
+  const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
+
+  const { data: clientePorTelefone, isLoading: buscandoCliente } =
+    api.cliente.buscarPorTelefone.useQuery(
+      { telefone: telefoneAgendamento },
+      {
+        enabled: telefoneAgendamento.length >= 10,
+      },
+    );
+
+  const { data: horariosDisponiveis, isLoading: carregandoHorarios } =
+    api.agendamento.getHorariosDisponiveisPorData.useQuery(
+      {
+        data: dataAgendamento
+          ? dataAgendamento.toISOString().split("T")[0]
+          : "",
+        servico: servicoSelecionado,
+      },
+      {
+        enabled: !!dataAgendamento && !!servicoSelecionado,
+      },
+    );
+
+  const criarAgendamentoMutation =
+    api.agendamento.criarAgendamentoPublico.useMutation({
+      onSuccess: () => {
+        setAgendamentoSucesso(true);
+        setEtapaAgendamento("confirmacao");
+      },
+      onError: (error) => {
+        alert(`Erro ao criar agendamento: ${error.message}`);
+      },
+    });
+
   const handleLogin = () => {
     // Aqui você pode implementar a lógica de login
     // Por enquanto, vamos redirecionar para o dashboard
     window.location.href = "/dashboard";
+  };
+
+  // Funções para agendamento
+  const formatarTelefone = (valor: string) => {
+    const numeros = valor.replace(/\D/g, "");
+    if (numeros.length <= 11) {
+      return numeros.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    }
+    return valor;
+  };
+
+  const limparTelefone = (valor: string) => {
+    return valor.replace(/\D/g, "");
+  };
+
+  const resetarAgendamento = () => {
+    setTelefoneAgendamento("");
+    setClienteEncontrado(null);
+    setNomeNovoCliente("");
+    setDataAgendamento(null);
+    setServicoSelecionado("");
+    setHorarioSelecionado("");
+    setEtapaAgendamento("telefone");
+    setAgendamentoSucesso(false);
+  };
+
+  const confirmarAgendamento = () => {
+    if (!dataAgendamento || !horarioSelecionado || !servicoSelecionado) {
+      alert("Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    const telefoneNumeros = limparTelefone(telefoneAgendamento);
+
+    criarAgendamentoMutation.mutate({
+      nome: nomeNovoCliente,
+      telefone: telefoneNumeros,
+      data: dataAgendamento.toISOString().split("T")[0],
+      horario: horarioSelecionado,
+      servico: servicoSelecionado,
+    });
   };
 
   const nextSlide = useCallback(() => {
@@ -261,11 +356,447 @@ export default function LandingPage() {
               Agende Seu Horário
             </h2>
             <p className="text-lg text-gray-400">
-              Solicite seu agendamento de forma rápida e prática
+              Faça seu agendamento de forma rápida e prática
             </p>
           </div>
 
-          <FormularioAgendamento modo="publico" />
+          <Card className="border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+            <CardContent className="p-8">
+              {!agendamentoSucesso ? (
+                <>
+                  {/* Etapa 1: Telefone */}
+                  {etapaAgendamento === "telefone" && (
+                    <div className="space-y-6">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
+                          <Phone className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-white">
+                          Informe seu telefone
+                        </h3>
+                        <p className="text-gray-400">
+                          Vamos verificar se você já é nosso cliente
+                        </p>
+                      </div>
+
+                      <div className="mx-auto max-w-md space-y-4">
+                        <div>
+                          <Label htmlFor="telefone" className="text-white">
+                            Telefone
+                          </Label>
+                          <Input
+                            id="telefone"
+                            type="tel"
+                            placeholder="(11) 99999-9999"
+                            value={telefoneAgendamento}
+                            onChange={(e) => {
+                              const valorFormatado = formatarTelefone(
+                                e.target.value,
+                              );
+                              setTelefoneAgendamento(valorFormatado);
+                            }}
+                            className="mt-2 border-gray-600 bg-gray-700 text-white"
+                            maxLength={15}
+                          />
+                        </div>
+
+                        {buscandoCliente && (
+                          <div className="flex items-center justify-center gap-2 text-amber-400">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Verificando...</span>
+                          </div>
+                        )}
+
+                        <Button
+                          onClick={() => {
+                            const telefoneNumeros =
+                              limparTelefone(telefoneAgendamento);
+                            if (telefoneNumeros.length >= 10) {
+                              // Verificar se já temos os dados da query
+                              if (clientePorTelefone) {
+                                // Cliente encontrado
+                                setClienteEncontrado(clientePorTelefone);
+                                setNomeNovoCliente(clientePorTelefone.nome);
+                                setEtapaAgendamento("servico");
+                              } else if (
+                                clientePorTelefone === null &&
+                                !buscandoCliente
+                              ) {
+                                // Cliente não encontrado e query já terminou
+                                setClienteEncontrado(null);
+                                setEtapaAgendamento("dados");
+                              } else if (buscandoCliente) {
+                                // Ainda carregando, não fazer nada
+                                return;
+                              } else {
+                                // Forçar a execução da query se ainda não foi executada
+                                // Isso não deveria acontecer, mas é uma segurança
+                                alert("Aguarde a verificação do telefone");
+                              }
+                            } else {
+                              alert("Digite um telefone válido");
+                            }
+                          }}
+                          disabled={
+                            limparTelefone(telefoneAgendamento).length < 10 ||
+                            buscandoCliente
+                          }
+                          className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                        >
+                          Continuar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Etapa 2: Dados do novo cliente */}
+                  {etapaAgendamento === "dados" && (
+                    <div className="space-y-6">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
+                          <User className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-white">
+                          Novo cliente
+                        </h3>
+                        <p className="text-gray-400">
+                          Precisamos de algumas informações básicas
+                        </p>
+                      </div>
+
+                      <div className="mx-auto max-w-md space-y-4">
+                        <div>
+                          <Label htmlFor="nome" className="text-white">
+                            Nome completo
+                          </Label>
+                          <Input
+                            id="nome"
+                            type="text"
+                            placeholder="Seu nome completo"
+                            value={nomeNovoCliente}
+                            onChange={(e) => setNomeNovoCliente(e.target.value)}
+                            className="mt-2 border-gray-600 bg-gray-700 text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-white">Telefone</Label>
+                          <Input
+                            value={telefoneAgendamento}
+                            disabled
+                            className="mt-2 border-gray-500 bg-gray-600 text-gray-300"
+                          />
+                        </div>
+
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={() => setEtapaAgendamento("telefone")}
+                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (nomeNovoCliente.trim()) {
+                                setEtapaAgendamento("servico");
+                              } else {
+                                alert("Digite seu nome");
+                              }
+                            }}
+                            disabled={!nomeNovoCliente.trim()}
+                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                          >
+                            Continuar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Etapa 3: Seleção de serviço */}
+                  {etapaAgendamento === "servico" && (
+                    <div className="space-y-6">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
+                          <Sparkles className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-white">
+                          {clienteEncontrado
+                            ? `Olá, ${clienteEncontrado.nome}!`
+                            : `Olá, ${nomeNovoCliente}!`}
+                        </h3>
+                        <p className="text-gray-400">
+                          Escolha o serviço desejado
+                        </p>
+                      </div>
+
+                      <div className="mx-auto max-w-md space-y-4">
+                        <div>
+                          <Label className="text-white">Serviço</Label>
+                          <select
+                            value={servicoSelecionado}
+                            onChange={(e) =>
+                              setServicoSelecionado(e.target.value)
+                            }
+                            className="mt-2 w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                          >
+                            <option value="">Selecione um serviço</option>
+                            {servicosDisponiveis?.map((servico) => (
+                              <option key={servico.nome} value={servico.nome}>
+                                {servico.nome} - R$ {servico.preco} (
+                                {servico.duracaoMinutos}min)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <Label className="text-white">Data desejada</Label>
+                          <Input
+                            type="date"
+                            value={
+                              dataAgendamento
+                                ? dataAgendamento.toISOString().split("T")[0]
+                                : ""
+                            }
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setDataAgendamento(
+                                  new Date(e.target.value + "T00:00:00"),
+                                );
+                              } else {
+                                setDataAgendamento(null);
+                              }
+                            }}
+                            min={new Date().toISOString().split("T")[0]}
+                            className="mt-2 border-gray-600 bg-gray-700 text-white"
+                          />
+                        </div>
+
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              setEtapaAgendamento(
+                                clienteEncontrado ? "telefone" : "dados",
+                              )
+                            }
+                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              if (servicoSelecionado && dataAgendamento) {
+                                setEtapaAgendamento("horario");
+                              } else {
+                                alert("Selecione o serviço e a data");
+                              }
+                            }}
+                            disabled={!servicoSelecionado || !dataAgendamento}
+                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                          >
+                            Ver Horários
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Etapa 4: Seleção de horário */}
+                  {etapaAgendamento === "horario" && (
+                    <div className="space-y-6">
+                      <div className="text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
+                          <Clock className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-white">
+                          Escolha o horário
+                        </h3>
+                        <p className="text-gray-400">
+                          {servicoSelecionado} em{" "}
+                          {dataAgendamento?.toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+
+                      <div className="mx-auto max-w-2xl space-y-4">
+                        {carregandoHorarios ? (
+                          <div className="flex items-center justify-center gap-2 py-8 text-amber-400">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            <span>Carregando horários disponíveis...</span>
+                          </div>
+                        ) : horariosDisponiveis?.erro ? (
+                          <div className="py-8 text-center">
+                            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+                            <p className="text-red-400">
+                              {horariosDisponiveis.erro}
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            {horariosDisponiveis?.intervalos &&
+                              horariosDisponiveis.intervalos.length > 0 && (
+                                <div className="mb-6 rounded-md border border-blue-200 bg-blue-50/10 p-4">
+                                  <div className="mb-2 flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-blue-400" />
+                                    <span className="text-sm font-medium text-blue-300">
+                                      Funcionamento:
+                                    </span>
+                                  </div>
+                                  <div className="text-sm text-blue-200">
+                                    {horariosDisponiveis.intervalos.map(
+                                      (intervalo, index) => (
+                                        <span key={index}>
+                                          {intervalo.inicio} às {intervalo.fim}
+                                          {index <
+                                            horariosDisponiveis.intervalos
+                                              .length -
+                                              1 && " • "}
+                                        </span>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
+                              {horariosDisponiveis?.horarios
+                                ?.filter((h) => h.disponivel)
+                                ?.slice(0, 18)
+                                ?.map((horario) => (
+                                  <Button
+                                    key={horario.horario}
+                                    variant={
+                                      horarioSelecionado === horario.horario
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    onClick={() =>
+                                      setHorarioSelecionado(horario.horario)
+                                    }
+                                    className={`text-sm ${
+                                      horarioSelecionado === horario.horario
+                                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                                        : "border-gray-600 text-gray-300 hover:bg-gray-700"
+                                    }`}
+                                  >
+                                    {horario.horario}
+                                  </Button>
+                                ))}
+                            </div>
+
+                            {horariosDisponiveis?.horarios?.filter(
+                              (h) => h.disponivel,
+                            )?.length === 0 && (
+                              <div className="py-8 text-center">
+                                <CalendarDays className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+                                <p className="text-gray-400">
+                                  Nenhum horário disponível para esta data
+                                </p>
+                                <p className="mt-2 text-sm text-gray-500">
+                                  Tente escolher outra data
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        <div className="flex gap-3 pt-4">
+                          <Button
+                            variant="outline"
+                            onClick={() => setEtapaAgendamento("servico")}
+                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            onClick={confirmarAgendamento}
+                            disabled={
+                              !horarioSelecionado ||
+                              criarAgendamentoMutation.isLoading
+                            }
+                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                          >
+                            {criarAgendamentoMutation.isLoading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Agendando...
+                              </>
+                            ) : (
+                              "Confirmar Agendamento"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Etapa 5: Confirmação */
+                <div className="space-y-6 text-center">
+                  <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
+                    <CheckCircle className="h-12 w-12 text-green-400" />
+                  </div>
+
+                  <div>
+                    <h3 className="mb-4 text-3xl font-bold text-white">
+                      Agendamento Confirmado!
+                    </h3>
+                    <p className="mb-6 text-lg text-gray-300">
+                      Seu agendamento foi realizado com sucesso
+                    </p>
+                  </div>
+
+                  <div className="mx-auto max-w-md rounded-lg bg-gray-700/50 p-6">
+                    <h4 className="mb-4 text-lg font-semibold text-white">
+                      Detalhes do Agendamento
+                    </h4>
+                    <div className="space-y-2 text-left">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Cliente:</span>
+                        <span className="text-white">{nomeNovoCliente}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Telefone:</span>
+                        <span className="text-white">
+                          {telefoneAgendamento}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Serviço:</span>
+                        <span className="text-white">{servicoSelecionado}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Data:</span>
+                        <span className="text-white">
+                          {dataAgendamento?.toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Horário:</span>
+                        <span className="text-white">{horarioSelecionado}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-gray-400">
+                      Entraremos em contato via WhatsApp para confirmar seu
+                      agendamento
+                    </p>
+
+                    <Button
+                      onClick={resetarAgendamento}
+                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                    >
+                      Fazer Novo Agendamento
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </section>
 
@@ -304,7 +835,7 @@ export default function LandingPage() {
                           alt={parcerias[getSlideIndex(-1)]?.titulo ?? "Imagem"}
                           fill
                           className="object-cover transition-transform duration-300"
-                          priority={true} // ou loading="eager" caso queira carregar antes
+                          priority={true}
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
@@ -349,7 +880,6 @@ export default function LandingPage() {
                               "Erro ao carregar imagem da parceria:",
                               parcerias[currentSlide]?.titulo,
                             );
-                            // Oculta a imagem quebrada
                             (e.target as HTMLImageElement).style.display =
                               "none";
                           }}

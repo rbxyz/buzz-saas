@@ -106,8 +106,14 @@ export const clienteRouter = createTRPCRouter({
       }
   
       try {
-        // Buscar por telefone exato (apenas números)
-        const cliente = await db.select().from(clientes).where(eq(clientes.telefone, telefoneNumeros)).limit(1)
+        // Buscar por telefone exato (apenas números) ou com formatação
+        const cliente = await db
+          .select()
+          .from(clientes)
+          .where(
+            sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros}`
+          )
+          .limit(1)
   
         if (cliente[0]) {
           console.log("✅ Cliente encontrado no banco:", {
@@ -126,5 +132,4 @@ export const clienteRouter = createTRPCRouter({
         throw error
       }
     }),
-  
-})
+  })
