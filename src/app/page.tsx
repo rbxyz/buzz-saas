@@ -7,12 +7,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   ChevronRight,
   ChevronLeft,
@@ -30,94 +24,14 @@ import {
   User,
   CalendarDays,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
-
-// Componente para verificar horário em tempo real
-function VerificadorHorario({
-  data,
-  horario,
-  servico,
-  onHorarioSelecionado,
-}: {
-  data: string;
-  horario: string;
-  servico: string;
-  onHorarioSelecionado: (horario: string) => void;
-}) {
-  const { data: conflito, isLoading } =
-    api.agendamento.verificarConflito.useQuery(
-      { data, horario, servico },
-      { enabled: !!data && !!horario && !!servico },
-    );
-
-  if (isLoading) {
-    return (
-      <div className="mt-2 flex items-center gap-2 text-amber-400">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-sm">Verificando disponibilidade...</span>
-      </div>
-    );
-  }
-
-  if (conflito?.temConflito) {
-    return (
-      <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50/10 p-3">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-400" />
-          <div>
-            <p className="text-sm font-medium text-yellow-300">
-              Horário {horario} não disponível
-            </p>
-            {conflito.proximoDisponivel && (
-              <div className="mt-2">
-                <p className="text-sm text-yellow-200">
-                  Próximo horário disponível: {conflito.proximoDisponivel}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    onHorarioSelecionado(conflito.proximoDisponivel!)
-                  }
-                  className="mt-2 border-yellow-400 text-yellow-300 hover:bg-yellow-400/10"
-                >
-                  Selecionar {conflito.proximoDisponivel}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (conflito && !conflito.temConflito) {
-    return (
-      <div className="mt-2 rounded-md border border-green-200 bg-green-50/10 p-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="h-4 w-4 text-green-400" />
-          <div>
-            <p className="text-sm font-medium text-green-300">
-              Horário {horario} disponível!
-            </p>
-            <Button
-              size="sm"
-              onClick={() => onHorarioSelecionado(horario)}
-              className="mt-2 bg-green-600 hover:bg-green-700"
-            >
-              Confirmar {horario}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-}
+import dayjs from "dayjs";
+import "dayjs/locale/pt-br";
+import {
+  LayoutPanelLeftIcon as CalendarLeft,
+  PanelRightIcon as CalendarRight,
+} from "lucide-react";
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
@@ -132,12 +46,14 @@ export default function LandingPage() {
   const [dataAgendamento, setDataAgendamento] = useState<Date | null>(null);
   const [servicoSelecionado, setServicoSelecionado] = useState("");
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
-  const [horarioManual, setHorarioManual] = useState("");
-  const [horarioManualValido, setHorarioManualValido] = useState(false);
   const [etapaAgendamento, setEtapaAgendamento] = useState<
     "telefone" | "dados" | "servico" | "horario" | "confirmacao"
   >("telefone");
   const [agendamentoSucesso, setAgendamentoSucesso] = useState(false);
+  const [horarioManual, setHorarioManual] = useState("");
+  const [horarioManualValido, setHorarioManualValido] = useState(false);
+  const [calendarioAberto, setCalendarioAberto] = useState(false);
+  const [mesAtual, setMesAtual] = useState(dayjs());
 
   const minDate = new Date();
   minDate.setDate(minDate.getDate() + 30); // Apenas 30 dias depois da data atual
@@ -216,8 +132,6 @@ export default function LandingPage() {
     setDataAgendamento(null);
     setServicoSelecionado("");
     setHorarioSelecionado("");
-    setHorarioManual("");
-    setHorarioManualValido(false);
     setEtapaAgendamento("telefone");
     setAgendamentoSucesso(false);
   };
@@ -276,6 +190,22 @@ export default function LandingPage() {
       return () => clearInterval(interval);
     }
   }, [parcerias, nextSlide]);
+
+  useEffect(() => {
+    dayjs.locale("pt-br");
+  }, []);
+
+  const { data: conflito, isLoading: conflitoLoading } =
+    api.agendamento.verificarConflito.useQuery(
+      {
+        data: dataAgendamento
+          ? dataAgendamento.toISOString().split("T")[0]
+          : "",
+        horario: horarioManual,
+        servico: servicoSelecionado,
+      },
+      { enabled: !!dataAgendamento && !!horarioManual && !!servicoSelecionado },
+    );
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -623,7 +553,7 @@ export default function LandingPage() {
                             : `Olá, ${nomeNovoCliente}!`}
                         </h3>
                         <p className="text-gray-400">
-                          Escolha o serviço e a data desejada
+                          Escolha o serviço desejado
                         </p>
                       </div>
 
@@ -649,44 +579,176 @@ export default function LandingPage() {
 
                         <div>
                           <Label className="text-white">Data desejada</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className={`mt-2 w-full justify-start border-gray-600 bg-gray-700 text-left font-normal text-white hover:bg-gray-600 ${
-                                  !dataAgendamento && "text-gray-400"
-                                }`}
-                              >
-                                <Calendar className="mr-2 h-4 w-4" />
-                                {dataAgendamento ? (
-                                  format(dataAgendamento, "PPP", {
-                                    locale: ptBR,
-                                  })
-                                ) : (
-                                  <span>Selecione uma data</span>
-                                )}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              className="w-auto p-0"
-                              align="start"
+                          <div className="mt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                setCalendarioAberto(!calendarioAberto)
+                              }
+                              className={`w-full justify-start border-gray-600 bg-gray-700 text-left font-normal text-white hover:bg-gray-600 ${
+                                !dataAgendamento && "text-gray-400"
+                              }`}
                             >
-                              <CalendarComponent
-                                mode="single"
-                                selected={dataAgendamento}
-                                onSelect={setDataAgendamento}
-                                disabled={(date) =>
-                                  date < new Date() ||
-                                  date < new Date("1900-01-01")
-                                }
-                                initialFocus
-                                locale={ptBR}
-                              />
-                            </PopoverContent>
-                          </Popover>
+                              <Calendar className="mr-2 h-4 w-4" />
+                              {dataAgendamento ? (
+                                dayjs(dataAgendamento)
+                                  .locale("pt-br")
+                                  .format("dddd, DD [de] MMMM [de] YYYY")
+                              ) : (
+                                <span>Selecione uma data</span>
+                              )}
+                            </Button>
+
+                            {calendarioAberto && (
+                              <div className="mt-2 rounded-lg border border-gray-600 bg-gray-800 p-4 shadow-lg">
+                                {/* Header do calendário */}
+                                <div className="mb-4 flex items-center justify-between">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setMesAtual(mesAtual.subtract(1, "month"))
+                                    }
+                                    className="text-gray-300 hover:bg-gray-700 hover:text-white"
+                                  >
+                                    <CalendarLeft className="h-4 w-4" />
+                                  </Button>
+
+                                  <h3 className="text-lg font-semibold text-white">
+                                    {mesAtual
+                                      .locale("pt-br")
+                                      .format("MMMM [de] YYYY")}
+                                  </h3>
+
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setMesAtual(mesAtual.add(1, "month"))
+                                    }
+                                    className="text-gray-300 hover:bg-gray-700 hover:text-white"
+                                  >
+                                    <CalendarRight className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                {/* Dias da semana */}
+                                <div className="mb-2 grid grid-cols-7 gap-1">
+                                  {[
+                                    "Dom",
+                                    "Seg",
+                                    "Ter",
+                                    "Qua",
+                                    "Qui",
+                                    "Sex",
+                                    "Sáb",
+                                  ].map((dia) => (
+                                    <div
+                                      key={dia}
+                                      className="p-2 text-center text-sm font-medium text-gray-400"
+                                    >
+                                      {dia}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Dias do mês */}
+                                <div className="grid grid-cols-7 gap-1">
+                                  {(() => {
+                                    const inicioMes = mesAtual.startOf("month");
+                                    const fimMes = mesAtual.endOf("month");
+                                    const inicioDomingo =
+                                      inicioMes.startOf("week");
+                                    const fimSabado = fimMes.endOf("week");
+
+                                    const dias = [];
+                                    let diaAtual = inicioDomingo;
+
+                                    while (
+                                      diaAtual.isBefore(fimSabado) ||
+                                      diaAtual.isSame(fimSabado, "day")
+                                    ) {
+                                      const dia = diaAtual;
+                                      const ehMesAtual = dia.isSame(
+                                        mesAtual,
+                                        "month",
+                                      );
+                                      const ehHoje = dia.isSame(dayjs(), "day");
+                                      const ehPassado = dia.isBefore(
+                                        dayjs(),
+                                        "day",
+                                      );
+                                      const ehSelecionado =
+                                        dataAgendamento &&
+                                        dia.isSame(
+                                          dayjs(dataAgendamento),
+                                          "day",
+                                        );
+
+                                      dias.push(
+                                        <Button
+                                          key={dia.format("YYYY-MM-DD")}
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={!ehMesAtual || ehPassado}
+                                          onClick={() => {
+                                            if (ehMesAtual && !ehPassado) {
+                                              setDataAgendamento(dia.toDate());
+                                              setCalendarioAberto(false);
+                                            }
+                                          }}
+                                          className={`h-10 w-10 p-0 text-sm transition-colors ${!ehMesAtual ? "cursor-not-allowed text-gray-600" : ""} ${ehPassado ? "cursor-not-allowed text-gray-500 opacity-50" : ""} ${ehMesAtual && !ehPassado ? "text-gray-300 hover:bg-gray-700 hover:text-white" : ""} ${ehHoje && ehMesAtual ? "bg-blue-600/20 font-semibold text-blue-400" : ""} ${ehSelecionado ? "bg-amber-500 font-semibold text-white hover:bg-amber-600" : ""} `}
+                                        >
+                                          {dia.format("D")}
+                                        </Button>,
+                                      );
+
+                                      diaAtual = diaAtual.add(1, "day");
+                                    }
+
+                                    return dias;
+                                  })()}
+                                </div>
+
+                                {/* Footer com botões */}
+                                <div className="mt-4 flex justify-between">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setDataAgendamento(null);
+                                      setCalendarioAberto(false);
+                                    }}
+                                    className="text-gray-400 hover:bg-gray-700 hover:text-white"
+                                  >
+                                    Limpar
+                                  </Button>
+
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setMesAtual(dayjs());
+                                      if (!dataAgendamento) {
+                                        setDataAgendamento(new Date());
+                                      }
+                                    }}
+                                    className="text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                  >
+                                    Hoje
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Campo de horário manual */}
                         {dataAgendamento && servicoSelecionado && (
                           <div>
                             <Label className="text-white">
@@ -717,10 +779,10 @@ export default function LandingPage() {
                                       .split(":")
                                       .map(Number);
                                     const valido =
-                                      horas! >= 0 &&
-                                      horas! <= 23 &&
-                                      minutos! >= 0 &&
-                                      minutos! <= 59;
+                                      horas >= 0 &&
+                                      horas <= 23 &&
+                                      minutos >= 0 &&
+                                      minutos <= 59;
                                     setHorarioManualValido(valido);
                                   } else {
                                     setHorarioManualValido(false);
@@ -733,14 +795,86 @@ export default function LandingPage() {
                             </div>
 
                             {horarioManual && horarioManualValido && (
-                              <VerificadorHorario
-                                data={
-                                  dataAgendamento.toISOString().split("T")[0]
-                                }
-                                horario={horarioManual}
-                                servico={servicoSelecionado}
-                                onHorarioSelecionado={setHorarioSelecionado}
-                              />
+                              <div className="mt-2">
+                                {(() => {
+                                  if (conflitoLoading) {
+                                    return (
+                                      <div className="flex items-center gap-2 text-amber-400">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        <span className="text-sm">
+                                          Verificando disponibilidade...
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+
+                                  if (conflito?.temConflito) {
+                                    return (
+                                      <div className="rounded-md border border-yellow-200 bg-yellow-50/10 p-3">
+                                        <div className="flex items-start gap-2">
+                                          <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-400" />
+                                          <div>
+                                            <p className="text-sm font-medium text-yellow-300">
+                                              Horário {horarioManual} não
+                                              disponível
+                                            </p>
+                                            {conflito.proximoDisponivel && (
+                                              <div className="mt-2">
+                                                <p className="text-sm text-yellow-200">
+                                                  Próximo horário disponível:{" "}
+                                                  {conflito.proximoDisponivel}
+                                                </p>
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() =>
+                                                    setHorarioSelecionado(
+                                                      conflito.proximoDisponivel!,
+                                                    )
+                                                  }
+                                                  className="mt-2 border-yellow-400 text-yellow-300 hover:bg-yellow-400/10"
+                                                >
+                                                  Selecionar{" "}
+                                                  {conflito.proximoDisponivel}
+                                                </Button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  if (conflito && !conflito.temConflito) {
+                                    return (
+                                      <div className="rounded-md border border-green-200 bg-green-50/10 p-3">
+                                        <div className="flex items-center gap-2">
+                                          <CheckCircle className="h-4 w-4 text-green-400" />
+                                          <div>
+                                            <p className="text-sm font-medium text-green-300">
+                                              Horário {horarioManual}{" "}
+                                              disponível!
+                                            </p>
+                                            <Button
+                                              size="sm"
+                                              onClick={() =>
+                                                setHorarioSelecionado(
+                                                  horarioManual,
+                                                )
+                                              }
+                                              className="mt-2 bg-green-600 hover:bg-green-700"
+                                            >
+                                              Confirmar {horarioManual}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  return null;
+                                })()}
+                              </div>
                             )}
 
                             {horarioManual &&
@@ -768,13 +902,7 @@ export default function LandingPage() {
                           <Button
                             onClick={() => {
                               if (servicoSelecionado && dataAgendamento) {
-                                if (horarioSelecionado) {
-                                  // Se já tem horário selecionado, pular para confirmação
-                                  setEtapaAgendamento("confirmacao");
-                                } else {
-                                  // Senão, ir para seleção de horários
-                                  setEtapaAgendamento("horario");
-                                }
+                                setEtapaAgendamento("horario");
                               } else {
                                 alert("Selecione o serviço e a data");
                               }
@@ -782,7 +910,7 @@ export default function LandingPage() {
                             disabled={!servicoSelecionado || !dataAgendamento}
                             className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                           >
-                            {horarioSelecionado ? "Confirmar" : "Ver Horários"}
+                            Ver Horários
                           </Button>
                         </div>
                       </div>
