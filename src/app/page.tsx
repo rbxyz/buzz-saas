@@ -7,6 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   ChevronRight,
   ChevronLeft,
@@ -24,8 +30,94 @@ import {
   User,
   CalendarDays,
 } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
+
+// Componente para verificar horário em tempo real
+function VerificadorHorario({
+  data,
+  horario,
+  servico,
+  onHorarioSelecionado,
+}: {
+  data: string;
+  horario: string;
+  servico: string;
+  onHorarioSelecionado: (horario: string) => void;
+}) {
+  const { data: conflito, isLoading } =
+    api.agendamento.verificarConflito.useQuery(
+      { data, horario, servico },
+      { enabled: !!data && !!horario && !!servico },
+    );
+
+  if (isLoading) {
+    return (
+      <div className="mt-2 flex items-center gap-2 text-amber-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">Verificando disponibilidade...</span>
+      </div>
+    );
+  }
+
+  if (conflito?.temConflito) {
+    return (
+      <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50/10 p-3">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-400" />
+          <div>
+            <p className="text-sm font-medium text-yellow-300">
+              Horário {horario} não disponível
+            </p>
+            {conflito.proximoDisponivel && (
+              <div className="mt-2">
+                <p className="text-sm text-yellow-200">
+                  Próximo horário disponível: {conflito.proximoDisponivel}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    onHorarioSelecionado(conflito.proximoDisponivel!)
+                  }
+                  className="mt-2 border-yellow-400 text-yellow-300 hover:bg-yellow-400/10"
+                >
+                  Selecionar {conflito.proximoDisponivel}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (conflito && !conflito.temConflito) {
+    return (
+      <div className="mt-2 rounded-md border border-green-200 bg-green-50/10 p-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-green-400" />
+          <div>
+            <p className="text-sm font-medium text-green-300">
+              Horário {horario} disponível!
+            </p>
+            <Button
+              size="sm"
+              onClick={() => onHorarioSelecionado(horario)}
+              className="mt-2 bg-green-600 hover:bg-green-700"
+            >
+              Confirmar {horario}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
@@ -40,6 +132,8 @@ export default function LandingPage() {
   const [dataAgendamento, setDataAgendamento] = useState<Date | null>(null);
   const [servicoSelecionado, setServicoSelecionado] = useState("");
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
+  const [horarioManual, setHorarioManual] = useState("");
+  const [horarioManualValido, setHorarioManualValido] = useState(false);
   const [etapaAgendamento, setEtapaAgendamento] = useState<
     "telefone" | "dados" | "servico" | "horario" | "confirmacao"
   >("telefone");
@@ -122,6 +216,8 @@ export default function LandingPage() {
     setDataAgendamento(null);
     setServicoSelecionado("");
     setHorarioSelecionado("");
+    setHorarioManual("");
+    setHorarioManualValido(false);
     setEtapaAgendamento("telefone");
     setAgendamentoSucesso(false);
   };
@@ -527,7 +623,7 @@ export default function LandingPage() {
                             : `Olá, ${nomeNovoCliente}!`}
                         </h3>
                         <p className="text-gray-400">
-                          Escolha o serviço desejado
+                          Escolha o serviço e a data desejada
                         </p>
                       </div>
 
@@ -553,26 +649,109 @@ export default function LandingPage() {
 
                         <div>
                           <Label className="text-white">Data desejada</Label>
-                          <Input
-                            type="date"
-                            value={
-                              dataAgendamento
-                                ? dataAgendamento.toISOString().split("T")[0]
-                                : ""
-                            }
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                setDataAgendamento(
-                                  new Date(e.target.value + "T00:00:00"),
-                                );
-                              } else {
-                                setDataAgendamento(null);
-                              }
-                            }}
-                            min={new Date().toISOString().split("T")[0]}
-                            className="mt-2 border-gray-600 bg-gray-700 text-white"
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={`mt-2 w-full justify-start border-gray-600 bg-gray-700 text-left font-normal text-white hover:bg-gray-600 ${
+                                  !dataAgendamento && "text-gray-400"
+                                }`}
+                              >
+                                <Calendar className="mr-2 h-4 w-4" />
+                                {dataAgendamento ? (
+                                  format(dataAgendamento, "PPP", {
+                                    locale: ptBR,
+                                  })
+                                ) : (
+                                  <span>Selecione uma data</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
+                              <CalendarComponent
+                                mode="single"
+                                selected={dataAgendamento}
+                                onSelect={setDataAgendamento}
+                                disabled={(date) =>
+                                  date < new Date() ||
+                                  date < new Date("1900-01-01")
+                                }
+                                initialFocus
+                                locale={ptBR}
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </div>
+
+                        {/* Campo de horário manual */}
+                        {dataAgendamento && servicoSelecionado && (
+                          <div>
+                            <Label className="text-white">
+                              Horário desejado (opcional)
+                            </Label>
+                            <div className="relative mt-2">
+                              <Input
+                                type="text"
+                                placeholder="14:30"
+                                value={horarioManual}
+                                onChange={(e) => {
+                                  const valor = e.target.value.replace(
+                                    /\D/g,
+                                    "",
+                                  );
+                                  let valorFormatado = "";
+                                  if (valor.length >= 1) {
+                                    valorFormatado = valor.slice(0, 2);
+                                    if (valor.length >= 3) {
+                                      valorFormatado += ":" + valor.slice(2, 4);
+                                    }
+                                  }
+                                  setHorarioManual(valorFormatado);
+
+                                  // Validar horário
+                                  if (valorFormatado.length === 5) {
+                                    const [horas, minutos] = valorFormatado
+                                      .split(":")
+                                      .map(Number);
+                                    const valido =
+                                      horas! >= 0 &&
+                                      horas! <= 23 &&
+                                      minutos! >= 0 &&
+                                      minutos! <= 59;
+                                    setHorarioManualValido(valido);
+                                  } else {
+                                    setHorarioManualValido(false);
+                                  }
+                                }}
+                                maxLength={5}
+                                className="border-gray-600 bg-gray-700 pr-10 text-white"
+                              />
+                              <Clock className="absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                            </div>
+
+                            {horarioManual && horarioManualValido && (
+                              <VerificadorHorario
+                                data={
+                                  dataAgendamento.toISOString().split("T")[0]
+                                }
+                                horario={horarioManual}
+                                servico={servicoSelecionado}
+                                onHorarioSelecionado={setHorarioSelecionado}
+                              />
+                            )}
+
+                            {horarioManual &&
+                              !horarioManualValido &&
+                              horarioManual.length === 5 && (
+                                <p className="mt-1 text-sm text-red-400">
+                                  Horário inválido. Use o formato HH:MM
+                                </p>
+                              )}
+                          </div>
+                        )}
 
                         <div className="flex gap-3">
                           <Button
@@ -589,7 +768,13 @@ export default function LandingPage() {
                           <Button
                             onClick={() => {
                               if (servicoSelecionado && dataAgendamento) {
-                                setEtapaAgendamento("horario");
+                                if (horarioSelecionado) {
+                                  // Se já tem horário selecionado, pular para confirmação
+                                  setEtapaAgendamento("confirmacao");
+                                } else {
+                                  // Senão, ir para seleção de horários
+                                  setEtapaAgendamento("horario");
+                                }
                               } else {
                                 alert("Selecione o serviço e a data");
                               }
@@ -597,7 +782,7 @@ export default function LandingPage() {
                             disabled={!servicoSelecionado || !dataAgendamento}
                             className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                           >
-                            Ver Horários
+                            {horarioSelecionado ? "Confirmar" : "Ver Horários"}
                           </Button>
                         </div>
                       </div>
