@@ -14,7 +14,15 @@ import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { api } from "@/trpc/react";
-import { Loader2, PlusCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  PlusCircle,
+  Clock,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+} from "lucide-react";
 import dayjs from "dayjs";
 import { toast } from "sonner";
 
@@ -26,7 +34,6 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
-
 import {
   Select,
   SelectContent,
@@ -35,13 +42,95 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
+// Função para aplicar máscara de horário com correção automática
+const aplicarMascaraHorario = (valor: string): string => {
+  // Remove tudo que não é número
+  const numeros = valor.replace(/\D/g, "");
+
+  // Se não há números, retorna vazio
+  if (numeros.length === 0) return "";
+
+  // Se tem apenas 1 dígito
+  if (numeros.length === 1) {
+    return numeros;
+  }
+
+  // Se tem 2 dígitos
+  if (numeros.length === 2) {
+    const primeiroDigito = Number.parseInt(numeros[0]!);
+    const segundoDigito = Number.parseInt(numeros[1]!);
+
+    // Se o primeiro dígito é > 2, assume que é minuto e adiciona 0 na frente
+    // Ex: "9" + "1" = "91" vira "09:1"
+    if (primeiroDigito > 2) {
+      return `0${primeiroDigito}:${segundoDigito}`;
+    }
+
+    // Se o primeiro dígito é 2 e o segundo > 3, assume que é minuto
+    // Ex: "2" + "5" = "25" vira "02:5"
+    if (primeiroDigito === 2 && segundoDigito > 3) {
+      return `0${primeiroDigito}:${segundoDigito}`;
+    }
+
+    // Caso contrário, mantém como hora
+    return numeros;
+  }
+
+  // Se tem 3 dígitos
+  if (numeros.length === 3) {
+    const primeiroDigito = Number.parseInt(numeros[0]!);
+    const segundoDigito = Number.parseInt(numeros[1]!);
+    const terceiroDigito = Number.parseInt(numeros[2]!);
+
+    // Se os dois primeiros dígitos formam uma hora inválida (> 23)
+    const horaFormada = Number.parseInt(numeros.slice(0, 2));
+    if (horaFormada > 23) {
+      // Reorganiza: primeiro dígito vira hora com zero, segundo e terceiro viram minuto
+      return `0${primeiroDigito}:${segundoDigito}${terceiroDigito}`;
+    }
+
+    // Caso contrário, aplica máscara normal
+    return `${numeros.slice(0, 2)}:${terceiroDigito}`;
+  }
+
+  // Se tem 4 ou mais dígitos
+  if (numeros.length >= 4) {
+    const hora = numeros.slice(0, 2);
+    const minuto = numeros.slice(2, 4);
+
+    // Verifica se a hora é válida
+    const horaNum = Number.parseInt(hora);
+    if (horaNum > 23) {
+      // Se hora inválida, reorganiza pegando primeiro dígito como hora
+      const primeiroDigito = numeros[0]!;
+      const restante = numeros.slice(1, 3);
+      return `0${primeiroDigito}:${restante}`;
+    }
+
+    return `${hora}:${minuto}`;
+  }
+
+  return numeros;
+};
+
+// Função para validar horário
+const validarHorario = (horario: string): boolean => {
+  const regex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  if (!regex.test(horario)) return false;
+
+  const [horas, minutos] = horario.split(":").map(Number);
+  return horas! >= 0 && horas! <= 23 && minutos! >= 0 && minutos! <= 59;
+};
 
 export default function AgendamentosPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [open, setOpen] = useState(false);
   const [horario, setHorario] = useState<string>("");
+  const [horarioInput, setHorarioInput] = useState<string>("");
   const [servico, setServico] = useState<string>("");
+  const [dataParaAgendamento, setDataParaAgendamento] = useState<Date>(
+    new Date(),
+  );
 
   // Estados para busca de cliente
   const [clienteQuery, setClienteQuery] = useState("");
@@ -65,17 +154,35 @@ export default function AgendamentosPage() {
 
   const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
 
-  // Nova query para horários disponíveis
+  // Buscar horários disponíveis quando data e serviço estiverem selecionados
   const { data: horariosData, isLoading: loadingHorarios } =
-    api.agendamento.getHorariosDisponiveis.useQuery(
+    api.agendamento.getHorariosDisponiveisPorData.useQuery(
       {
-        data: dayjs(selectedDate).format("YYYY-MM-DD"),
-        servico: servico || "",
+        data: format(dataParaAgendamento, "yyyy-MM-dd"),
+        servico: servico,
       },
       {
-        enabled: !!servico,
+        enabled: !!servico && !!dataParaAgendamento,
+        refetchOnWindowFocus: false,
       },
     );
+
+  // Verificar conflito quando horário específico for selecionado
+  const { data: conflito } = api.agendamento.verificarConflito.useQuery(
+    {
+      data: format(dataParaAgendamento, "yyyy-MM-dd"),
+      horario: horario,
+      servico: servico,
+    },
+    {
+      enabled:
+        !!horario &&
+        !!servico &&
+        !!dataParaAgendamento &&
+        validarHorario(horario),
+      refetchOnWindowFocus: false,
+    },
+  );
 
   const { data: agendamentos, refetch: refetchAgendamentos } =
     api.agendamento.getByData.useQuery({
@@ -107,10 +214,12 @@ export default function AgendamentosPage() {
 
   const resetForm = () => {
     setHorario("");
+    setHorarioInput("");
     setServico("");
     setClienteId(null);
     setClienteNomeSelecionado("");
     setClienteQuery("");
+    setDataParaAgendamento(new Date());
   };
 
   // Função debounce para busca de clientes
@@ -124,37 +233,84 @@ export default function AgendamentosPage() {
     return () => clearTimeout(handler);
   }, [clienteQuery]);
 
-  // Reset horário quando serviço muda
+  // Limpar seleção se necessário
   useEffect(() => {
+    if (!clienteQuery && clienteId && clientesEncontrados) {
+      if (!clientesEncontrados.some((c) => c.id === clienteId)) {
+        setClienteId(null);
+        setClienteNomeSelecionado("");
+      }
+    }
+  }, [clienteQuery, clientesEncontrados, clienteId]);
+
+  useEffect(() => {
+    if (
+      clienteId &&
+      (!clientesEncontrados ||
+        !clientesEncontrados.some((c) => c.id === clienteId))
+    ) {
+      setClienteId(null);
+      setClienteNomeSelecionado("");
+    }
+  }, [clientesEncontrados, clienteId]);
+
+  // Função para navegar entre datas
+  const navegarData = (direcao: "anterior" | "proxima") => {
+    const novaData = new Date(dataParaAgendamento);
+    if (direcao === "anterior") {
+      novaData.setDate(novaData.getDate() - 1);
+    } else {
+      novaData.setDate(novaData.getDate() + 1);
+    }
+    setDataParaAgendamento(novaData);
+    // Limpar horário quando mudar data
     setHorario("");
-  }, [servico]);
+    setHorarioInput("");
+  };
+
+  // Função para lidar com mudança no input de horário
+  const handleHorarioChange = (valor: string) => {
+    const valorComMascara = aplicarMascaraHorario(valor);
+    setHorarioInput(valorComMascara);
+
+    // Se o horário estiver completo e válido, atualizar o estado do horário
+    if (valorComMascara.length === 5 && validarHorario(valorComMascara)) {
+      setHorario(valorComMascara);
+    } else {
+      setHorario("");
+    }
+  };
 
   const handleNovoAgendamento = () => {
     if (createMutation.isPending) return;
-
     if (!clienteId) {
       toast.error("Selecione um cliente válido.");
       return;
     }
-
+    if (!horario || !validarHorario(horario)) {
+      toast.error("Digite um horário válido (HH:MM).");
+      return;
+    }
     if (!servico) {
       toast.error("Selecione um serviço.");
       return;
     }
-
-    if (!horario) {
-      toast.error("Selecione um horário.");
+    if (conflito?.temConflito) {
+      toast.error("Este horário está ocupado. Selecione outro horário.");
       return;
     }
 
     createMutation.mutate({
       clienteId,
-      data: format(selectedDate, "yyyy-MM-dd"),
+      data: format(dataParaAgendamento, "yyyy-MM-dd"),
       horario,
       servico,
       status: "agendado",
     });
   };
+
+  // Verificar se a data é hoje para não permitir voltar para datas passadas
+  const podeVoltarData = dayjs(dataParaAgendamento).isAfter(dayjs(), "day");
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -258,7 +414,6 @@ export default function AgendamentosPage() {
                 Total: {agendamentos?.length ?? 0}
               </CardDescription>
             </div>
-
             <Dialog
               open={open}
               onOpenChange={(isOpen) => {
@@ -278,7 +433,7 @@ export default function AgendamentosPage() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto bg-black/50 backdrop-blur-sm">
                 <DialogHeader>
                   <DialogTitle>Novo Agendamento</DialogTitle>
                 </DialogHeader>
@@ -315,11 +470,11 @@ export default function AgendamentosPage() {
                       clientesEncontrados &&
                       clientesEncontrados.length > 0 &&
                       !clienteId && (
-                        <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-md">
+                        <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow-md backdrop-blur-sm">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
-                              className="hover:bg-muted cursor-pointer px-3 py-2 text-sm"
+                              className="hover:bg-muted cursor-pointer bg-black/50 px-3 py-2 text-sm backdrop-blur-sm"
                               onClick={() => {
                                 setClienteId(cliente.id);
                                 setClienteNomeSelecionado(cliente.nome);
@@ -336,21 +491,19 @@ export default function AgendamentosPage() {
                       clienteQuery.length > 1 &&
                       clientesEncontrados &&
                       clientesEncontrados.length === 0 && (
-                        <Alert className="mt-2">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>
-                            Cliente não encontrado.{" "}
-                            <Button
-                              variant="link"
-                              className="text-primary h-auto p-0 underline"
-                              onClick={() =>
-                                window.open("/dashboard/clientes", "_blank")
-                              }
-                            >
-                              Criar novo cliente
-                            </Button>
-                          </AlertDescription>
-                        </Alert>
+                        <div className="border-destructive bg-destructive/10 text-destructive mt-2 flex flex-col items-center gap-2 rounded border p-3">
+                          <p>Cliente não encontrado.</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="cursor-pointer"
+                            onClick={() =>
+                              window.open("/dashboard/clientes", "_blank")
+                            }
+                          >
+                            Criar novo cliente
+                          </Button>
+                        </div>
                       )}
 
                     {clienteNomeSelecionado && (
@@ -360,14 +513,60 @@ export default function AgendamentosPage() {
                     )}
                   </div>
 
+                  {/* Navegação de data */}
+                  <div>
+                    <label className="text-sm font-medium">
+                      Data do agendamento
+                    </label>
+                    <div className="mt-1 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navegarData("anterior")}
+                        disabled={!podeVoltarData}
+                        className="cursor-pointer"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      <div className="bg-background border-input flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2">
+                        <Calendar className="text-muted-foreground h-4 w-4" />
+                        <span className="font-medium">
+                          {format(
+                            dataParaAgendamento,
+                            "EEEE, dd 'de' MMMM 'de' yyyy",
+                            { locale: ptBR },
+                          )}
+                        </span>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navegarData("proxima")}
+                        className="cursor-pointer"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Serviço */}
                   <div>
                     <label className="text-sm font-medium">Serviço *</label>
-                    <Select value={servico} onValueChange={setServico}>
-                      <SelectTrigger className="mt-1 cursor-pointer">
+                    <Select
+                      value={servico}
+                      onValueChange={(value) => {
+                        setServico(value);
+                        setHorario(""); // Limpar horário quando mudar serviço
+                        setHorarioInput("");
+                      }}
+                    >
+                      <SelectTrigger className="cursor-pointer">
                         <SelectValue placeholder="Selecione um serviço" />
                       </SelectTrigger>
-                      <SelectContent className="cursor-pointer bg-black/50 backdrop-blur-sm">
+
+                      <SelectContent className="bg-black/20 backdrop-blur-sm">
                         {servicosDisponiveis?.map((s) => (
                           <SelectItem
                             className="cursor-pointer"
@@ -375,109 +574,186 @@ export default function AgendamentosPage() {
                             value={s.nome}
                           >
                             {s.nome} - R$ {s.preco.toFixed(2)} (
-                            {s.duracaoMinutos}min)
+                            {s.duracaoMinutos || 30}min)
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* Horário */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <Clock className="h-4 w-4" />
-                      Horário *
-                    </label>
-
-                    {!servico ? (
-                      <div className="mt-1 rounded-md border border-dashed border-gray-300 p-4 text-center text-sm text-gray-500">
-                        Selecione um serviço primeiro
-                      </div>
-                    ) : loadingHorarios ? (
-                      <div className="mt-1 flex items-center justify-center rounded-md border border-dashed border-gray-300 p-4">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        <span className="text-sm text-gray-500">
-                          Carregando horários...
-                        </span>
-                      </div>
-                    ) : horariosData?.erro ? (
-                      <Alert className="mt-1" variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{horariosData.erro}</AlertDescription>
-                      </Alert>
-                    ) : horariosData?.horarios.length === 0 ? (
-                      <Alert className="mt-1">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Nenhum horário disponível para esta data. Todos os
-                          horários estão ocupados ou fora do horário de
-                          funcionamento.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <Select value={horario} onValueChange={setHorario}>
-                        <SelectTrigger className="mt-1 cursor-pointer">
-                          <SelectValue placeholder="Selecione um horário" />
-                        </SelectTrigger>
-                        <SelectContent className="cursor-pointer bg-black/50 backdrop-blur-sm">
-                          {horariosData?.horarios.map((h) => (
-                            <SelectItem
-                              className="cursor-pointer"
-                              key={h}
-                              value={h}
-                            >
-                              {h}
-                            </SelectItem>
+                  {/* Intervalos de funcionamento */}
+                  {horariosData?.intervalos &&
+                    horariosData.intervalos.length > 0 && (
+                      <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-800">
+                            Funcionamento em{" "}
+                            {format(dataParaAgendamento, "EEEE", {
+                              locale: ptBR,
+                            })}
+                            :
+                          </span>
+                        </div>
+                        <div className="text-sm text-blue-700">
+                          {horariosData.intervalos.map((intervalo, index) => (
+                            <span key={index}>
+                              {intervalo.inicio} às {intervalo.fim}
+                              {index < horariosData.intervalos.length - 1 &&
+                                " • "}
+                            </span>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </div>
+                      </div>
                     )}
-                  </div>
 
-                  {/* Resumo do agendamento */}
-                  {clienteId && servico && horario && (
-                    <div className="bg-muted/50 rounded-lg border p-3">
-                      <h4 className="mb-2 text-sm font-medium">
-                        Resumo do Agendamento
-                      </h4>
-                      <div className="text-muted-foreground space-y-1 text-xs">
-                        <p>
-                          <strong>Cliente:</strong> {clienteNomeSelecionado}
-                        </p>
-                        <p>
-                          <strong>Serviço:</strong> {servico}
-                        </p>
-                        <p>
-                          <strong>Data:</strong>{" "}
-                          {format(selectedDate, "dd/MM/yyyy")}
-                        </p>
-                        <p>
-                          <strong>Horário:</strong> {horario}
-                        </p>
-                        {servicosDisponiveis && (
-                          <p>
-                            <strong>Valor:</strong> R${" "}
-                            {servicosDisponiveis
-                              .find((s) => s.nome === servico)
-                              ?.preco.toFixed(2)}
-                          </p>
-                        )}
+                  {/* Campo manual de horário */}
+                  <div>
+                    <label className="text-sm font-medium">
+                      Horário desejado *
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        type="text"
+                        value={horarioInput}
+                        onChange={(e) => handleHorarioChange(e.target.value)}
+                        placeholder="HH:MM"
+                        maxLength={5}
+                        className="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 font-mono text-lg tracking-wider"
+                      />
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                        <Clock className="text-muted-foreground h-4 w-4" />
                       </div>
                     </div>
+
+                    {/* Validação do horário */}
+                    {horarioInput &&
+                      horarioInput.length === 5 &&
+                      !validarHorario(horarioInput) && (
+                        <p className="mt-1 text-sm text-red-600">
+                          Horário inválido. Use o formato HH:MM (ex: 14:30)
+                        </p>
+                      )}
+                  </div>
+
+                  {/* Horários sugeridos */}
+                  {servico && dataParaAgendamento && (
+                    <div>
+                      <label className="text-sm font-medium">
+                        Horários sugeridos
+                      </label>
+
+                      {loadingHorarios && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-muted-foreground text-sm">
+                            Carregando horários...
+                          </span>
+                        </div>
+                      )}
+
+                      {horariosData?.erro && (
+                        <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
+                          <p className="text-sm text-red-700">
+                            {horariosData.erro}
+                          </p>
+                        </div>
+                      )}
+
+                      {horariosData?.horarios &&
+                        horariosData.horarios.length > 0 && (
+                          <div className="mt-2 grid max-h-32 grid-cols-4 gap-2 overflow-y-auto">
+                            {horariosData.horarios
+                              .filter((item) => item.disponivel)
+                              .slice(0, 12) // Mostrar apenas os primeiros 12 horários disponíveis
+                              .map((item) => (
+                                <Button
+                                  key={item.horario}
+                                  variant={
+                                    horario === item.horario
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  size="sm"
+                                  className="cursor-pointer text-xs"
+                                  onClick={() => {
+                                    setHorario(item.horario);
+                                    setHorarioInput(item.horario);
+                                  }}
+                                >
+                                  {item.horario}
+                                </Button>
+                              ))}
+                          </div>
+                        )}
+                    </div>
                   )}
+
+                  {/* Aviso de conflito e sugestão */}
+                  {conflito?.temConflito &&
+                    horario &&
+                    validarHorario(horario) && (
+                      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-600" />
+                          <div>
+                            <p className="text-sm font-medium text-yellow-800">
+                              Este horário já está ocupado!
+                            </p>
+                            {conflito.proximoDisponivel && (
+                              <p className="mt-1 text-sm text-yellow-700">
+                                Horário mais próximo disponível:{" "}
+                                {conflito.proximoDisponivel}
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="ml-2 h-auto cursor-pointer p-0 text-yellow-700 underline"
+                                  onClick={() => {
+                                    setHorario(conflito.proximoDisponivel!);
+                                    setHorarioInput(
+                                      conflito.proximoDisponivel!,
+                                    );
+                                  }}
+                                >
+                                  Selecionar
+                                </Button>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Confirmação de horário válido */}
+                  {horario &&
+                    validarHorario(horario) &&
+                    !conflito?.temConflito && (
+                      <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-green-600" />
+                          <p className="text-sm font-medium text-green-800">
+                            Horário {horario} disponível para agendamento!
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                   {/* Botões */}
                   <div className="flex justify-end gap-2 pt-4">
                     <DialogClose asChild>
-                      <Button variant="ghost">Cancelar</Button>
+                      <Button className="cursor-pointer" variant="ghost">
+                        Cancelar
+                      </Button>
                     </DialogClose>
                     <Button
                       onClick={handleNovoAgendamento}
                       disabled={
+                        createMutation.isPending ||
                         !clienteId ||
-                        !servico ||
                         !horario ||
-                        createMutation.isPending
+                        !validarHorario(horario) ||
+                        !servico ||
+                        conflito?.temConflito
                       }
                     >
                       {createMutation.isPending && (
@@ -527,6 +803,7 @@ export default function AgendamentosPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="cursor-pointer"
                       onClick={() =>
                         atualizarStatus.mutate({
                           id: agendamento.id,
@@ -540,6 +817,7 @@ export default function AgendamentosPage() {
                     <Button
                       variant="destructive"
                       size="sm"
+                      className="cursor-pointer"
                       onClick={() =>
                         atualizarStatus.mutate({
                           id: agendamento.id,
