@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { MessageCircle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,17 +27,28 @@ export function WhatsappCard() {
   const atualizarWhatsappMutation =
     trpc.configuracao.atualizarIntegracaoWhatsapp.useMutation({
       onSuccess: async () => {
-        toast.success("Integração WhatsApp atualizada com sucesso!");
+        toast({
+          title: "Sucesso!",
+          description: "Integração WhatsApp atualizada com sucesso!",
+        });
         await refetch();
       },
       onError: () => {
-        toast.error("Erro ao salvar integração do WhatsApp.");
+        toast({
+          title: "Erro!",
+          description: "Erro ao salvar integração do WhatsApp.",
+          variant: "destructive",
+        });
       },
     });
 
   function handleSalvarWhatsapp() {
     if (!configs?.id) {
-      toast.error("Configuração não carregada.");
+      toast({
+        title: "Erro!",
+        description: "Configuração não carregada.",
+        variant: "destructive",
+      });
       return;
     }
     atualizarWhatsappMutation.mutate({

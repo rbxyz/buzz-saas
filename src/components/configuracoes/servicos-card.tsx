@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/trpc/react";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { Plus, Trash2, DollarSign, Clock } from "lucide-react";
 
 type Servico = {
@@ -28,11 +28,18 @@ export function ServicosCard() {
 
   const atualizarServicos = api.configuracao.atualizarServicos.useMutation({
     onSuccess: () => {
-      toast.success("Serviços atualizados com sucesso!");
+      toast({
+        title: "Sucesso!",
+        description: "Serviços atualizados com sucesso!",
+      });
       refetch();
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast({
+        title: "Erro!",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -69,7 +76,11 @@ export function ServicosCard() {
 
   const handleSalvar = () => {
     if (!configuracao?.id) {
-      toast.error("Configuração não encontrada");
+      toast({
+        title: "Erro!",
+        description: "Configuração não encontrada",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -78,7 +89,11 @@ export function ServicosCard() {
     );
 
     if (servicosValidos.length === 0) {
-      toast.error("Adicione pelo menos um serviço válido");
+      toast({
+        title: "Erro!",
+        description: "Adicione pelo menos um serviço válido",
+        variant: "destructive",
+      });
       return;
     }
 

@@ -4,8 +4,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
 }
 
 @layer base {
@@ -33,8 +33,6 @@
     --destructive-foreground: 0 0% 98%;
 
     --card-background: 0 0% 20%;
-
-
   }
 
   .dark {
@@ -58,7 +56,6 @@
     --sidebar-ring: 274 100% 34%;
 
     --card-background: 0 0% 75%;
-
   }
 }
 
@@ -93,19 +90,18 @@
   .border-sidebar-border {
     border-color: hsl(var(--sidebar-border));
   }
-  
+
   .text-sidebar-foreground {
     color: hsl(var(--sidebar-foreground));
   }
-  
+
   .hover\:bg-sidebar-border:hover {
     background-color: hsl(var(--sidebar-border));
   }
-  
+
   .hover\:text-accent-foreground:hover {
     color: hsl(var(--accent-foreground));
   }
-  
 }
 
 @layer base {
@@ -133,4 +129,66 @@
 .rdp {
   background-color: var(--rdp-background-color);
   color: var(--rdp-color);
+}
+
+/* Toast animations */
+@keyframes toast-fade-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes toast-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast-fade-out {
+  animation: toast-fade-out 700ms ease-out forwards;
+}
+
+.toast-fade-in {
+  animation: toast-fade-in 300ms ease-out forwards;
+}
+
+/* Backdrop blur animation */
+@keyframes backdrop-fade-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+}
+
+@keyframes backdrop-fade-out {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+.backdrop-fade-in {
+  animation: backdrop-fade-in 300ms ease-out forwards;
+}
+
+.backdrop-fade-out {
+  animation: backdrop-fade-out 700ms ease-out forwards;
 }

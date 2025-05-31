@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { Building2, Phone, MapPin } from "lucide-react";
 
 export function ContaCard() {
@@ -28,11 +28,18 @@ export function ContaCard() {
   // Mutation para atualizar configuração geral
   const mutation = trpc.configuracao.atualizarConfiguracao.useMutation({
     onSuccess: async () => {
-      toast.success("Configuração atualizada com sucesso!");
+      toast({
+        title: "Sucesso!",
+        description: "Configuração atualizada com sucesso!",
+      });
       await refetch();
     },
     onError: () => {
-      toast.error("Erro ao atualizar a configuração.");
+      toast({
+        title: "Erro!",
+        description: "Erro ao atualizar a configuração.",
+        variant: "destructive",
+      });
     },
   });
 

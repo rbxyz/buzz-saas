@@ -177,22 +177,60 @@ export const agendamentoRouter = createTRPCRouter({
         return { horarios: [], erro: "Não é possível agendar para datas passadas" }
       }
 
+      // Buscar configuração
+      const configuracao = await db.query.configuracoes.findFirst()
+      if (!configuracao) {
+        return { horarios: [], erro: "Configuração não encontrada" }
+      }
+
       // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
         where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
-      if (intervalos.length === 0) {
+      // Verificar se existem intervalos configurados no sistema
+      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
+        where: eq(intervalosTrabalho.ativo, true),
+      })
+
+      let horariosDisponiveis: string[] = []
+      let intervalosInfo: { inicio: string; fim: string }[] = []
+
+      if (existemIntervalos) {
+        // Se existem intervalos configurados no sistema, usar apenas eles
+        if (intervalos.length > 0) {
+          // Há intervalos para este dia específico
+          intervalosInfo = intervalos.map((intervalo) => ({
+            inicio: intervalo.horaInicio,
+            fim: intervalo.horaFim,
+          }))
+        } else {
+          // Não há intervalos para este dia específico = estabelecimento fechado
+          return { horarios: [], erro: "Estabelecimento fechado neste dia" }
+        }
+      } else {
+        // Se não existem intervalos configurados, usar horário padrão
+        const diasPadrao = configuracao.dias || []
+
+        if (!diasPadrao.includes(diaSemana)) {
+          return { horarios: [], erro: "Estabelecimento fechado neste dia" }
+        }
+
+        // Usar horário padrão da configuração
+        intervalosInfo = [
+          {
+            inicio: configuracao.horaInicio,
+            fim: configuracao.horaFim,
+          },
+        ]
+      }
+
+      if (intervalosInfo.length === 0) {
         return { horarios: [], erro: "Estabelecimento fechado neste dia" }
       }
 
-      // Buscar configuração para pegar duração do serviço
-      const configuracao = await db.query.configuracoes.findFirst()
-      if (!configuracao) {
-        return { horarios: [], erro: "Configuração não encontrada" }
-      }
-
+      // Buscar duração do serviço
       const servicos = configuracao.servicos as ServicoConfigurado[]
       const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
       if (!servicoSelecionado) {
@@ -202,9 +240,8 @@ export const agendamentoRouter = createTRPCRouter({
       const duracaoServico = servicoSelecionado.duracaoMinutos || 30
 
       // Gerar todos os horários possíveis dos intervalos
-      let horariosDisponiveis: string[] = []
-      for (const intervalo of intervalos) {
-        const horariosIntervalo = gerarHorarios(intervalo.horaInicio, intervalo.horaFim, duracaoServico)
+      for (const intervalo of intervalosInfo) {
+        const horariosIntervalo = gerarHorarios(intervalo.inicio, intervalo.fim, duracaoServico)
         horariosDisponiveis = [...horariosDisponiveis, ...horariosIntervalo]
       }
 
@@ -561,13 +598,63 @@ export const agendamentoRouter = createTRPCRouter({
       const data = dayjs(input.data)
       const diaSemana = getDiaSemana(data.toDate()) as any
 
+      // Buscar configuração
+      const configuracao = await db.query.configuracoes.findFirst()
+      if (!configuracao) {
+        return { horarios: [], intervalos: [], erro: "Configuração não encontrada" }
+      }
+
       // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
         where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
-      if (intervalos.length === 0) {
+      // Verificar se existem intervalos configurados no sistema
+      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
+        where: eq(intervalosTrabalho.ativo, true),
+      })
+
+      let intervalosInfo: { inicio: string; fim: string }[] = []
+
+      if (existemIntervalos) {
+        // Se existem intervalos configurados no sistema, usar apenas eles
+        if (intervalos.length > 0) {
+          // Há intervalos para este dia específico
+          intervalosInfo = intervalos.map((intervalo) => ({
+            inicio: intervalo.horaInicio,
+            fim: intervalo.horaFim,
+          }))
+        } else {
+          // Não há intervalos para este dia específico = estabelecimento fechado
+          return {
+            horarios: [],
+            intervalos: [],
+            erro: "Estabelecimento fechado neste dia",
+          }
+        }
+      } else {
+        // Se não existem intervalos configurados, usar horário padrão
+        const diasPadrao = configuracao.dias || []
+
+        if (!diasPadrao.includes(diaSemana)) {
+          return {
+            horarios: [],
+            intervalos: [],
+            erro: "Estabelecimento fechado neste dia",
+          }
+        }
+
+        // Usar horário padrão da configuração
+        intervalosInfo = [
+          {
+            inicio: configuracao.horaInicio,
+            fim: configuracao.horaFim,
+          },
+        ]
+      }
+
+      if (intervalosInfo.length === 0) {
         return {
           horarios: [],
           intervalos: [],
@@ -575,12 +662,7 @@ export const agendamentoRouter = createTRPCRouter({
         }
       }
 
-      // Buscar configuração para pegar duração do serviço
-      const configuracao = await db.query.configuracoes.findFirst()
-      if (!configuracao) {
-        return { horarios: [], intervalos: [], erro: "Configuração não encontrada" }
-      }
-
+      // Buscar duração do serviço
       const servicos = configuracao.servicos as ServicoConfigurado[]
       const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
       if (!servicoSelecionado) {
@@ -591,14 +673,10 @@ export const agendamentoRouter = createTRPCRouter({
 
       // Gerar todos os horários possíveis dos intervalos (de 10 em 10 minutos)
       const horariosDisponiveis: string[] = []
-      const intervalosInfo = intervalos.map((intervalo) => ({
-        inicio: intervalo.horaInicio,
-        fim: intervalo.horaFim,
-      }))
 
-      for (const intervalo of intervalos) {
-        const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-        const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+      for (const intervalo of intervalosInfo) {
+        const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
+        const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
         const inicioMinutos = horaInicio! * 60 + minutoInicio!
         const fimMinutos = horaFim! * 60 + minutoFim!
@@ -698,7 +776,7 @@ export const agendamentoRouter = createTRPCRouter({
         }
       }
 
-      // Buscar configurações da barbearia usando a estrutura correta do Drizzle
+      // Buscar configurações da barbearia
       const config = await db.query.configuracoes.findFirst()
       if (!config) {
         return {
@@ -727,11 +805,55 @@ export const agendamentoRouter = createTRPCRouter({
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
+      // Verificar se existem intervalos configurados no sistema
+      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
+        where: eq(intervalosTrabalho.ativo, true),
+      })
+
+      let intervalosInfo: { inicio: string; fim: string }[] = []
+
+      if (existemIntervalos) {
+        // Se existem intervalos configurados no sistema, usar apenas eles
+        if (intervalos.length > 0) {
+          // Há intervalos para este dia específico
+          intervalosInfo = intervalos.map((intervalo) => ({
+            inicio: intervalo.horaInicio,
+            fim: intervalo.horaFim,
+          }))
+        } else {
+          // Não há intervalos para este dia específico = estabelecimento fechado
+          return {
+            temConflito: true,
+            motivo: "Estabelecimento fechado neste dia",
+            proximoDisponivel: null,
+          }
+        }
+      } else {
+        // Se não existem intervalos configurados, usar horário padrão
+        const diasPadrao = config.dias || []
+
+        if (!diasPadrao.includes(diaSemana)) {
+          return {
+            temConflito: true,
+            motivo: "Estabelecimento fechado neste dia",
+            proximoDisponivel: null,
+          }
+        }
+
+        // Usar horário padrão da configuração
+        intervalosInfo = [
+          {
+            inicio: config.horaInicio,
+            fim: config.horaFim,
+          },
+        ]
+      }
+
       // Verificar se está dentro de algum intervalo de trabalho
       let dentroIntervalo = false
-      for (const intervalo of intervalos) {
-        const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-        const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+      for (const intervalo of intervalosInfo) {
+        const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
+        const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
         const inicioMinutos = horaInicio! * 60 + minutoInicio!
         const fimMinutos = horaFim! * 60 + minutoFim!
@@ -747,8 +869,8 @@ export const agendamentoRouter = createTRPCRouter({
         let proximoInicioMinutos = null
 
         // Buscar próximo início de intervalo após o horário atual
-        for (const intervalo of intervalos) {
-          const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
+        for (const intervalo of intervalosInfo) {
+          const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
           const inicioMinutos = horaInicio! * 60 + minutoInicio!
 
           if (inicioMinutos > horarioMinutos) {
@@ -758,9 +880,9 @@ export const agendamentoRouter = createTRPCRouter({
         }
 
         // Se não encontrou, pegar o primeiro intervalo do dia
-        if (proximoInicioMinutos === null && intervalos.length > 0) {
-          const primeiroIntervalo = intervalos[0]!
-          const [horaInicio, minutoInicio] = primeiroIntervalo.horaInicio.split(":").map(Number)
+        if (proximoInicioMinutos === null && intervalosInfo.length > 0) {
+          const primeiroIntervalo = intervalosInfo[0]!
+          const [horaInicio, minutoInicio] = primeiroIntervalo.inicio.split(":").map(Number)
           proximoInicioMinutos = horaInicio! * 60 + minutoInicio!
         }
 
@@ -811,9 +933,9 @@ export const agendamentoRouter = createTRPCRouter({
           let proximoDisponivel = null
 
           // Gerar horários possíveis em intervalos de 30 minutos
-          for (const intervalo of intervalos) {
-            const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-            const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+          for (const intervalo of intervalosInfo) {
+            const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
+            const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
             const inicioMinutos = horaInicio! * 60 + minutoInicio!
             const fimMinutos = horaFim! * 60 + minutoFim!

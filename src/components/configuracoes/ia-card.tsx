@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { Brain, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,28 +26,46 @@ export function IACard() {
 
   const atualizarIAMutation = trpc.configuracao.atualizarIA.useMutation({
     onSuccess: async () => {
-      toast.success("Configurações de IA atualizadas com sucesso!");
+      toast({
+        title: "Sucesso!",
+        description: "Configurações de IA atualizadas com sucesso!",
+      });
       await refetch();
     },
     onError: () => {
-      toast.error("Erro ao salvar configurações de IA.");
+      toast({
+        title: "Erro!",
+        description: "Erro ao salvar configurações de IA.",
+        variant: "destructive",
+      });
     },
   });
 
   const atualizarModoTreinoMutation =
     trpc.configuracao.atualizarModoTreino.useMutation({
       onSuccess: async () => {
-        toast.success("Modo treino atualizado com sucesso!");
+        toast({
+          title: "Sucesso!",
+          description: "Modo treino atualizado com sucesso!",
+        });
         await refetch();
       },
       onError: () => {
-        toast.error("Erro ao atualizar modo treino.");
+        toast({
+          title: "Erro!",
+          description: "Erro ao atualizar modo treino.",
+          variant: "destructive",
+        });
       },
     });
 
   function handleSalvarIA() {
     if (!configs?.id) {
-      toast.error("Configuração não carregada.");
+      toast({
+        title: "Erro!",
+        description: "Configuração não carregada.",
+        variant: "destructive",
+      });
       return;
     }
     atualizarIAMutation.mutate({
@@ -59,7 +77,11 @@ export function IACard() {
 
   function handleToggleModoTreino() {
     if (!configs?.id) {
-      toast.error("Configuração não carregada.");
+      toast({
+        title: "Erro!",
+        description: "Configuração não carregada.",
+        variant: "destructive",
+      });
       return;
     }
     const novoModo = !modoTreinoAtivo;

@@ -55,8 +55,9 @@ export default function LandingPage() {
   const [calendarioAberto, setCalendarioAberto] = useState(false);
   const [mesAtual, setMesAtual] = useState(dayjs());
 
-  const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 30); // Apenas 30 dias depois da data atual
+  // Definir limites de data para agendamentos
+  const hoje = dayjs();
+  const dataMaxima = hoje.add(30, "days"); // Máximo 30 dias no futuro
 
   // Busca parceiros (tipo "parceria")
   const { data: parcerias } = api.linktree.listarParcerias.useQuery();
@@ -222,10 +223,10 @@ export default function LandingPage() {
           </div>
           <nav className="hidden items-center gap-6 md:flex">
             <a
-              href="#servicos"
+              href="#agendamento"
               className="text-gray-300 transition-colors hover:text-white"
             >
-              Serviços
+              Agendar
             </a>
             <a
               href="#clientes"
@@ -239,12 +240,7 @@ export default function LandingPage() {
             >
               Parceiros
             </a>
-            <a
-              href="#agendamento"
-              className="text-gray-300 transition-colors hover:text-white"
-            >
-              Agendar
-            </a>
+
             <Button
               onClick={() => setShowLogin(true)}
               className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
@@ -257,7 +253,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden px-6 py-20">
-        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10" />
         <div className="container mx-auto max-w-6xl text-center">
           <Badge className="mb-6 border-amber-500/30 bg-amber-500/20 text-amber-300">
             <Sparkles className="mr-2 h-4 w-4" />
@@ -277,7 +273,7 @@ export default function LandingPage() {
             inovação em cada atendimento para o homem moderno.
           </p>
 
-          <div className="flex cursor-pointer flex-col gap-4 sm:flex-row sm:justify-center">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
             <Button
               size="lg"
               onClick={() =>
@@ -294,9 +290,14 @@ export default function LandingPage() {
             <Button
               size="lg"
               variant="outline"
+              onClick={() =>
+                document
+                  .getElementById("parceiros")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
               className="border-gray-600 text-gray-300 hover:bg-gray-800"
             >
-              Ver Serviços
+              Ver Parceiros
             </Button>
           </div>
 
@@ -611,7 +612,11 @@ export default function LandingPage() {
                                     onClick={() =>
                                       setMesAtual(mesAtual.subtract(1, "month"))
                                     }
-                                    className="text-gray-300 hover:bg-gray-700 hover:text-white"
+                                    disabled={mesAtual
+                                      .subtract(1, "month")
+                                      .endOf("month")
+                                      .isBefore(hoje, "day")}
+                                    className="text-gray-300 hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     <CalendarLeft className="h-4 w-4" />
                                   </Button>
@@ -629,7 +634,11 @@ export default function LandingPage() {
                                     onClick={() =>
                                       setMesAtual(mesAtual.add(1, "month"))
                                     }
-                                    className="text-gray-300 hover:bg-gray-700 hover:text-white"
+                                    disabled={mesAtual
+                                      .add(1, "month")
+                                      .startOf("month")
+                                      .isAfter(dataMaxima, "day")}
+                                    className="text-gray-300 hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     <CalendarRight className="h-4 w-4" />
                                   </Button>
@@ -676,9 +685,13 @@ export default function LandingPage() {
                                         mesAtual,
                                         "month",
                                       );
-                                      const ehHoje = dia.isSame(dayjs(), "day");
+                                      const ehHoje = dia.isSame(hoje, "day");
                                       const ehPassado = dia.isBefore(
-                                        dayjs(),
+                                        hoje,
+                                        "day",
+                                      );
+                                      const ehAlemDoLimite = dia.isAfter(
+                                        dataMaxima,
                                         "day",
                                       );
                                       const ehSelecionado =
@@ -687,6 +700,10 @@ export default function LandingPage() {
                                           dayjs(dataAgendamento),
                                           "day",
                                         );
+                                      const ehDesabilitado =
+                                        !ehMesAtual ||
+                                        ehPassado ||
+                                        ehAlemDoLimite;
 
                                       dias.push(
                                         <Button
@@ -694,14 +711,42 @@ export default function LandingPage() {
                                           type="button"
                                           variant="ghost"
                                           size="sm"
-                                          disabled={!ehMesAtual || ehPassado}
+                                          disabled={ehDesabilitado}
                                           onClick={() => {
-                                            if (ehMesAtual && !ehPassado) {
+                                            if (!ehDesabilitado) {
                                               setDataAgendamento(dia.toDate());
                                               setCalendarioAberto(false);
                                             }
                                           }}
-                                          className={`h-10 w-10 p-0 text-sm transition-colors ${!ehMesAtual ? "cursor-not-allowed text-gray-600" : ""} ${ehPassado ? "cursor-not-allowed text-gray-500 opacity-50" : ""} ${ehMesAtual && !ehPassado ? "text-gray-300 hover:bg-gray-700 hover:text-white" : ""} ${ehHoje && ehMesAtual ? "bg-blue-600/20 font-semibold text-blue-400" : ""} ${ehSelecionado ? "bg-amber-500 font-semibold text-white hover:bg-amber-600" : ""} `}
+                                          className={`h-10 w-10 p-0 text-sm transition-colors ${
+                                            !ehMesAtual
+                                              ? "cursor-not-allowed text-gray-600"
+                                              : ""
+                                          } ${
+                                            ehPassado || ehAlemDoLimite
+                                              ? "cursor-not-allowed text-gray-500 opacity-50"
+                                              : ""
+                                          } ${
+                                            ehMesAtual &&
+                                            !ehPassado &&
+                                            !ehAlemDoLimite
+                                              ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                                              : ""
+                                          } ${
+                                            ehHoje &&
+                                            ehMesAtual &&
+                                            !ehAlemDoLimite
+                                              ? "bg-blue-600/20 font-semibold text-blue-400"
+                                              : ""
+                                          } ${
+                                            ehSelecionado
+                                              ? "bg-amber-500 font-semibold text-white hover:bg-amber-600"
+                                              : ""
+                                          } ${
+                                            ehAlemDoLimite && ehMesAtual
+                                              ? "cursor-not-allowed bg-red-500/10 text-red-400"
+                                              : ""
+                                          }`}
                                         >
                                           {dia.format("D")}
                                         </Button>,
@@ -746,6 +791,17 @@ export default function LandingPage() {
                                 </div>
                               </div>
                             )}
+                          </div>
+                        </div>
+
+                        {/* Mensagem informativa sobre limite */}
+                        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/10 p-3">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 text-amber-400" />
+                            <p className="text-sm text-amber-300">
+                              Agendamentos disponíveis até{" "}
+                              {dataMaxima.format("DD/MM/YYYY")} (30 dias)
+                            </p>
                           </div>
                         </div>
 
@@ -899,19 +955,43 @@ export default function LandingPage() {
                           >
                             Voltar
                           </Button>
-                          <Button
-                            onClick={() => {
-                              if (servicoSelecionado && dataAgendamento) {
-                                setEtapaAgendamento("horario");
-                              } else {
-                                alert("Selecione o serviço e a data");
+
+                          {/* Se já tem horário selecionado, mostrar botão de confirmar */}
+                          {horarioSelecionado ? (
+                            <Button
+                              onClick={confirmarAgendamento}
+                              disabled={
+                                !servicoSelecionado ||
+                                !dataAgendamento ||
+                                !horarioSelecionado ||
+                                criarAgendamentoMutation.isLoading
                               }
-                            }}
-                            disabled={!servicoSelecionado || !dataAgendamento}
-                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                          >
-                            Ver Horários
-                          </Button>
+                              className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                            >
+                              {criarAgendamentoMutation.isLoading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Agendando...
+                                </>
+                              ) : (
+                                `Confirmar às ${horarioSelecionado}`
+                              )}
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => {
+                                if (servicoSelecionado && dataAgendamento) {
+                                  setEtapaAgendamento("horario");
+                                } else {
+                                  alert("Selecione o serviço e a data");
+                                }
+                              }}
+                              disabled={!servicoSelecionado || !dataAgendamento}
+                              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                            >
+                              Ver Horários
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1348,7 +1428,7 @@ export default function LandingPage() {
 
           {loadingClientes ? (
             <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-amber-500 border-r-transparent"></div>
+              <div className="inline-block h-16 w-16 animate-spin rounded-full border-4 border-solid border-amber-500 border-r-transparent"></div>
               <p className="mt-4 text-gray-300">Carregando clientes...</p>
             </div>
           ) : errorClientes ? (
@@ -1421,19 +1501,9 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-black/40 px-6 py-8">
         <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500">
-                <span className="text-sm font-bold text-white">D</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                {configs?.nome}
-              </span>
-            </div>
-            <p className="text-sm text-gray-400">
-              © 2024 {configs?.nome}. Todos os direitos reservados.
-            </p>
-          </div>
+          <p className="text-center text-sm text-gray-400">
+            © 2025 {configs?.nome}. Todos os direitos reservados.
+          </p>
         </div>
       </footer>
 
