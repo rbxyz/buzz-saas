@@ -69,7 +69,7 @@ export function RecentAppointments() {
   const { data, isLoading, error, isStale } =
     trpc.dashboard.getUltimosAgendamentos.useQuery(undefined, {
       staleTime: 60 * 1000, // 1 minuto
-      cacheTime: 5 * 60 * 1000, // 5 minutos
+      gcTime: 5 * 60 * 1000, // 5 minutos
       refetchOnWindowFocus: false,
       refetchInterval: 2 * 60 * 1000, // Atualiza a cada 2 minutos
     });

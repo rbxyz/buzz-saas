@@ -11,7 +11,7 @@ export function DashboardStats() {
     undefined,
     {
       staleTime: 30 * 1000, // 30 segundos
-      cacheTime: 5 * 60 * 1000, // 5 minutos
+      gcTime: 5 * 60 * 1000, // 5 minutos
       refetchOnWindowFocus: false,
       refetchInterval: 60 * 1000, // Atualiza a cada minuto
     },

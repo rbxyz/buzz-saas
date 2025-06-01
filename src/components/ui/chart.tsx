@@ -222,7 +222,7 @@ const ChartTooltipContent = React.forwardRef<
                     item.name,
                     item as TooltipPayloadItem,
                     index,
-                    payloadObj ?? {},
+                    payloadObj ? [payloadObj] : [],
                   )
                 ) : (
                   <>

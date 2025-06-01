@@ -51,7 +51,7 @@ export function Overview() {
   const { data, isLoading, error, isStale } =
     trpc.dashboard.getOverviewData.useQuery(undefined, {
       staleTime: 2 * 60 * 1000, // 2 minutos
-      cacheTime: 10 * 60 * 1000, // 10 minutos
+      gcTime: 10 * 60 * 1000, // 10 minutos
       refetchOnWindowFocus: false,
       refetchInterval: 5 * 60 * 1000, // Atualiza a cada 5 minutos
     });
