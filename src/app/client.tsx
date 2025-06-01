@@ -20,11 +20,10 @@ function QueryProvider({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 1 * 60 * 1000,
-            cacheTime: 5 * 60 * 1000,
+            gcTime: 5 * 60 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
-            suspense: false,
           },
           mutations: {
             retry: 1,
