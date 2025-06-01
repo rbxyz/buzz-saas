@@ -158,7 +158,7 @@ export default function LandingPage() {
     criarAgendamentoMutation.mutate({
       nome: nomeNovoCliente || "",
       telefone: telefoneNumeros,
-      data: dataAgendamento.toISOString().split("T")[0] ?? "",
+      data: dataAgendamento?.toISOString().split("T")[0] ?? "",
       horario: horarioSelecionado,
       servico: servicoSelecionado,
     });
