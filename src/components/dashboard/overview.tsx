@@ -37,7 +37,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
       return (
         <div className="bg-primary-foreground text-primary border-sidebar-border rounded border p-2 shadow-lg">
           <p className="text-sm font-semibold">{label}</p>
-          <p className="text-accent">{firstItem.value} agendamentos</p>
+          <p className="text-black">{firstItem.value} agendamentos</p>
         </div>
       );
     }
