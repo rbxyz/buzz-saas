@@ -1,13 +1,10 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { CACHE_CONFIG } from "@/lib/cache-config"
 import type { TRPCClientError } from "@trpc/client"
+import type { AppRouter } from "@/server/api/root"
 
 // Tipo genérico para erros TRPC
-type TRPCError = TRPCClientError<{
-  message: string
-  code: string
-  data?: Record<string, unknown>
-}>
+type TRPCError = TRPCClientError<AppRouter>
 
 // Hook otimizado para queries com cache inteligente
 export function useOptimizedQuery<TData, TError = TRPCError>(
@@ -26,7 +23,7 @@ export function useOptimizedQuery<TData, TError = TRPCError>(
     queryKey: key,
     queryFn,
     staleTime: cacheConfig.staleTime,
-    cacheTime: cacheConfig.cacheTime,
+    gcTime: cacheConfig.cacheTime,
     refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
     retry: options?.retry ?? 1,
     enabled: options?.enabled ?? true,
@@ -46,12 +43,13 @@ export function useOptimizedInfiniteQuery<TData, TError = TRPCError>(
 
   return useInfiniteQuery<TData, TError>({
     queryKey: key,
-    queryFn: ({ pageParam = 1 }) => queryFn({ pageParam }),
+    queryFn: ({ pageParam }) => queryFn({ pageParam: pageParam as number }),
     staleTime: cacheConfig.staleTime,
-    cacheTime: cacheConfig.cacheTime,
+    gcTime: cacheConfig.cacheTime,
     refetchOnWindowFocus: false,
     retry: 1,
     enabled: options?.enabled ?? true,
     getNextPageParam: options?.getNextPageParam ?? (() => undefined),
+    initialPageParam: 1
   })
 }
