@@ -153,11 +153,6 @@ export default function LandingPage() {
   };
 
   const confirmarAgendamento = () => {
-    if (!dataAgendamento || !horarioSelecionado || !servicoSelecionado) {
-      alert("Preencha todos os campos obrigatórios");
-      return;
-    }
-
     const telefoneNumeros = limparTelefone(telefoneAgendamento);
 
     criarAgendamentoMutation.mutate({
@@ -931,11 +926,15 @@ export default function LandingPage() {
                                             </p>
                                             <Button
                                               size="sm"
-                                              onClick={() =>
+                                              onClick={() => {
                                                 setHorarioSelecionado(
                                                   horarioManual,
-                                                )
-                                              }
+                                                );
+                                                // aguarda o estado atualizar e chama a função
+                                                setTimeout(() => {
+                                                  confirmarAgendamento();
+                                                }, 0);
+                                              }}
                                               className="mt-2 bg-green-600 hover:bg-green-700"
                                             >
                                               Confirmar {horarioManual}
