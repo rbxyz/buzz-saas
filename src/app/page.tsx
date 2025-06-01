@@ -97,9 +97,7 @@ export default function LandingPage() {
   const { data: horariosDisponiveis, isLoading: carregandoHorarios } =
     api.agendamento.getHorariosDisponiveisPorData.useQuery(
       {
-        data: dataAgendamento
-          ? dataAgendamento.toISOString().split("T")[0]
-          : "",
+        data: dataAgendamento?.toISOString().split("T")[0] ?? "",
         servico: servicoSelecionado,
       },
       {
@@ -157,9 +155,9 @@ export default function LandingPage() {
     const telefoneNumeros = limparTelefone(telefoneAgendamento);
 
     criarAgendamentoMutation.mutate({
-      nome: nomeNovoCliente,
+      nome: nomeNovoCliente || "",
       telefone: telefoneNumeros,
-      data: dataAgendamento.toISOString().split("T")[0],
+      data: dataAgendamento.toISOString().split("T")[0] ?? "",
       horario: horarioSelecionado,
       servico: servicoSelecionado,
     });
@@ -210,15 +208,12 @@ export default function LandingPage() {
   const { data: conflito, isLoading: conflitoLoading } =
     api.agendamento.verificarConflito.useQuery(
       {
-        data: dataAgendamento
-          ? dataAgendamento.toISOString().split("T")[0]
-          : "",
-        horario: horarioManual,
-        servico: servicoSelecionado,
+        data: dataAgendamento?.toISOString().split("T")[0] ?? "",
+        horario: horarioManual ?? "",
+        servico: servicoSelecionado ?? "",
       },
       { enabled: !!dataAgendamento && !!horarioManual && !!servicoSelecionado },
     );
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header/Navigation */}
@@ -452,8 +447,10 @@ export default function LandingPage() {
                             if (telefoneNumeros.length >= 10) {
                               // Verificar se já temos os dados da query
                               if (clientePorTelefone) {
-                                // Cliente encontrado
-                                setClienteEncontrado(clientePorTelefone);
+                                setClienteEncontrado({
+                                  ...clientePorTelefone,
+                                  email: clientePorTelefone.email ?? undefined,
+                                });
                                 setNomeNovoCliente(clientePorTelefone.nome);
                                 setEtapaAgendamento("servico");
                               } else if (
@@ -846,6 +843,10 @@ export default function LandingPage() {
                                       .split(":")
                                       .map(Number);
                                     const valido =
+                                      typeof horas === "number" &&
+                                      !isNaN(horas) &&
+                                      typeof minutos === "number" &&
+                                      !isNaN(minutos) &&
                                       horas >= 0 &&
                                       horas <= 23 &&
                                       minutos >= 0 &&
@@ -975,11 +976,11 @@ export default function LandingPage() {
                                 !servicoSelecionado ||
                                 !dataAgendamento ||
                                 !horarioSelecionado ||
-                                Boolean(criarAgendamentoMutation.isLoading)
+                                Boolean(criarAgendamentoMutation.isPending)
                               }
                               className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
                             >
-                              {criarAgendamentoMutation.isLoading ? (
+                              {criarAgendamentoMutation.isPending ? (
                                 <>
                                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                   Agendando...
@@ -1118,11 +1119,11 @@ export default function LandingPage() {
                             onClick={confirmarAgendamento}
                             disabled={
                               !horarioSelecionado ||
-                              Boolean(criarAgendamentoMutation.isLoading)
+                              Boolean(criarAgendamentoMutation.isPending)
                             }
                             className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                           >
-                            {criarAgendamentoMutation.isLoading ? (
+                            {criarAgendamentoMutation.isPending ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Agendando...
