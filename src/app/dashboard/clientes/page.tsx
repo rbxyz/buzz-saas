@@ -79,7 +79,6 @@ export default function ClientesPage() {
       enabled: !!clienteSelecionadoId,
     },
   );
-
   const criarCliente = trpc.cliente.criar.useMutation({
     onSuccess: async () => {
       setModalCriarAberto(false);

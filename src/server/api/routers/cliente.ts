@@ -16,6 +16,7 @@ export const clienteRouter = createTRPCRouter({
         nome: z.string().min(1, "Nome é obrigatório"),
         telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
         email: z.string().email().optional(),
+        dataNascimento: z.string().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -25,6 +26,7 @@ export const clienteRouter = createTRPCRouter({
           nome: input.nome,
           telefone: input.telefone,
           email: input.email,
+          dataNascimento: input.dataNascimento,
         })
         .returning()
 
