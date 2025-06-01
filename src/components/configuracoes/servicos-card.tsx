@@ -70,7 +70,24 @@ export function ServicosCard() {
     valor: string | number,
   ) => {
     const novosServicos = [...servicos];
-    novosServicos[index] = { ...novosServicos[index], [campo]: valor };
+    const servicoAtual = novosServicos[index];
+
+    const novoValor =
+      campo === "preco" || campo === "duracaoMinutos"
+        ? Number(valor)
+        : String(valor); // Garante que seja string
+    const servicoAtualizado: Servico = {
+      nome:
+        campo === "nome" ? (novoValor as string) : (servicoAtual?.nome ?? ""),
+      preco:
+        campo === "preco" ? (novoValor as number) : (servicoAtual?.preco ?? 0),
+      duracaoMinutos:
+        campo === "duracaoMinutos"
+          ? (novoValor as number)
+          : (servicoAtual?.duracaoMinutos ?? 30),
+    };
+
+    novosServicos[index] = servicoAtualizado;
     setServicos(novosServicos);
   };
 
