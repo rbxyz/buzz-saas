@@ -83,7 +83,7 @@ export default function AgendamentosPage() {
       { query: clienteQuery },
       {
         enabled: clienteQuery.length > 1,
-        keepPreviousData: true,
+        staleTime: 1000 * 60 * 5, // 5 minutos
       },
     );
 
@@ -196,7 +196,7 @@ export default function AgendamentosPage() {
   };
 
   const handleNovoAgendamento = () => {
-    if (createMutation.isLoading) return;
+    if (createMutation.isPending) return;
     if (!clienteId) {
       alert("Selecione um cliente válido.");
       return;
@@ -227,16 +227,10 @@ export default function AgendamentosPage() {
   const podeVoltarData = dayjs(dataParaAgendamento).isAfter(dayjs(), "day");
 
   const { data: agendamentos, refetch: refetchAgendamentos } =
-    trpc.agendamento.getHorariosDisponiveisPorData.useQuery(
-      {
-        data: format(selectedDate, "yyyy-MM-dd"),
-      },
-      {
-        onError: (error) => {
-          console.error("Erro ao buscar agendamentos:", error);
-        },
-      },
-    );
+    trpc.agendamento.getHorariosDisponiveisPorData.useQuery({
+      data: format(selectedDate, "yyyy-MM-dd"),
+      servico: servico ?? "",
+    });
 
   return (
     <div
@@ -671,7 +665,7 @@ export default function AgendamentosPage() {
                       className="cursor-pointer"
                       onClick={handleNovoAgendamento}
                       disabled={
-                        Boolean(createMutation.isLoading) ||
+                        Boolean(createMutation.isPending) ||
                         !clienteId ||
                         !horario ||
                         !validarHorario(horario) ||
@@ -679,7 +673,7 @@ export default function AgendamentosPage() {
                         conflito?.temConflito
                       }
                     >
-                      {Boolean(createMutation.isLoading) && (
+                      {Boolean(createMutation.isPending) && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
                       Confirmar Agendamento
