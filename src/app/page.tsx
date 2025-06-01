@@ -116,6 +116,12 @@ export default function LandingPage() {
       },
     });
 
+  // Função para abrir links de parceiros
+  const handleVisitarSite = (url: string) => {
+    if (!url) return;
+    window.open(url, "_blank"); // abre em nova aba
+  };
+
   const handleLogin = () => {
     // Aqui você pode implementar a lógica de login
     // Por enquanto, vamos redirecionar para o dashboard
@@ -1298,7 +1304,7 @@ export default function LandingPage() {
                     )}
 
                     {/* Overlay com informações */}
-                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent">
+                    <div className="absolute inset-0 z-10 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent">
                       <div
                         className={`w-full p-6 text-white transition-all duration-400 lg:p-8 ${
                           isTransitioning
@@ -1313,15 +1319,17 @@ export default function LandingPage() {
                           {parcerias[currentSlide]?.descricao}
                         </p>
                         {parcerias[currentSlide]?.url && (
-                          <a
-                            href={parcerias[currentSlide]?.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
+                          <Button
+                            onClick={() =>
+                              handleVisitarSite(
+                                parcerias[currentSlide]?.url ?? "",
+                              )
+                            }
+                            className="z-50 inline-flex cursor-pointer items-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
                           >
                             Visitar Site
                             <ChevronRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" />
-                          </a>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -1401,23 +1409,6 @@ export default function LandingPage() {
                   >
                     <ChevronRight className="h-5 w-5 lg:h-6 lg:w-6" />
                   </button>
-
-                  {/* Indicadores */}
-                  <div className="mt-8 flex justify-center space-x-3">
-                    {parcerias.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => goToSlide(index)}
-                        disabled={isTransitioning}
-                        className={`h-3 w-3 rounded-full transition-all duration-300 disabled:cursor-not-allowed ${
-                          index === currentSlide
-                            ? "scale-110 bg-amber-500 shadow-md shadow-amber-500/30"
-                            : "bg-gray-400 hover:scale-105 hover:bg-gray-300"
-                        }`}
-                        aria-label={`Ir para slide ${index + 1}`}
-                      />
-                    ))}
-                  </div>
                 </>
               )}
             </div>

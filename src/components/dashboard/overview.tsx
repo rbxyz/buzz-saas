@@ -35,9 +35,9 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
     const firstItem = payload[0];
     if (firstItem?.value !== undefined) {
       return (
-        <div className="bg-primary-foreground text-primary border-sidebar-border rounded border p-2 shadow-lg">
+        <div className="bg-primary-foreground text-accent border-sidebar-border rounded border p-2 shadow-lg">
           <p className="text-sm font-semibold">{label}</p>
-          <p className="text-black">{firstItem.value} agendamentos</p>
+          <p className="text-accent">{firstItem.value} agendamentos</p>
         </div>
       );
     }
