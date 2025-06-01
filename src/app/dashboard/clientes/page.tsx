@@ -18,8 +18,45 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { trpc } from "@/utils/trpc";
+import { trpc as trpcUntyped } from "@/utils/trpc";
 import dayjs from "dayjs";
+
+// Explicit types for TRPC hooks
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/server/api/root";
+
+// Infer types for cliente and agendamento
+type RouterOutput = inferRouterOutputs<AppRouter>;
+type Cliente = RouterOutput["cliente"]["listar"][number];
+type ClienteDetalhe = RouterOutput["cliente"]["buscarPorId"];
+type HistoricoAgendamento =
+  RouterOutput["agendamento"]["getHistoricoPorCliente"][number];
+
+// Type-safe trpc
+const trpc = trpcUntyped as unknown as {
+  cliente: {
+    listar: {
+      useQuery: typeof trpcUntyped.cliente.listar.useQuery;
+    };
+    getById: {
+      useQuery: typeof trpcUntyped.cliente.buscarPorId.useQuery;
+    };
+    criar: {
+      useMutation: typeof trpcUntyped.cliente.criar.useMutation;
+    };
+    editar: {
+      useMutation: typeof trpcUntyped.cliente.atualizar.useMutation;
+    };
+    deletar: {
+      useMutation: typeof trpcUntyped.cliente.excluir.useMutation;
+    };
+  };
+  agendamento: {
+    getHistoricoPorCliente: {
+      useQuery: typeof trpcUntyped.agendamento.getHistoricoPorCliente.useQuery;
+    };
+  };
+};
 
 export default function ClientesPage() {
   const [modalAberto, setModalAberto] = useState(false);
@@ -32,7 +69,9 @@ export default function ClientesPage() {
     useState(false);
 
   // Apenas consome dados já em cache (sem loading states)
-  const { data: clientes, refetch } = trpc.cliente.listar.useQuery();
+  const { data: clientes, refetch } = trpc.cliente.listar.useQuery(undefined, {
+    // No options needed for cache-only
+  });
 
   const { data: clienteSelecionado } = trpc.cliente.getById.useQuery(
     clienteSelecionadoId ?? "",
@@ -118,11 +157,22 @@ export default function ClientesPage() {
   useEffect(() => {
     if (clienteSelecionado && modalEditarAberto) {
       setFormData({
-        nome: clienteSelecionado.nome ?? "",
-        telefone: clienteSelecionado.telefone ?? "",
-        email: clienteSelecionado.email ?? "",
+        nome:
+          typeof clienteSelecionado.nome === "string"
+            ? clienteSelecionado.nome
+            : "",
+        telefone:
+          typeof clienteSelecionado.telefone === "string"
+            ? clienteSelecionado.telefone
+            : "",
+        email:
+          typeof clienteSelecionado.email === "string"
+            ? clienteSelecionado.email
+            : "",
         dataNascimento: clienteSelecionado.dataNascimento
-          ? dayjs(clienteSelecionado.dataNascimento).format("YYYY-MM-DD")
+          ? dayjs(
+              clienteSelecionado.dataNascimento as string | number | Date,
+            ).format("YYYY-MM-DD")
           : "",
       });
     }
@@ -155,8 +205,8 @@ export default function ClientesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {clientes?.length ? (
-            clientes.map((cliente) => (
+          {Array.isArray(clientes) && clientes.length ? (
+            clientes.map((cliente: Cliente) => (
               <Card
                 key={cliente.id}
                 className="border-border bg-card text-card-foreground border p-4 shadow-sm"
@@ -216,24 +266,48 @@ export default function ClientesPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <Label>Nome completo</Label>
-                <Input value={clienteSelecionado?.nome ?? ""} readOnly />
+                <Input
+                  value={
+                    typeof clienteSelecionado.nome === "string"
+                      ? clienteSelecionado.nome
+                      : ""
+                  }
+                  readOnly
+                />
               </div>
               <div>
                 <Label>Telefone</Label>
-                <Input value={clienteSelecionado?.telefone ?? ""} readOnly />
+                <Input
+                  value={
+                    typeof clienteSelecionado.telefone === "string"
+                      ? clienteSelecionado.telefone
+                      : ""
+                  }
+                  readOnly
+                />
               </div>
               <div>
                 <Label>Email</Label>
-                <Input value={clienteSelecionado?.email ?? ""} readOnly />
+                <Input
+                  value={
+                    typeof clienteSelecionado.email === "string"
+                      ? clienteSelecionado.email
+                      : ""
+                  }
+                  readOnly
+                />
               </div>
               <div>
                 <Label>Data de nascimento</Label>
                 <Input
                   value={
-                    clienteSelecionado?.dataNascimento
-                      ? dayjs(clienteSelecionado.dataNascimento).format(
-                          "DD/MM/YYYY",
-                        )
+                    clienteSelecionado.dataNascimento
+                      ? dayjs(
+                          clienteSelecionado.dataNascimento as
+                            | string
+                            | number
+                            | Date,
+                        ).format("DD/MM/YYYY")
                       : ""
                   }
                   readOnly
@@ -242,16 +316,17 @@ export default function ClientesPage() {
 
               <div className="col-span-2 mt-2">
                 <Label>Histórico de Agendamentos</Label>
-                {historico?.length === 0 ? (
+                {Array.isArray(historico) && historico.length === 0 ? (
                   <p>Nenhum serviço registrado ainda.</p>
                 ) : (
                   <ul className="text-muted-foreground list-disc pl-5 text-sm">
-                    {historico?.map((h) => (
-                      <li key={h.id}>
-                        {dayjs(h.dataHora).format("DD/MM/YYYY HH:mm")} –{" "}
-                        {h.servico} ({h.status})
-                      </li>
-                    ))}
+                    {Array.isArray(historico) &&
+                      historico.map((h: HistoricoAgendamento) => (
+                        <li key={h.id}>
+                          {dayjs(h.dataHora).format("DD/MM/YYYY HH:mm")} –{" "}
+                          {h.servico} ({h.status})
+                        </li>
+                      ))}
                   </ul>
                 )}
               </div>
@@ -341,8 +416,7 @@ export default function ClientesPage() {
             <Button
               className="cursor-pointer"
               onClick={handleCriarCliente}
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              disabled={!formData.nome || criarCliente.isLoading}
+              disabled={!formData.nome || Boolean(criarCliente.isLoading)}
             >
               {criarCliente.isLoading ? "Salvando..." : "Salvar"}
             </Button>
@@ -417,8 +491,7 @@ export default function ClientesPage() {
                   ...formData,
                 });
               }}
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-              disabled={editarCliente.isLoading}
+              disabled={Boolean(editarCliente.isLoading)}
             >
               {editarCliente.isLoading ? "Salvando..." : "Salvar alterações"}
             </Button>

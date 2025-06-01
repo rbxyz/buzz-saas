@@ -32,7 +32,7 @@ export function ServicosCard() {
         title: "Sucesso!",
         description: "Serviços atualizados com sucesso!",
       });
-      refetch();
+      void refetch();
     },
     onError: (error) => {
       toast({

@@ -236,7 +236,7 @@ export const linktreeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       // Para clientes, a URL sempre será null
       // Para parcerias, usa a URL fornecida
-      const urlFinal = input.tipo === "cliente" ? null : input.url || null
+      const urlFinal = input.tipo === "cliente" ? null : input.url ?? null
 
       let imagemBuffer = null
       if (input.imagem) {
@@ -293,7 +293,7 @@ export const linktreeRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       // Para clientes, a URL sempre será null
       // Para parcerias, usa a URL fornecida
-      const urlFinal = input.tipo === "cliente" ? null : input.url || null
+      const urlFinal = input.tipo === "cliente" ? null : input.url ?? null
 
       let imagemBuffer = null
       if (input.imagem) {
@@ -308,7 +308,14 @@ export const linktreeRouter = createTRPCRouter({
         }
       }
 
-      const updateData: any = {
+      const updateData: {
+        titulo: string;
+        url: string | null;
+        descricao: string;
+        tipo: "cliente" | "parceria";
+        updatedAt: Date;
+        imagem?: Buffer;
+      } = {
         titulo: input.titulo,
         url: urlFinal,
         descricao: input.descricao ?? "",

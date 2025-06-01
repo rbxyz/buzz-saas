@@ -62,7 +62,7 @@ export const clienteRouter = createTRPCRouter({
 
   buscarPorId: publicProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input }) => {
     const cliente = await db.select().from(clientes).where(eq(clientes.id, input.id)).limit(1)
-    return cliente[0] || null
+    return cliente[0] ?? null
   }),
 
   buscarPorNome: publicProcedure.input(z.object({ nome: z.string() })).query(async ({ input }) => {
@@ -87,8 +87,8 @@ export const clienteRouter = createTRPCRouter({
       .where(sql`${clientes.createdAt} >= NOW() - INTERVAL '30 days'`)
 
     return {
-      total: totalClientes[0]?.count || 0,
-      recentes: clientesRecentes[0]?.count || 0,
+      total: totalClientes[0]?.count ?? 0,
+      recentes: clientesRecentes[0]?.count ?? 0,
     }
   }),
     // PROCEDIMENTO CRÍTICO: buscarPorTelefone (buscarClientePorTelefone)

@@ -283,8 +283,8 @@ export default function LinktreePage() {
     );
   }
 
-  const clientes = links?.filter((link) => link.tipo === "cliente") || [];
-  const parcerias = links?.filter((link) => link.tipo === "parceria") || [];
+  const clientes = links?.filter((link) => link.tipo === "cliente") ?? [];
+  const parcerias = links?.filter((link) => link.tipo === "parceria") ?? [];
 
   return (
     <main

@@ -2,8 +2,15 @@ import { useQuery, useInfiniteQuery } from "@tanstack/react-query"
 import { CACHE_CONFIG } from "@/lib/cache-config"
 import type { TRPCClientError } from "@trpc/client"
 
+// Tipo genérico para erros TRPC
+type TRPCError = TRPCClientError<{
+  message: string
+  code: string
+  data?: Record<string, unknown>
+}>
+
 // Hook otimizado para queries com cache inteligente
-export function useOptimizedQuery<TData, TError = TRPCClientError<any>>(
+export function useOptimizedQuery<TData, TError = TRPCError>(
   key: string[],
   queryFn: () => Promise<TData>,
   options?: {
@@ -27,7 +34,7 @@ export function useOptimizedQuery<TData, TError = TRPCClientError<any>>(
 }
 
 // Hook para queries infinitas (paginação)
-export function useOptimizedInfiniteQuery<TData, TError = TRPCClientError<any>>(
+export function useOptimizedInfiniteQuery<TData, TError = TRPCError>(
   key: string[],
   queryFn: ({ pageParam }: { pageParam: number }) => Promise<TData>,
   options?: {
@@ -39,7 +46,7 @@ export function useOptimizedInfiniteQuery<TData, TError = TRPCClientError<any>>(
 
   return useInfiniteQuery<TData, TError>({
     queryKey: key,
-    queryFn,
+    queryFn: ({ pageParam = 1 }) => queryFn({ pageParam }),
     staleTime: cacheConfig.staleTime,
     cacheTime: cacheConfig.cacheTime,
     refetchOnWindowFocus: false,

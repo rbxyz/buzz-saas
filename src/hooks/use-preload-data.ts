@@ -45,7 +45,7 @@ export function usePreloadData(config: PreloadConfig) {
 
     if (config.configuracoes) {
       void utils.configuracao.listar.prefetch()
-      void utils.configuracao.getHorariosPersonalizados.prefetch()
+      void utils.intervalosTrabalho.listar.prefetch()
       void utils.configuracao.getServicos.prefetch()
     }
 

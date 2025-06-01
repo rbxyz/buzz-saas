@@ -122,18 +122,13 @@ export default function AgendamentosPage() {
 
   const atualizarStatus = trpc.agendamento.atualizarStatus.useMutation({
     onSuccess: () => {
-      refetchAgendamentos();
+      void refetchAgendamentos();
     },
   });
 
-  const { data: agendamentos, refetch: refetchAgendamentos } =
-    trpc.agendamento.getByData.useQuery({
-      date: selectedDate.toISOString(),
-    });
-
   const createMutation = trpc.agendamento.create.useMutation({
     onSuccess: () => {
-      refetchAgendamentos();
+      void refetchAgendamentos();
       setOpen(false);
       setHorario("");
       setHorarioInput("");
@@ -167,11 +162,7 @@ export default function AgendamentosPage() {
   }, [clienteQuery, clientesEncontrados, clienteId]);
 
   useEffect(() => {
-    if (
-      clienteId &&
-      (!clientesEncontrados ||
-        !clientesEncontrados.some((c) => c.id === clienteId))
-    ) {
+    if (clienteId && !clientesEncontrados?.some((c) => c.id === clienteId)) {
       setClienteId(null);
       setClienteNomeSelecionado("");
     }
@@ -234,6 +225,18 @@ export default function AgendamentosPage() {
 
   // Verificar se a data é hoje para não permitir voltar para datas passadas
   const podeVoltarData = dayjs(dataParaAgendamento).isAfter(dayjs(), "day");
+
+  const { data: agendamentos, refetch: refetchAgendamentos } =
+    trpc.agendamento.getHorariosDisponiveisPorData.useQuery(
+      {
+        data: format(selectedDate, "yyyy-MM-dd"),
+      },
+      {
+        onError: (error) => {
+          console.error("Erro ao buscar agendamentos:", error);
+        },
+      },
+    );
 
   return (
     <div
@@ -316,7 +319,7 @@ export default function AgendamentosPage() {
                 Agendamentos de {format(selectedDate, "dd/MM/yyyy")}
               </CardTitle>
               <CardDescription>
-                Total: {agendamentos?.length ?? 0}
+                Total: {Array.isArray(agendamentos) ? agendamentos.length : 0}
               </CardDescription>
             </div>
 
@@ -484,11 +487,19 @@ export default function AgendamentosPage() {
                       className="border-input text-foreground focus:ring-accent bg-background mt-1 w-full cursor-pointer rounded-md border px-3 py-2 shadow-sm transition duration-200 focus:ring-2 focus:ring-offset-1 focus:outline-none"
                     >
                       <option value="">Selecione um serviço</option>
-                      {servicosDisponiveis?.map((s) => (
-                        <option key={s.nome} value={s.nome}>
-                          {s.nome} - R$ {s.preco} ({s.duracaoMinutos || 30}min)
-                        </option>
-                      ))}
+                      {Array.isArray(servicosDisponiveis) &&
+                        servicosDisponiveis.map(
+                          (s: {
+                            nome: string;
+                            preco: number;
+                            duracaoMinutos?: number;
+                          }) => (
+                            <option key={s.nome} value={s.nome}>
+                              {s.nome} - R$ {s.preco} ({s.duracaoMinutos ?? 30}
+                              min)
+                            </option>
+                          ),
+                        )}
                     </select>
                   </div>
 
@@ -660,7 +671,7 @@ export default function AgendamentosPage() {
                       className="cursor-pointer"
                       onClick={handleNovoAgendamento}
                       disabled={
-                        createMutation.isLoading ||
+                        Boolean(createMutation.isLoading) ||
                         !clienteId ||
                         !horario ||
                         !validarHorario(horario) ||
@@ -668,7 +679,7 @@ export default function AgendamentosPage() {
                         conflito?.temConflito
                       }
                     >
-                      {createMutation.isLoading && (
+                      {Boolean(createMutation.isLoading) && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
                       Confirmar Agendamento
@@ -680,63 +691,74 @@ export default function AgendamentosPage() {
           </CardHeader>
 
           <CardContent className="space-y-2">
-            {agendamentos?.length === 0 && (
+            {Array.isArray(agendamentos) && agendamentos.length === 0 && (
               <p className="text-muted-foreground text-sm">
                 Nenhum agendamento para esta data.
               </p>
             )}
-            {agendamentos?.map((agendamento) => (
-              <div
-                key={agendamento.id}
-                className="border-border bg-card text-card-foreground flex flex-col gap-2 rounded border p-2"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">
-                      {agendamento.cliente?.nome ?? "Cliente desconhecido"}
-                    </p>
-                    <p className="text-muted-foreground text-sm">
-                      {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
-                      {agendamento.servico} ({agendamento.duracaoMinutos}min)
-                    </p>
-                  </div>
-                  <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
-                    {agendamento.status}
-                  </span>
-                </div>
+            {Array.isArray(agendamentos) &&
+              agendamentos.map(
+                (agendamento: {
+                  id: string;
+                  cliente?: { nome?: string };
+                  dataHora: string;
+                  servico: string;
+                  duracaoMinutos?: number;
+                  status: string;
+                }) => (
+                  <div
+                    key={agendamento.id}
+                    className="border-border bg-card text-card-foreground flex flex-col gap-2 rounded border p-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {agendamento.cliente?.nome ?? "Cliente desconhecido"}
+                        </p>
+                        <p className="text-muted-foreground text-sm">
+                          {dayjs(agendamento.dataHora).format("HH:mm")} -{" "}
+                          {agendamento.servico} (
+                          {agendamento.duracaoMinutos ?? 30}min)
+                        </p>
+                      </div>
+                      <span className="bg-muted text-muted-foreground rounded px-2 py-1 text-xs capitalize">
+                        {agendamento.status}
+                      </span>
+                    </div>
 
-                {agendamento.status === "agendado" && (
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      className="cursor-pointer"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        atualizarStatus.mutate({
-                          id: agendamento.id,
-                          status: "concluido",
-                        })
-                      }
-                    >
-                      Confirmar
-                    </Button>
-                    <Button
-                      className="cursor-pointer"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() =>
-                        atualizarStatus.mutate({
-                          id: agendamento.id,
-                          status: "cancelado",
-                        })
-                      }
-                    >
-                      Cancelar
-                    </Button>
+                    {agendamento.status === "agendado" && (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          className="cursor-pointer"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            void atualizarStatus.mutate({
+                              id: agendamento.id,
+                              status: "concluido",
+                            })
+                          }
+                        >
+                          Confirmar
+                        </Button>
+                        <Button
+                          className="cursor-pointer"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            void atualizarStatus.mutate({
+                              id: agendamento.id,
+                              status: "cancelado",
+                            })
+                          }
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+                ),
+              )}
           </CardContent>
         </Card>
       </div>

@@ -37,11 +37,22 @@ export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  // const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  // const [clienteEncontrado, setClienteEncontrado] = useState<any>(null);
+
+  // Define interface para o cliente
+  interface Cliente {
+    id: string;
+    nome: string;
+    telefone: string;
+    email?: string;
+  }
+  const [clienteEncontrado, setClienteEncontrado] = useState<Cliente | null>(
+    null,
+  );
 
   // Estados para agendamento
   const [telefoneAgendamento, setTelefoneAgendamento] = useState("");
-  const [clienteEncontrado, setClienteEncontrado] = useState<any>(null);
   const [nomeNovoCliente, setNomeNovoCliente] = useState("");
   const [dataAgendamento, setDataAgendamento] = useState<Date | null>(null);
   const [servicoSelecionado, setServicoSelecionado] = useState("");
@@ -550,7 +561,7 @@ export default function LandingPage() {
                         </div>
                         <h3 className="mb-2 text-2xl font-bold text-white">
                           {clienteEncontrado
-                            ? `Olá, ${clienteEncontrado.nome}!`
+                            ? `Olá, ${clienteEncontrado?.nome || ""}!`
                             : `Olá, ${nomeNovoCliente}!`}
                         </h3>
                         <p className="text-gray-400">
@@ -964,7 +975,7 @@ export default function LandingPage() {
                                 !servicoSelecionado ||
                                 !dataAgendamento ||
                                 !horarioSelecionado ||
-                                criarAgendamentoMutation.isLoading
+                                Boolean(criarAgendamentoMutation.isLoading)
                               }
                               className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
                             >
@@ -1107,7 +1118,7 @@ export default function LandingPage() {
                             onClick={confirmarAgendamento}
                             disabled={
                               !horarioSelecionado ||
-                              criarAgendamentoMutation.isLoading
+                              Boolean(criarAgendamentoMutation.isLoading)
                             }
                             className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
                           >
@@ -1474,7 +1485,7 @@ export default function LandingPage() {
                       {cliente.descricao}
                     </p>
                     <div className="flex justify-center">
-                      {[...Array(5)].map((_, i) => (
+                      {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
                           className="h-5 w-5 fill-current text-amber-400"

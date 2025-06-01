@@ -192,7 +192,7 @@ export default function AgendamentosPage() {
   // Mutations
   const atualizarStatus = api.agendamento.atualizarStatus.useMutation({
     onSuccess: () => {
-      refetchAgendamentos();
+      void refetchAgendamentos();
       toast.success("Status atualizado com sucesso!");
     },
     onError: (error) => {
@@ -202,7 +202,7 @@ export default function AgendamentosPage() {
 
   const createMutation = api.agendamento.create.useMutation({
     onSuccess: () => {
-      refetchAgendamentos();
+      void refetchAgendamentos();
       setOpen(false);
       resetForm();
       toast.success("Agendamento criado com sucesso!");
@@ -236,7 +236,7 @@ export default function AgendamentosPage() {
   // Limpar seleção se necessário
   useEffect(() => {
     if (!clienteQuery && clienteId && clientesEncontrados) {
-      if (!clientesEncontrados.some((c) => c.id === clienteId)) {
+      if (!clientesEncontrados?.some((c) => c.id === clienteId)) {
         setClienteId(null);
         setClienteNomeSelecionado("");
       }
@@ -244,11 +244,7 @@ export default function AgendamentosPage() {
   }, [clienteQuery, clientesEncontrados, clienteId]);
 
   useEffect(() => {
-    if (
-      clienteId &&
-      (!clientesEncontrados ||
-        !clientesEncontrados.some((c) => c.id === clienteId))
-    ) {
+    if (clienteId && !clientesEncontrados?.some((c) => c.id === clienteId)) {
       setClienteId(null);
       setClienteNomeSelecionado("");
     }
@@ -350,7 +346,7 @@ export default function AgendamentosPage() {
                 className="border-border bg-card w-full rounded-md border p-4 text-[16px]"
                 modifiers={{
                   hasAppointments:
-                    cortesDoMes?.map((corte) => new Date(corte.dataHora)) || [],
+                    cortesDoMes?.map((corte) => new Date(corte.dataHora)) ?? [],
                 }}
                 modifiersStyles={{
                   hasAppointments: {
@@ -574,7 +570,7 @@ export default function AgendamentosPage() {
                             value={s.nome}
                           >
                             {s.nome} - R$ {s.preco.toFixed(2)} (
-                            {s.duracaoMinutos || 30}min)
+                            {s.duracaoMinutos ?? 30}min)
                           </SelectItem>
                         ))}
                       </SelectContent>

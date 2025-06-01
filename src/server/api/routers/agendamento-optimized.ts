@@ -5,8 +5,39 @@ import { agendamentos, clientes } from "@/server/db/schema"
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm"
 import dayjs from "dayjs"
 
+// Definição de tipos para o cache
+interface CacheEntry<T> {
+  data: T
+  timestamp: number
+  ttl: number
+}
+
+// Interfaces para os dados retornados
+interface ClienteBasico {
+  id: string
+  nome: string
+  telefone: string | null
+}
+
+interface AgendamentoStatus {
+  agendado?: number
+  cancelado?: number
+  concluido?: number
+  pendente?: number
+  [key: string]: number | undefined
+}
+
+interface DashboardStats {
+  agendamentosHoje: number
+  agendamentosOntem: number
+  totalClientes: number
+  faturamentoSemana: number
+  agendamentosPorStatus: AgendamentoStatus
+  variacaoAgendamentos: number
+}
+
 // Cache em memória simples para dados que não mudam frequentemente
-const cache = new Map<string, { data: any; timestamp: number; ttl: number }>()
+const cache = new Map<string, CacheEntry<unknown>>()
 
 function getCachedData<T>(key: string): T | null {
   const cached = cache.get(key)
@@ -112,7 +143,7 @@ export const agendamentoOptimizedRouter = createTRPCRouter({
       const cacheKey = `clientes-search-${input.query}-${input.limit}`
 
       // Verificar cache primeiro
-      const cached = getCachedData<any[]>(cacheKey)
+      const cached = getCachedData<ClienteBasico[]>(cacheKey)
       if (cached) {
         return cached
       }
@@ -130,7 +161,7 @@ export const agendamentoOptimizedRouter = createTRPCRouter({
         .limit(input.limit)
 
       // Cache por 2 minutos
-      setCachedData(cacheKey, clientesEncontrados, 2 * 60 * 1000)
+      setCachedData<ClienteBasico[]>(cacheKey, clientesEncontrados, 2 * 60 * 1000)
 
       return clientesEncontrados
     }),
@@ -140,7 +171,7 @@ export const agendamentoOptimizedRouter = createTRPCRouter({
     const cacheKey = "dashboard-stats"
 
     // Cache por 30 segundos para stats em tempo real
-    const cached = getCachedData<any>(cacheKey)
+    const cached = getCachedData<DashboardStats>(cacheKey)
     if (cached) {
       return cached
     }
@@ -204,7 +235,7 @@ export const agendamentoOptimizedRouter = createTRPCRouter({
           ),
       ])
 
-    const stats = {
+    const stats: DashboardStats = {
       agendamentosHoje,
       agendamentosOntem,
       totalClientes,
@@ -215,7 +246,7 @@ export const agendamentoOptimizedRouter = createTRPCRouter({
     }
 
     // Cache por 30 segundos
-    setCachedData(cacheKey, stats, 30 * 1000)
+    setCachedData<DashboardStats>(cacheKey, stats, 30 * 1000)
 
     return stats
   }),

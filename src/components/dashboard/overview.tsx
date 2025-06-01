@@ -16,22 +16,31 @@ type OverviewDataItem = {
   total: number;
 };
 
-function CustomTooltip({
-  active,
-  payload,
-  label,
-}: {
+type ChartPayloadItem = {
+  value: number;
+  payload: {
+    name: string;
+    total: number;
+  };
+};
+
+interface CustomTooltipProps {
   active?: boolean;
-  payload?: any;
+  payload?: ChartPayloadItem[];
   label?: string;
-}) {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-primary-foreground text-primary border-sidebar-border rounded border p-2 shadow-lg">
-        <p className="text-sm font-semibold">{label}</p>
-        <p className="text-accent">{payload[0].value} agendamentos</p>
-      </div>
-    );
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (active && Array.isArray(payload) && payload.length > 0) {
+    const firstItem = payload[0];
+    if (firstItem?.value !== undefined) {
+      return (
+        <div className="bg-primary-foreground text-primary border-sidebar-border rounded border p-2 shadow-lg">
+          <p className="text-sm font-semibold">{label}</p>
+          <p className="text-accent">{firstItem.value} agendamentos</p>
+        </div>
+      );
+    }
   }
 
   return null;

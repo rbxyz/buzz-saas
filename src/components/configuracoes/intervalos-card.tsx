@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -31,22 +31,25 @@ const DIAS_SEMANA = [
   { label: "Sexta-feira", value: "sexta" },
   { label: "Sábado", value: "sabado" },
   { label: "Domingo", value: "domingo" },
-];
+] as const;
 
 const TURNOS = [
   { label: "Manhã", value: "manha" },
   { label: "Tarde", value: "tarde" },
   { label: "Noite", value: "noite" },
-];
+] as const;
+
+type DiaSemana = (typeof DIAS_SEMANA)[number]["value"];
+type Turno = (typeof TURNOS)[number]["value"];
 
 type Intervalo = {
   horaInicio: string;
   horaFim: string;
-  turno: "manha" | "tarde" | "noite";
+  turno: Turno;
 };
 
 export function IntervalosCard() {
-  const [diaSelecionado, setDiaSelecionado] = useState<string>("segunda");
+  const [diaSelecionado, setDiaSelecionado] = useState<DiaSemana>("segunda");
   const [intervalos, setIntervalos] = useState<Intervalo[]>([]);
 
   const { data: intervalosExistentes, refetch } =
@@ -58,7 +61,7 @@ export function IntervalosCard() {
         title: "Sucesso!",
         description: "Intervalos salvos com sucesso!",
       });
-      refetch();
+      void refetch();
     },
     onError: (error) => {
       toast({
@@ -101,24 +104,27 @@ export function IntervalosCard() {
     }
 
     salvarIntervalos.mutate({
-      diaSemana: diaSelecionado as any,
+      diaSemana: diaSelecionado,
       intervalos,
     });
   };
 
-  const carregarIntervalos = (dia: string) => {
-    const intervalosDay =
-      intervalosExistentes?.filter((i) => i.diaSemana === dia) || [];
-    setIntervalos(
-      intervalosDay.map((i) => ({
-        horaInicio: i.horaInicio,
-        horaFim: i.horaFim,
-        turno: i.turno,
-      })),
-    );
-  };
+  const carregarIntervalos = useCallback(
+    (dia: DiaSemana) => {
+      const intervalosDay =
+        intervalosExistentes?.filter((i) => i.diaSemana === dia) ?? [];
+      setIntervalos(
+        intervalosDay.map((i) => ({
+          horaInicio: i.horaInicio,
+          horaFim: i.horaFim,
+          turno: i.turno,
+        })),
+      );
+    },
+    [intervalosExistentes],
+  );
 
-  const handleDiaChange = (dia: string) => {
+  const handleDiaChange = (dia: DiaSemana) => {
     setDiaSelecionado(dia);
     carregarIntervalos(dia);
   };
@@ -128,7 +134,7 @@ export function IntervalosCard() {
     if (intervalosExistentes) {
       carregarIntervalos(diaSelecionado);
     }
-  }, [intervalosExistentes, diaSelecionado]);
+  }, [intervalosExistentes, diaSelecionado, carregarIntervalos]);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -208,7 +214,7 @@ export function IntervalosCard() {
                   <Label className="text-xs">Turno</Label>
                   <Select
                     value={intervalo.turno}
-                    onValueChange={(value) =>
+                    onValueChange={(value: Turno) =>
                       atualizarIntervalo(index, "turno", value)
                     }
                   >
@@ -268,7 +274,7 @@ export function IntervalosCard() {
               const intervalosDay =
                 intervalosExistentes?.filter(
                   (i) => i.diaSemana === dia.value,
-                ) || [];
+                ) ?? [];
 
               return (
                 <div key={dia.value} className="rounded-lg border p-3">

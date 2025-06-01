@@ -1,52 +1,52 @@
-import type { NextApiRequest, NextApiResponse } from "next";
-import { db } from "@/server/db";
-import { configuracoes } from "@/server/db/schema";
+import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/server/db"
+import { configuracoes } from "@/server/db/schema"
+import { eq } from "drizzle-orm"
 
-type ConfigsObj = Record<string, string>;
+interface ConfiguracaoRow {
+  chave: string | null
+  valor: string | null
+}
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method === "GET") {
-    try {
-      const configs = await db.select().from(configuracoes);
-      // Transforma o array [{chave, valor}] em objeto { chave: valor }
-      const configsObj: ConfigsObj = {};
-      configs.forEach(({ chave, valor }) => {
-        configsObj[chave] = valor;
-      });
-      return res.status(200).json(configsObj);
-    } catch (error) {
-      console.error("Erro ao buscar configurações:", error);
-      return res.status(500).json({ error: "Erro interno no servidor." });
+type ConfigsObj = Record<string, string>
+
+export async function GET() {
+  try {
+    const configs = (await db.select().from(configuracoes)) as ConfiguracaoRow[]
+    // Transforma o array [{chave, valor}] em objeto { chave: valor }
+    const configsObj: ConfigsObj = {}
+    for (const config of configs) {
+      if (config.chave && typeof config.chave === "string" && config.valor && typeof config.valor === "string") {
+        configsObj[config.chave] = config.valor
+      }
     }
-  } else if (req.method === "POST") {
-    try {
-      const dados: ConfigsObj = req.body;
+    return NextResponse.json(configsObj)
+  } catch (error) {
+    console.error("Erro ao buscar configurações:", error)
+    return NextResponse.json({ error: "Erro interno no servidor." }, { status: 500 })
+  }
+}
 
-      // Para cada chave-valor, faz upsert (update se existe, insert se não)
-      for (const [chave, valor] of Object.entries(dados)) {
-        const existente = await db
-          .select()
-          .from(configuracoes)
-          .where(configuracoes.chave.eq(chave))
-          .limit(1);
+export async function POST(request: NextRequest) {
+  try {
+    const dados = (await request.json()) as ConfigsObj
+
+    // Para cada chave-valor, faz upsert (update se existe, insert se não)
+    for (const [chave, valor] of Object.entries(dados)) {
+      if (typeof chave === "string" && typeof valor === "string") {
+        const existente = await db.select().from(configuracoes).where(eq(configuracoes.chave, chave)).limit(1)
 
         if (existente.length > 0) {
-          await db
-            .update(configuracoes)
-            .set({ valor })
-            .where(configuracoes.chave.eq(chave));
+          await db.update(configuracoes).set({ valor }).where(eq(configuracoes.chave, chave))
         } else {
-          await db.insert(configuracoes).values({ chave, valor });
+          await db.insert(configuracoes).values({ chave, valor })
         }
       }
-
-      return res.status(200).json({ message: "Configurações salvas com sucesso." });
-    } catch (error) {
-      console.error("Erro ao salvar configurações:", error);
-      return res.status(500).json({ error: "Erro interno no servidor." });
     }
-  } else {
-    res.setHeader("Allow", ["GET", "POST"]);
-    return res.status(405).end(`Método ${req.method} não permitido`);
+
+    return NextResponse.json({ message: "Configurações salvas com sucesso." })
+  } catch (error) {
+    console.error("Erro ao salvar configurações:", error)
+    return NextResponse.json({ error: "Erro interno no servidor." }, { status: 500 })
   }
 }

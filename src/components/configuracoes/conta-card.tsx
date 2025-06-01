@@ -45,7 +45,10 @@ export function ContaCard() {
 
   function handleSalvar() {
     if (!configs?.id) {
-      toast.error("Configuração inicial não carregada.");
+      toast({
+        title: "Configuração inicial não carregada.",
+        variant: "destructive",
+      });
       return;
     }
 

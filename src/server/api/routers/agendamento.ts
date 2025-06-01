@@ -6,16 +6,30 @@ import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
 import { sql, desc } from "drizzle-orm"
 
+// Tipos específicos
+type DiaSemana = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado"
+
 type ServicoConfigurado = {
   nome: string
   preco: number
   duracaoMinutos?: number
 }
 
-// Função helper para converter dia da semana
-function getDiaSemana(date: Date): string {
-  const dias = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
-  return dias[date.getDay()]!
+// Função helper para converter dia da semana com tipagem segura
+function getDiaSemana(date: Date): DiaSemana {
+  const dias: DiaSemana[] = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
+  const dayIndex = date.getDay()
+  const dia = dias[dayIndex]
+  if (!dia) {
+    throw new Error(`Índice de dia inválido: ${dayIndex}`)
+  }
+  return dia
+}
+
+// Função helper para validar se uma string é um dia da semana válido
+function isValidDiaSemana(dia: string): dia is DiaSemana {
+  const diasValidos: DiaSemana[] = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
+  return diasValidos.includes(dia as DiaSemana)
 }
 
 // Função helper para gerar horários disponíveis
@@ -24,8 +38,12 @@ function gerarHorarios(inicio: string, fim: string, duracaoServico: number): str
   const [horaInicio, minutoInicio] = inicio.split(":").map(Number)
   const [horaFim, minutoFim] = fim.split(":").map(Number)
 
-  const inicioMinutos = horaInicio! * 60 + minutoInicio!
-  const fimMinutos = horaFim! * 60 + minutoFim!
+  if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
+    return []
+  }
+
+  const inicioMinutos = horaInicio * 60 + minutoInicio
+  const fimMinutos = horaFim * 60 + minutoFim
 
   for (let minutos = inicioMinutos; minutos + duracaoServico <= fimMinutos; minutos += 30) {
     const hora = Math.floor(minutos / 60)
@@ -141,7 +159,7 @@ export const agendamentoRouter = createTRPCRouter({
     return servicos.map((servico) => ({
       nome: servico.nome,
       preco: servico.preco,
-      duracaoMinutos: servico.duracaoMinutos || 30,
+      duracaoMinutos: servico.duracaoMinutos ?? 30,
     }))
   }),
 
@@ -152,7 +170,7 @@ export const agendamentoRouter = createTRPCRouter({
           nome: configuracao.nome,
           telefone: configuracao.telefone,
           endereco: configuracao.endereco,
-          diasAntecedenciaAgendamento: configuracao.diasAntecedenciaAgendamento || 30,
+          diasAntecedenciaAgendamento: configuracao.diasAntecedenciaAgendamento ?? 30,
         }
       : null
   }),
@@ -170,7 +188,7 @@ export const agendamentoRouter = createTRPCRouter({
       }
 
       const data = dayjs(input.data)
-      const diaSemana = getDiaSemana(data.toDate()) as any
+      const diaSemana = getDiaSemana(data.toDate())
 
       // Verificar se a data não é no passado
       if (data.isBefore(dayjs(), "day")) {
@@ -211,7 +229,7 @@ export const agendamentoRouter = createTRPCRouter({
         }
       } else {
         // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = configuracao.dias || []
+        const diasPadrao = (configuracao.dias as string[]) ?? []
 
         if (!diasPadrao.includes(diaSemana)) {
           return { horarios: [], erro: "Estabelecimento fechado neste dia" }
@@ -237,7 +255,7 @@ export const agendamentoRouter = createTRPCRouter({
         return { horarios: [], erro: "Serviço não encontrado" }
       }
 
-      const duracaoServico = servicoSelecionado.duracaoMinutos || 30
+      const duracaoServico = servicoSelecionado.duracaoMinutos ?? 30
 
       // Gerar todos os horários possíveis dos intervalos
       for (const intervalo of intervalosInfo) {
@@ -332,7 +350,7 @@ export const agendamentoRouter = createTRPCRouter({
         throw new Error("Serviço não encontrado")
       }
 
-      const duracaoMinutos = servicoSelecionado.duracaoMinutos || 30
+      const duracaoMinutos = servicoSelecionado.duracaoMinutos ?? 30
       const fimAgendamento = dataHora.add(duracaoMinutos, "minute")
 
       // Verificar conflitos
@@ -596,7 +614,7 @@ export const agendamentoRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       const data = dayjs(input.data)
-      const diaSemana = getDiaSemana(data.toDate()) as any
+      const diaSemana = getDiaSemana(data.toDate())
 
       // Buscar configuração
       const configuracao = await db.query.configuracoes.findFirst()
@@ -635,7 +653,7 @@ export const agendamentoRouter = createTRPCRouter({
         }
       } else {
         // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = configuracao.dias || []
+        const diasPadrao = (configuracao.dias as string[]) ?? []
 
         if (!diasPadrao.includes(diaSemana)) {
           return {
@@ -669,7 +687,7 @@ export const agendamentoRouter = createTRPCRouter({
         return { horarios: [], intervalos: [], erro: "Serviço não encontrado" }
       }
 
-      const duracaoServico = servicoSelecionado.duracaoMinutos || 30
+      const duracaoServico = servicoSelecionado.duracaoMinutos ?? 30
 
       // Gerar todos os horários possíveis dos intervalos (de 10 em 10 minutos)
       const horariosDisponiveis: string[] = []
@@ -678,8 +696,17 @@ export const agendamentoRouter = createTRPCRouter({
         const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
         const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
-        const inicioMinutos = horaInicio! * 60 + minutoInicio!
-        const fimMinutos = horaFim! * 60 + minutoFim!
+        if (
+          horaInicio === undefined ||
+          minutoInicio === undefined ||
+          horaFim === undefined ||
+          minutoFim === undefined
+        ) {
+          continue
+        }
+
+        const inicioMinutos = horaInicio * 60 + minutoInicio
+        const fimMinutos = horaFim * 60 + minutoFim
 
         // Gerar horários de 10 em 10 minutos
         for (let minutos = inicioMinutos; minutos + duracaoServico <= fimMinutos; minutos += 10) {
@@ -754,7 +781,6 @@ export const agendamentoRouter = createTRPCRouter({
       }
     }),
 
-  // Procedimento verificarConflito CORRIGIDO
   verificarConflito: publicProcedure
     .input(
       z.object({
@@ -789,16 +815,24 @@ export const agendamentoRouter = createTRPCRouter({
       // Buscar duração do serviço no array de serviços da configuração
       const servicos = config.servicos as ServicoConfigurado[]
       const servicoInfo = servicos.find((s) => s.nome === servico)
-      const duracaoMinutos = servicoInfo?.duracaoMinutos || 30
+      const duracaoMinutos = servicoInfo?.duracaoMinutos ?? 30
 
       // Converter horário para minutos para facilitar cálculos
       const [horas, minutos] = horario.split(":").map(Number)
-      const horarioMinutos = horas! * 60 + minutos!
+      if (horas === undefined || minutos === undefined) {
+        return {
+          temConflito: true,
+          motivo: "Formato de horário inválido",
+          proximoDisponivel: null,
+        }
+      }
+
+      const horarioMinutos = horas * 60 + minutos
       const horarioFimMinutos = horarioMinutos + duracaoMinutos
 
       // Buscar intervalos de trabalho para este dia
       const dataObj = dayjs(data)
-      const diaSemana = getDiaSemana(dataObj.toDate()) as any
+      const diaSemana = getDiaSemana(dataObj.toDate())
 
       const intervalos = await db.query.intervalosTrabalho.findMany({
         where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
@@ -830,7 +864,7 @@ export const agendamentoRouter = createTRPCRouter({
         }
       } else {
         // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = config.dias || []
+        const diasPadrao = (config.dias as string[]) ?? []
 
         if (!diasPadrao.includes(diaSemana)) {
           return {
@@ -855,8 +889,17 @@ export const agendamentoRouter = createTRPCRouter({
         const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
         const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
-        const inicioMinutos = horaInicio! * 60 + minutoInicio!
-        const fimMinutos = horaFim! * 60 + minutoFim!
+        if (
+          horaInicio === undefined ||
+          minutoInicio === undefined ||
+          horaFim === undefined ||
+          minutoFim === undefined
+        ) {
+          continue
+        }
+
+        const inicioMinutos = horaInicio * 60 + minutoInicio
+        const fimMinutos = horaFim * 60 + minutoFim
 
         if (horarioMinutos >= inicioMinutos && horarioFimMinutos <= fimMinutos) {
           dentroIntervalo = true
@@ -871,7 +914,9 @@ export const agendamentoRouter = createTRPCRouter({
         // Buscar próximo início de intervalo após o horário atual
         for (const intervalo of intervalosInfo) {
           const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
-          const inicioMinutos = horaInicio! * 60 + minutoInicio!
+          if (horaInicio === undefined || minutoInicio === undefined) continue
+
+          const inicioMinutos = horaInicio * 60 + minutoInicio
 
           if (inicioMinutos > horarioMinutos) {
             proximoInicioMinutos = inicioMinutos
@@ -883,7 +928,9 @@ export const agendamentoRouter = createTRPCRouter({
         if (proximoInicioMinutos === null && intervalosInfo.length > 0) {
           const primeiroIntervalo = intervalosInfo[0]!
           const [horaInicio, minutoInicio] = primeiroIntervalo.inicio.split(":").map(Number)
-          proximoInicioMinutos = horaInicio! * 60 + minutoInicio!
+          if (horaInicio !== undefined && minutoInicio !== undefined) {
+            proximoInicioMinutos = horaInicio * 60 + minutoInicio
+          }
         }
 
         // Converter de volta para formato HH:MM
@@ -937,8 +984,17 @@ export const agendamentoRouter = createTRPCRouter({
             const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
             const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
 
-            const inicioMinutos = horaInicio! * 60 + minutoInicio!
-            const fimMinutos = horaFim! * 60 + minutoFim!
+            if (
+              horaInicio === undefined ||
+              minutoInicio === undefined ||
+              horaFim === undefined ||
+              minutoFim === undefined
+            ) {
+              continue
+            }
+
+            const inicioMinutos = horaInicio * 60 + minutoInicio
+            const fimMinutos = horaFim * 60 + minutoFim
 
             for (let minuto = inicioMinutos; minuto <= fimMinutos - duracaoMinutos; minuto += 30) {
               if (minuto <= horarioMinutos) continue // Só horários após o solicitado

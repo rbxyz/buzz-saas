@@ -2,8 +2,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/utils/trpc";
 
+// Tipos específicos para o status
+type AppointmentStatus = "agendado" | "cancelado" | "concluido" | "pendente";
+
+// Interface para o appointment
+interface Appointment {
+  id: string;
+  clienteNome: string | null;
+  servico: string;
+  dataHora: string | Date;
+  status: AppointmentStatus;
+}
+
 // Ajuste da tipagem para aceitar string ou Date
-function formatDate(dateInput: string | Date) {
+function formatDate(dateInput: string | Date): string {
   const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
   const now = new Date();
 
@@ -27,7 +39,8 @@ function formatDate(dateInput: string | Date) {
   return date.toLocaleDateString("pt-BR") + ", " + time;
 }
 
-function formatStatus(status: "agendado" | "cancelado" | "concluido" | string) {
+// Removido o "| string" para evitar tipos redundantes
+function formatStatus(status: AppointmentStatus): string {
   switch (status) {
     case "agendado":
       return "Agendado";
@@ -38,11 +51,12 @@ function formatStatus(status: "agendado" | "cancelado" | "concluido" | string) {
     case "concluido":
       return "Concluído";
     default:
-      return status.charAt(0).toUpperCase() + status.slice(1);
+      // TypeScript garante que este caso nunca será alcançado
+      return status;
   }
 }
 
-function getInitials(name: string) {
+function getInitials(name: string): string {
   return name
     .split(" ")
     .map((n) => n[0])
@@ -60,11 +74,11 @@ export function RecentAppointments() {
       refetchInterval: 2 * 60 * 1000, // Atualiza a cada 2 minutos
     });
 
-  // Loading skeleton
+  // Loading skeleton - usando Array.from para evitar spread inseguro
   if (isLoading) {
     return (
       <div className="space-y-8">
-        {[...Array(5)].map((_, i) => (
+        {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="flex animate-pulse items-center">
             <div className="bg-muted h-9 w-9 rounded-full"></div>
             <div className="ml-4 flex-1 space-y-1">
@@ -91,8 +105,8 @@ export function RecentAppointments() {
           Atualizando dados...
         </div>
       )}
-      {data.map((appointment) => {
-        const clientName = appointment.clienteNome || "Cliente";
+      {data.map((appointment: Appointment) => {
+        const clientName = appointment.clienteNome ?? "Cliente";
         const initials = getInitials(clientName);
 
         return (

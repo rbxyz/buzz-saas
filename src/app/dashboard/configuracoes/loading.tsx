@@ -14,15 +14,17 @@ export default function ConfiguracoesLoading() {
   const router = useRouter();
 
   // Pré-carrega configurações principais
-  const { data: configs, isLoading: isLoadingConfigs } =
-    api.configuracao.listar.useQuery(undefined, PRELOAD_CONFIG.configuracoes);
+  const { isLoading: isLoadingConfigs } = api.configuracao?.listar?.useQuery(
+    undefined,
+    PRELOAD_CONFIG.configuracoes,
+  ) || { isLoading: false };
 
   // Pré-carrega horários personalizados
-  const { data: horariosPersonalizados, isLoading: isLoadingHorarios } =
-    api.configuracao.getHorariosPersonalizados.useQuery(
+  const { isLoading: isLoadingHorarios } =
+    api.intervalosTrabalho.listar.useQuery(
       undefined,
       PRELOAD_CONFIG.horarios,
-    );
+    ) || { isLoading: false };
 
   useEffect(() => {
     if (!isLoadingConfigs && !isLoadingHorarios) {

@@ -52,7 +52,7 @@ export const configuracaoRouter = createTRPCRouter({
             contextoIA: input.contextoIA,
             dadosIA: input.dadosIA,
             servicos: input.servicos,
-            diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento || 30,
+            diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento ?? 30,
             updatedAt: now,
           })
           .where(eq(configuracoes.id, existente.id))
@@ -71,7 +71,7 @@ export const configuracaoRouter = createTRPCRouter({
         contextoIA: input.contextoIA,
         dadosIA: input.dadosIA,
         servicos: input.servicos,
-        diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento || 30,
+        diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento ?? 30,
         createdAt: now,
         updatedAt: now,
       })
