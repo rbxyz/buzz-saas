@@ -415,9 +415,9 @@ export default function ClientesPage() {
             <Button
               className="cursor-pointer"
               onClick={handleCriarCliente}
-              disabled={!formData.nome || Boolean(criarCliente.isLoading)}
+              disabled={!formData.nome || criarCliente.isPending}
             >
-              {criarCliente.isLoading ? "Salvando..." : "Salvar"}
+              {criarCliente.isPending ? "Salvando..." : "Salvar"}
             </Button>
           </div>
         </DialogContent>
@@ -490,9 +490,9 @@ export default function ClientesPage() {
                   ...formData,
                 });
               }}
-              disabled={Boolean(editarCliente.isLoading)}
+              disabled={Boolean(editarCliente.isPending)}
             >
-              {editarCliente.isLoading ? "Salvando..." : "Salvar alterações"}
+              {editarCliente.isPending ? "Salvando..." : "Salvar alterações"}
             </Button>
           </div>
         </DialogContent>
