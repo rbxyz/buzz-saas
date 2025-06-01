@@ -148,7 +148,7 @@ export default function AgendamentosPage() {
       { query: clienteQuery },
       {
         enabled: clienteQuery.length > 1,
-        keepPreviousData: true,
+        placeholderData: (previousData) => previousData,
       },
     );
 

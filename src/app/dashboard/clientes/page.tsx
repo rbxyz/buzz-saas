@@ -74,7 +74,7 @@ export default function ClientesPage() {
   });
 
   const { data: clienteSelecionado } = trpc.cliente.getById.useQuery(
-    clienteSelecionadoId ?? "",
+    { id: clienteSelecionadoId ?? "" },
     {
       enabled: !!clienteSelecionadoId,
     },
