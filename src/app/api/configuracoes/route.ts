@@ -12,7 +12,7 @@ type ConfigsObj = Record<string, string>
 
 export async function GET() {
   try {
-    const configs = (await db.select().from(configuracoes)) as ConfiguracaoRow[]
+    const configs = (await db.select().from(configuracoes)) as unknown as ConfiguracaoRow[]
     // Transforma o array [{chave, valor}] em objeto { chave: valor }
     const configsObj: ConfigsObj = {}
     for (const config of configs) {
