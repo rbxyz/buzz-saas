@@ -23,7 +23,7 @@ export default function ChatbotPage() {
     { remetente: "bot", texto: "Temos vagas das 10h às 12h e das 14h às 18h." },
   ]);
   const [novaMensagem, setNovaMensagem] = useState("");
-  const [isLoading, setIsLoading] = useState(false); // estado de loading
+  const [isLoading, setIsLoading] = useState(false);
 
   function enviarMensagem() {
     if (!novaMensagem.trim()) return;
@@ -46,7 +46,7 @@ export default function ChatbotPage() {
   if (isLoading) {
     return (
       <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div className="border-border flex items-center gap-3 rounded-lg border bg-white px-6 py-4 shadow-xl dark:bg-zinc-900">
+        <div className="border-border bg-card flex items-center gap-3 rounded-lg border px-6 py-4 shadow-xl">
           <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
           <span className="text-foreground text-sm font-medium">
             Carregando agente inteligente...
@@ -57,15 +57,10 @@ export default function ChatbotPage() {
   }
 
   return (
-    <div
-      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
-      style={{
-        backgroundColor: "hsl(var(--background))",
-        color: "hsl(var(--foreground))",
-        fontFamily: "var(--font-sans)",
-      }}
-    >
-      <h1 className="text-3xl font-bold tracking-tight">Chatbot WhatsApp</h1>
+    <div className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
+      <h1 className="text-foreground text-3xl font-bold tracking-tight">
+        Chatbot WhatsApp
+      </h1>
 
       <Card>
         <CardHeader>

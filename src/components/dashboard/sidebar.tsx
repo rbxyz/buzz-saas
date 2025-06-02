@@ -84,21 +84,18 @@ export function DashboardSidebar() {
         }}
         className="hidden w-64 flex-col md:flex"
       >
-        <SidebarHeader className="flex items-center gap-3 px-4 py-3">
+        <SidebarHeader
+          className="flex items-center gap-3 px-4 py-3"
+          style={{ justifyContent: "flex-start", paddingLeft: 0 }}
+        >
           <Image
-            src="/logo.svg"
+            src="/logo-b.png"
             alt="Logo"
-            width={32}
-            height={32}
+            width={40}
+            height={40}
             priority
             className="select-none"
           />
-          <button
-            onClick={() => handleNavigation("/dashboard")}
-            className="cursor-pointer text-xl font-bold select-none"
-          >
-            Buzz | o Saas para o seu Business
-          </button>
         </SidebarHeader>
 
         <SidebarContent className="flex-1 overflow-y-auto">

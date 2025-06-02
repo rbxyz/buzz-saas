@@ -197,17 +197,17 @@ export default function LinktreePage() {
           {Array.from({ length: 3 }).map((_, i) => (
             <Card
               key={i}
-              className="flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4"
+              className="border-border bg-card flex flex-row items-center gap-4 border p-4"
             >
               <div className="flex-shrink-0">
-                <div className="h-16 w-16 animate-pulse rounded bg-gray-300" />
+                <div className="bg-muted h-16 w-16 animate-pulse rounded" />
               </div>
               <div className="flex min-w-0 flex-grow flex-col space-y-2">
-                <div className="h-4 w-32 animate-pulse rounded bg-gray-300" />
-                <div className="h-3 w-40 animate-pulse rounded bg-gray-300" />
-                <div className="h-3 w-28 animate-pulse rounded bg-gray-300" />
+                <div className="bg-muted h-4 w-32 animate-pulse rounded" />
+                <div className="bg-muted h-3 w-40 animate-pulse rounded" />
+                <div className="bg-muted h-3 w-28 animate-pulse rounded" />
               </div>
-              <div className="h-8 w-8 flex-shrink-0 animate-pulse rounded bg-gray-300" />
+              <div className="bg-muted h-8 w-8 flex-shrink-0 animate-pulse rounded" />
             </Card>
           ))}
         </div>
@@ -227,7 +227,7 @@ export default function LinktreePage() {
         {lista.map((link: LinkItem) => (
           <Card
             key={link.id}
-            className="group relative flex flex-row items-center gap-4 border border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] p-4 text-[hsl(var(--sidebar-foreground))] transition-colors hover:bg-[hsl(var(--accent)/0.15)]"
+            className="group border-border bg-card text-card-foreground hover:bg-accent/15 relative flex flex-row items-center gap-4 border p-4 transition-colors"
           >
             <div className="flex-shrink-0">
               {link.imagem && link.mimeType ? (
@@ -236,17 +236,19 @@ export default function LinktreePage() {
                   alt={`Imagem de ${link.titulo}`}
                   width={64}
                   height={64}
-                  className="rounded border-2 border-gray-300 object-cover"
+                  className="border-muted rounded border-2 object-cover"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
+                <div className="bg-muted text-muted-foreground flex h-16 w-16 items-center justify-center rounded text-xs">
                   Sem imagem
                 </div>
               )}
             </div>
 
             <div className="flex min-w-0 flex-grow flex-col">
-              <p className="truncate font-semibold">{link.titulo}</p>
+              <p className="text-foreground truncate font-semibold">
+                {link.titulo}
+              </p>
               {link.descricao && (
                 <p className="text-muted-foreground truncate text-sm">
                   {link.descricao}
@@ -287,17 +289,12 @@ export default function LinktreePage() {
   const parcerias = links?.filter((link) => link.tipo === "parceria") ?? [];
 
   return (
-    <main
-      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
-      style={{
-        backgroundColor: "hsl(var(--background))",
-        color: "hsl(var(--foreground))",
-        fontFamily: "var(--font-sans)",
-      }}
-    >
-      <h1 className="text-3xl font-bold tracking-tight">Linktree Manager</h1>
+    <main className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
+      <h1 className="text-foreground text-3xl font-bold tracking-tight">
+        Linktree Manager
+      </h1>
       {isError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-950/20 dark:text-red-300">
           <p className="font-medium">Erro ao carregar links</p>
           <p className="text-sm">
             Tente recarregar a página ou entre em contato com o suporte.
@@ -309,7 +306,7 @@ export default function LinktreePage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Gerenciar Links</CardTitle>
-            <CardDescription className="text-[hsl(var(--foreground)/0.7)]">
+            <CardDescription>
               Adicione seus clientes e parceiros que aparecerão na sua página
               pública.
             </CardDescription>
@@ -325,7 +322,7 @@ export default function LinktreePage() {
             <DialogTrigger asChild>
               <Button
                 variant="outline"
-                className="border-sidebar-border text-sidebar-foreground hover:bg-sidebar-border hover:text-accent-foreground flex cursor-pointer items-center border transition-colors"
+                className="border-border text-foreground hover:bg-accent hover:text-accent-foreground flex cursor-pointer items-center border transition-colors"
               >
                 Adicionar
               </Button>
@@ -417,7 +414,7 @@ export default function LinktreePage() {
                         alt="Prévia da imagem"
                         width={80}
                         height={80}
-                        className="h-20 w-20 rounded border-2 border-gray-300 object-cover"
+                        className="border-muted h-20 w-20 rounded border-2 object-cover"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
@@ -456,7 +453,7 @@ export default function LinktreePage() {
             { titulo: "Parcerias", lista: parcerias },
           ].map(({ titulo, lista }) => (
             <section key={titulo}>
-              <h2 className="mb-4 text-lg font-semibold text-[hsl(var(--foreground))]">
+              <h2 className="text-foreground mb-4 text-lg font-semibold">
                 {titulo}
               </h2>
               {renderSecaoConteudo(titulo, lista, isLoading)}
@@ -471,7 +468,9 @@ export default function LinktreePage() {
               <DialogTitle>Confirmar exclusão</DialogTitle>
             </DialogHeader>
 
-            <p>Tem certeza que deseja deletar este link?</p>
+            <p className="text-foreground">
+              Tem certeza que deseja deletar este link?
+            </p>
 
             <div className="mt-4 flex justify-end gap-4">
               <DialogClose asChild>

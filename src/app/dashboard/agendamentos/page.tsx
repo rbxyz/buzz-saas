@@ -311,19 +311,21 @@ export default function AgendamentosPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "agendado":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300";
       case "concluido":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300";
       case "cancelado":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
   return (
-    <div className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
-      <h1 className="text-3xl font-bold tracking-tight">Agendamentos</h1>
+    <div className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
+      <h1 className="text-foreground text-3xl font-bold tracking-tight">
+        Agendamentos
+      </h1>
 
       <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
         {/* Calendário */}
@@ -360,7 +362,9 @@ export default function AgendamentosPage() {
 
             {/* Lado direito: Cortes do mês */}
             <div className="w-full md:w-1/2">
-              <h3 className="mb-2 text-lg font-semibold">Cortes do mês</h3>
+              <h3 className="text-foreground mb-2 text-lg font-semibold">
+                Cortes do mês
+              </h3>
               <p className="text-muted-foreground mb-4 text-sm">
                 Listagem dos cortes realizados em{" "}
                 {format(selectedDate, "MMMM/yyyy", { locale: ptBR })}
@@ -376,10 +380,10 @@ export default function AgendamentosPage() {
                 {cortesDoMes?.map((corte) => (
                   <div
                     key={corte.id}
-                    className="flex items-center justify-between rounded border p-2"
+                    className="border-border bg-card flex items-center justify-between rounded border p-2"
                   >
                     <div>
-                      <p className="font-medium">
+                      <p className="text-foreground font-medium">
                         {corte.cliente?.nome ?? "Cliente desconhecido"}
                       </p>
                       <p className="text-muted-foreground text-sm">
@@ -429,7 +433,7 @@ export default function AgendamentosPage() {
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto bg-black/50 backdrop-blur-sm">
+              <DialogContent className="bg-background/95 max-h-[90vh] max-w-2xl overflow-y-auto backdrop-blur-sm">
                 <DialogHeader>
                   <DialogTitle>Novo Agendamento</DialogTitle>
                 </DialogHeader>
@@ -437,7 +441,7 @@ export default function AgendamentosPage() {
                 <div className="flex flex-col gap-4 py-4">
                   {/* Seletor de cliente */}
                   <div className="relative">
-                    <label className="text-sm font-medium">
+                    <label className="text-foreground text-sm font-medium">
                       Buscar cliente *
                     </label>
                     <input
@@ -466,11 +470,11 @@ export default function AgendamentosPage() {
                       clientesEncontrados &&
                       clientesEncontrados.length > 0 &&
                       !clienteId && (
-                        <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/50 shadow-md backdrop-blur-sm">
+                        <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-md backdrop-blur-sm">
                           {clientesEncontrados.map((cliente) => (
                             <div
                               key={cliente.id}
-                              className="hover:bg-muted cursor-pointer bg-black/50 px-3 py-2 text-sm backdrop-blur-sm"
+                              className="hover:bg-accent cursor-pointer px-3 py-2 text-sm"
                               onClick={() => {
                                 setClienteId(cliente.id);
                                 setClienteNomeSelecionado(cliente.nome);
@@ -503,7 +507,7 @@ export default function AgendamentosPage() {
                       )}
 
                     {clienteNomeSelecionado && (
-                      <p className="mt-1 text-sm text-green-600">
+                      <p className="mt-1 text-sm text-green-600 dark:text-green-400">
                         ✓ Cliente selecionado: {clienteNomeSelecionado}
                       </p>
                     )}
@@ -511,7 +515,7 @@ export default function AgendamentosPage() {
 
                   {/* Navegação de data */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="text-foreground text-sm font-medium">
                       Data do agendamento
                     </label>
                     <div className="mt-1 flex items-center gap-2">
@@ -525,9 +529,9 @@ export default function AgendamentosPage() {
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
 
-                      <div className="bg-background border-input flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2">
+                      <div className="border-input bg-background flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2">
                         <Calendar className="text-muted-foreground h-4 w-4" />
-                        <span className="font-medium">
+                        <span className="text-foreground font-medium">
                           {format(
                             dataParaAgendamento,
                             "EEEE, dd 'de' MMMM 'de' yyyy",
@@ -549,7 +553,9 @@ export default function AgendamentosPage() {
 
                   {/* Serviço */}
                   <div>
-                    <label className="text-sm font-medium">Serviço *</label>
+                    <label className="text-foreground text-sm font-medium">
+                      Serviço *
+                    </label>
                     <Select
                       value={servico}
                       onValueChange={(value) => {
@@ -562,7 +568,7 @@ export default function AgendamentosPage() {
                         <SelectValue placeholder="Selecione um serviço" />
                       </SelectTrigger>
 
-                      <SelectContent className="bg-black/20 backdrop-blur-sm">
+                      <SelectContent className="bg-popover backdrop-blur-sm">
                         {servicosDisponiveis?.map((s) => (
                           <SelectItem
                             className="cursor-pointer"
@@ -580,10 +586,10 @@ export default function AgendamentosPage() {
                   {/* Intervalos de funcionamento */}
                   {horariosData?.intervalos &&
                     horariosData.intervalos.length > 0 && (
-                      <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
                         <div className="mb-2 flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-blue-600" />
-                          <span className="text-sm font-medium text-blue-800">
+                          <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
                             Funcionamento em{" "}
                             {format(dataParaAgendamento, "EEEE", {
                               locale: ptBR,
@@ -591,7 +597,7 @@ export default function AgendamentosPage() {
                             :
                           </span>
                         </div>
-                        <div className="text-sm text-blue-700">
+                        <div className="text-sm text-blue-700 dark:text-blue-300">
                           {horariosData.intervalos.map((intervalo, index) => (
                             <span key={index}>
                               {intervalo.inicio} às {intervalo.fim}
@@ -605,7 +611,7 @@ export default function AgendamentosPage() {
 
                   {/* Campo manual de horário */}
                   <div>
-                    <label className="text-sm font-medium">
+                    <label className="text-foreground text-sm font-medium">
                       Horário desejado *
                     </label>
                     <div className="relative mt-1">
@@ -626,7 +632,7 @@ export default function AgendamentosPage() {
                     {horarioInput &&
                       horarioInput.length === 5 &&
                       !validarHorario(horarioInput) && (
-                        <p className="mt-1 text-sm text-red-600">
+                        <p className="mt-1 text-sm text-red-600 dark:text-red-400">
                           Horário inválido. Use o formato HH:MM (ex: 14:30)
                         </p>
                       )}
@@ -635,7 +641,7 @@ export default function AgendamentosPage() {
                   {/* Horários sugeridos */}
                   {servico && dataParaAgendamento && (
                     <div>
-                      <label className="text-sm font-medium">
+                      <label className="text-foreground text-sm font-medium">
                         Horários sugeridos
                       </label>
 
@@ -649,8 +655,8 @@ export default function AgendamentosPage() {
                       )}
 
                       {horariosData?.erro && (
-                        <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
-                          <p className="text-sm text-red-700">
+                        <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/20">
+                          <p className="text-sm text-red-700 dark:text-red-300">
                             {horariosData.erro}
                           </p>
                         </div>
@@ -689,21 +695,21 @@ export default function AgendamentosPage() {
                   {conflito?.temConflito &&
                     horario &&
                     validarHorario(horario) && (
-                      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
+                      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-950/20">
                         <div className="flex items-start gap-2">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-600" />
+                          <AlertTriangle className="mt-0.5 h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                           <div>
-                            <p className="text-sm font-medium text-yellow-800">
+                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                               Este horário já está ocupado!
                             </p>
                             {conflito.proximoDisponivel && (
-                              <p className="mt-1 text-sm text-yellow-700">
+                              <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
                                 Horário mais próximo disponível:{" "}
                                 {conflito.proximoDisponivel}
                                 <Button
                                   variant="link"
                                   size="sm"
-                                  className="ml-2 h-auto cursor-pointer p-0 text-yellow-700 underline"
+                                  className="ml-2 h-auto cursor-pointer p-0 text-yellow-700 underline dark:text-yellow-300"
                                   onClick={() => {
                                     setHorario(conflito.proximoDisponivel!);
                                     setHorarioInput(
@@ -724,10 +730,10 @@ export default function AgendamentosPage() {
                   {horario &&
                     validarHorario(horario) &&
                     !conflito?.temConflito && (
-                      <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                      <div className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/20">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-green-600" />
-                          <p className="text-sm font-medium text-green-800">
+                          <Clock className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <p className="text-sm font-medium text-green-800 dark:text-green-200">
                             Horário {horario} disponível para agendamento!
                           </p>
                         </div>
@@ -776,7 +782,7 @@ export default function AgendamentosPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">
+                    <p className="text-foreground font-medium">
                       {agendamento.cliente?.nome ?? "Cliente desconhecido"}
                     </p>
                     <p className="text-muted-foreground text-sm">

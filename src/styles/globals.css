@@ -10,52 +10,111 @@
 
 @layer base {
   :root {
-    --primary: 274 100% 34%;
+    /* Cores principais da marca */
+    --primary: 274 100% 34%; /* #6700af - Roxo principal */
     --primary-foreground: 0 0% 98%;
 
-    --accent: 270 100% 20%;
+    --accent: 270 100% 20%; /* #390066 - Roxo escuro */
     --accent-foreground: 0 0% 98%;
 
+    /* Cores de fundo e texto */
     --background: 0 0% 100%;
-    --foreground: 0 0% 13%; /* preto suave */
+    --foreground: 0 0% 13%; /* #222222 - Preto suave */
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 13%;
-    --sidebar-primary: 274 100% 34%;
+    --sidebar-foreground: 0 0% 13%; /* #222222 */
+    --sidebar-primary: 274 100% 34%; /* #6700af */
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 270 100% 20%;
+    --sidebar-accent: 270 100% 20%; /* #390066 */
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 270 100% 92%;
-    --sidebar-ring: 274 100% 34%;
+    --sidebar-ring: 274 100% 34%; /* #6700af */
 
     --destructive: 0 100% 50%;
     --destructive-foreground: 0 0% 98%;
 
+    --card: 0 0% 95%;
+    --card-foreground: 0 0% 13%; /* #222222 */
     --card-background: 0 0% 20%;
+
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 45%;
+
+    --border: 0 0% 85%;
+    --input: 0 0% 90%;
+    --ring: 274 100% 34%; /* #6700af */
+
+    /* Cores personalizadas para a aplicação */
+    --brand-primary: 274 100% 34%; /* #6700af - Roxo principal */
+    --brand-secondary: 270 100% 20%; /* #390066 - Roxo escuro */
+    --brand-accent: 273 100% 45%; /* #8400df - Roxo mais claro */
+    --brand-light: 274 100% 90%; /* #f2d9ff - Roxo muito claro */
+    --brand-dark: 270 100% 15%; /* #2a004c - Roxo muito escuro */
+
+    /* Cores de estado */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 48 96% 53%;
+    --warning-foreground: 0 0% 13%;
+
+    --error: 0 84% 60%;
+    --error-foreground: 0 0% 98%;
+
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 98%;
   }
 
   .dark {
-    --background: 0 0% 13%;
+    --background: 0 0% 13%; /* #222222 */
     --foreground: 0 0% 98%;
 
-    --primary: 274 100% 34%;
+    --primary: 274 100% 34%; /* #6700af */
     --primary-foreground: 0 0% 98%;
 
-    --accent: 270 100% 20%;
+    --accent: 270 100% 20%; /* #390066 */
     --accent-foreground: 0 0% 98%;
 
     /* Sidebar */
-    --sidebar-background: 0 0% 13%;
+    --sidebar-background: 0 0% 13%; /* #222222 */
     --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 274 100% 34%;
+    --sidebar-primary: 274 100% 34%; /* #6700af */
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 270 100% 20%;
+    --sidebar-accent: 270 100% 20%; /* #390066 */
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 270 100% 30%;
-    --sidebar-ring: 274 100% 34%;
+    --sidebar-ring: 274 100% 34%; /* #6700af */
 
+    --card: 0 0% 18%;
+    --card-foreground: 0 0% 98%;
     --card-background: 0 0% 75%;
+
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
+
+    --border: 0 0% 25%;
+    --input: 0 0% 20%;
+
+    /* Cores personalizadas para modo escuro */
+    --brand-primary: 274 100% 50%; /* #8a00eb - Roxo principal mais brilhante no dark mode */
+    --brand-secondary: 270 100% 30%; /* #55009a - Roxo escuro mais visível */
+    --brand-accent: 273 100% 60%; /* #a64dff - Roxo mais claro e vibrante */
+    --brand-light: 274 100% 85%; /* #ebc2ff - Roxo claro ajustado */
+    --brand-dark: 270 100% 10%; /* #1c0033 - Roxo muito escuro */
+
+    /* Cores de estado para modo escuro */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 98%;
+
+    --warning: 48 96% 53%;
+    --warning-foreground: 0 0% 13%;
+
+    --error: 0 84% 60%;
+    --error-foreground: 0 0% 98%;
+
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 98%;
   }
 }
 
@@ -79,16 +138,34 @@
     color: hsl(var(--accent-foreground));
   }
   .bg-muted {
-    background-color: hsl(var(--sidebar-border));
+    background-color: hsl(var(--muted));
   }
   .text-muted {
-    color: hsl(var(--sidebar-foreground));
+    color: hsl(var(--muted-foreground));
+  }
+  .text-muted-foreground {
+    color: hsl(var(--muted-foreground));
   }
   .ring-ring {
-    --tw-ring-color: hsl(var(--sidebar-ring));
+    --tw-ring-color: hsl(var(--ring));
   }
   .border-sidebar-border {
     border-color: hsl(var(--sidebar-border));
+  }
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+  .bg-card {
+    background-color: hsl(var(--card));
+  }
+  .text-card-foreground {
+    color: hsl(var(--card-foreground));
+  }
+  .bg-background {
+    background-color: hsl(var(--background));
+  }
+  .text-foreground {
+    color: hsl(var(--foreground));
   }
 
   .text-sidebar-foreground {
@@ -101,6 +178,96 @@
 
   .hover\:text-accent-foreground:hover {
     color: hsl(var(--accent-foreground));
+  }
+
+  /* Classes personalizadas para cores da marca */
+  .bg-brand-primary {
+    background-color: hsl(var(--brand-primary));
+  }
+  .bg-brand-secondary {
+    background-color: hsl(var(--brand-secondary));
+  }
+  .bg-brand-accent {
+    background-color: hsl(var(--brand-accent));
+  }
+  .bg-brand-light {
+    background-color: hsl(var(--brand-light));
+  }
+  .bg-brand-dark {
+    background-color: hsl(var(--brand-dark));
+  }
+  .text-brand-primary {
+    color: hsl(var(--brand-primary));
+  }
+  .text-brand-secondary {
+    color: hsl(var(--brand-secondary));
+  }
+  .text-brand-accent {
+    color: hsl(var(--brand-accent));
+  }
+  .text-brand-light {
+    color: hsl(var(--brand-light));
+  }
+  .text-brand-dark {
+    color: hsl(var(--brand-dark));
+  }
+  .border-brand-primary {
+    border-color: hsl(var(--brand-primary));
+  }
+  .border-brand-secondary {
+    border-color: hsl(var(--brand-secondary));
+  }
+
+  /* Classes para estados */
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+  .text-success {
+    color: hsl(var(--success));
+  }
+  .text-success-foreground {
+    color: hsl(var(--success-foreground));
+  }
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  .text-warning-foreground {
+    color: hsl(var(--warning-foreground));
+  }
+  .bg-error {
+    background-color: hsl(var(--error));
+  }
+  .text-error {
+    color: hsl(var(--error));
+  }
+  .text-error-foreground {
+    color: hsl(var(--error-foreground));
+  }
+  .bg-info {
+    background-color: hsl(var(--info));
+  }
+  .text-info {
+    color: hsl(var(--info));
+  }
+  .text-info-foreground {
+    color: hsl(var(--info-foreground));
+  }
+
+  /* Gradientes personalizados */
+  .bg-gradient-brand {
+    background: linear-gradient(to right, hsl(var(--brand-primary)), hsl(var(--brand-secondary)));
+  }
+  .bg-gradient-brand-hover {
+    background: linear-gradient(to right, hsl(var(--brand-accent)), hsl(var(--brand-secondary)));
+  }
+  .bg-gradient-brand-light {
+    background: linear-gradient(to right, hsl(var(--brand-primary)), hsl(var(--brand-accent)));
+  }
+  .bg-gradient-brand-dark {
+    background: linear-gradient(to right, hsl(var(--brand-secondary)), hsl(var(--brand-dark)));
   }
 }
 
