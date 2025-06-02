@@ -14,16 +14,16 @@ export default function Configuracoes() {
         <div className="flex flex-col gap-8">
           {/* Header */}
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-foreground text-3xl font-bold tracking-tight">
               Configurações
             </h1>
-            <p className="text-gray-600">
+            <p className="text-muted-foreground">
               Gerencie as informações da empresa, serviços, horários e
               integrações.
             </p>
           </div>
 
-          <Separator className="bg-gray-200" />
+          <Separator />
 
           {/* Layout responsivo dos cards */}
           <div className="space-y-8">

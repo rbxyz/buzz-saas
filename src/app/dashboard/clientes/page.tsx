@@ -178,16 +178,11 @@ export default function ClientesPage() {
   }, [clienteSelecionado, modalEditarAberto]);
 
   return (
-    <div
-      className="animate-fade-in mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8"
-      style={{
-        backgroundColor: "hsl(var(--background))",
-        color: "hsl(var(--foreground))",
-        fontFamily: "var(--font-sans)",
-      }}
-    >
+    <div className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+        <h1 className="text-foreground text-3xl font-bold tracking-tight">
+          Clientes
+        </h1>
         <Button
           className="cursor-pointer"
           onClick={() => setModalCriarAberto(true)}
@@ -249,7 +244,7 @@ export default function ClientesPage() {
               </Card>
             ))
           ) : (
-            <p>Nenhum cliente encontrado.</p>
+            <p className="text-muted-foreground">Nenhum cliente encontrado.</p>
           )}
         </CardContent>
       </Card>
@@ -316,7 +311,9 @@ export default function ClientesPage() {
               <div className="col-span-2 mt-2">
                 <Label>Histórico de Agendamentos</Label>
                 {Array.isArray(historico) && historico.length === 0 ? (
-                  <p>Nenhum serviço registrado ainda.</p>
+                  <p className="text-muted-foreground">
+                    Nenhum serviço registrado ainda.
+                  </p>
                 ) : (
                   <ul className="text-muted-foreground list-disc pl-5 text-sm">
                     {Array.isArray(historico) &&
@@ -331,7 +328,9 @@ export default function ClientesPage() {
               </div>
             </div>
           ) : (
-            <p>Carregando detalhes do cliente...</p>
+            <p className="text-muted-foreground">
+              Carregando detalhes do cliente...
+            </p>
           )}
           <DialogClose asChild>
             <Button className="cursor-pointer" variant="outline" size="sm">
@@ -506,7 +505,7 @@ export default function ClientesPage() {
           <DialogHeader>
             <DialogTitle>Excluir Cliente</DialogTitle>
           </DialogHeader>
-          <p>
+          <p className="text-foreground">
             Tem certeza que deseja excluir este cliente? Esta ação não poderá
             ser desfeita.
           </p>

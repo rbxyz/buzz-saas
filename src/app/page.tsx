@@ -37,8 +37,6 @@ export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  // const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  // const [clienteEncontrado, setClienteEncontrado] = useState<any>(null);
 
   // Define interface para o cliente
   interface Cliente {
@@ -215,42 +213,43 @@ export default function LandingPage() {
       },
       { enabled: !!dataAgendamento && !!horarioManual && !!servicoSelecionado },
     );
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <main className="bg-background min-h-screen">
       {/* Header/Navigation */}
-      <header className="relative z-10 bg-black/20 backdrop-blur-sm">
+      <header className="bg-muted/20 relative z-10 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-orange-500">
+            <div className="bg-gradient-brand flex h-10 w-10 items-center justify-center rounded-full">
               <span className="text-lg font-bold text-white">D</span>
             </div>
-            <span className="text-xl font-bold text-white">
+            <span className="text-foreground text-xl font-bold">
               {configs?.nome}
             </span>
           </div>
           <nav className="hidden items-center gap-6 md:flex">
             <a
               href="#agendamento"
-              className="text-gray-300 transition-colors hover:text-white"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Agendar
             </a>
             <a
               href="#clientes"
-              className="text-gray-300 transition-colors hover:text-white"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Clientes
             </a>
             <a
               href="#parceiros"
-              className="text-gray-300 transition-colors hover:text-white"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Parceiros
             </a>
 
             <Button
               onClick={() => setShowLogin(true)}
-              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+              className="bg-gradient-brand hover:bg-gradient-brand-hover text-white"
             >
               Entrar
             </Button>
@@ -260,22 +259,22 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden px-6 py-20">
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-amber-500/10 to-orange-500/10" />
+        <div className="from-brand-primary/10 to-brand-secondary/10 pointer-events-none absolute inset-0 bg-gradient-to-r" />
         <div className="container mx-auto max-w-6xl text-center">
-          <Badge className="mb-6 border-amber-500/30 bg-amber-500/20 text-amber-300">
+          <Badge className="border-brand-primary/30 bg-brand-primary/10 text-brand-primary mb-6">
             <Sparkles className="mr-2 h-4 w-4" />
             Experiência Premium
           </Badge>
 
-          <h1 className="mb-6 text-5xl font-bold text-white md:text-7xl">
+          <h1 className="text-foreground mb-6 text-5xl font-bold md:text-7xl">
             Estilo que
-            <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
+            <span className="from-brand-primary to-brand-accent bg-gradient-to-r bg-clip-text">
               {" "}
               Transforma
             </span>
           </h1>
 
-          <p className="mx-auto mb-8 max-w-2xl text-xl text-gray-300">
+          <p className="text-muted-foreground mx-auto mb-8 max-w-2xl text-xl">
             Mais que um corte, uma experiência completa. Tradição, qualidade e
             inovação em cada atendimento para o homem moderno.
           </p>
@@ -288,7 +287,7 @@ export default function LandingPage() {
                   .getElementById("agendamento")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
-              className="cursor-pointer bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-3 font-semibold text-white hover:from-amber-600 hover:to-orange-600"
+              className="bg-gradient-brand hover:bg-gradient-brand-hover cursor-pointer px-8 py-3 font-semibold text-white"
             >
               <Calendar className="mr-2 h-5 w-5" />
               Agendar Horário
@@ -302,7 +301,7 @@ export default function LandingPage() {
                   .getElementById("parceiros")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
-              className="border-gray-600 text-gray-300 hover:bg-gray-800"
+              className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Ver Parceiros
             </Button>
@@ -311,20 +310,20 @@ export default function LandingPage() {
           {/* Stats */}
           <div className="mt-16 grid grid-cols-2 gap-8 md:grid-cols-4">
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">500+</div>
-              <div className="text-gray-400">Clientes Satisfeitos</div>
+              <div className="text-foreground text-3xl font-bold">500+</div>
+              <div className="text-muted-foreground">Clientes Satisfeitos</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">5★</div>
-              <div className="text-gray-400">Avaliação Média</div>
+              <div className="text-foreground text-3xl font-bold">5★</div>
+              <div className="text-muted-foreground">Avaliação Média</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">3+</div>
-              <div className="text-gray-400">Anos de Experiência</div>
+              <div className="text-foreground text-3xl font-bold">3+</div>
+              <div className="text-muted-foreground">Anos de Experiência</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white">15+</div>
-              <div className="text-gray-400">Serviços Oferecidos</div>
+              <div className="text-foreground text-3xl font-bold">15+</div>
+              <div className="text-muted-foreground">Serviços Oferecidos</div>
             </div>
           </div>
         </div>
@@ -335,42 +334,48 @@ export default function LandingPage() {
         <section className="px-6 py-16">
           <div className="container mx-auto max-w-4xl">
             <div className="grid gap-6 md:grid-cols-3">
-              <Card className="border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+              <Card className="border-border bg-card/50 backdrop-blur-sm">
                 <CardContent className="flex items-center gap-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
-                    <MapPin className="h-6 w-6 text-amber-400" />
+                  <div className="bg-brand-primary/20 flex h-12 w-12 items-center justify-center rounded-full">
+                    <MapPin className="text-brand-primary h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Localização</h3>
-                    <p className="text-sm text-gray-400">
+                    <h3 className="text-card-foreground font-semibold">
+                      Localização
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
                       {configs.endereco || "Endereço não informado"}
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+              <Card className="border-border bg-card/50 backdrop-blur-sm">
                 <CardContent className="flex items-center gap-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
-                    <Phone className="h-6 w-6 text-amber-400" />
+                  <div className="bg-brand-primary/20 flex h-12 w-12 items-center justify-center rounded-full">
+                    <Phone className="text-brand-primary h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Contato</h3>
-                    <p className="text-sm text-gray-400">
+                    <h3 className="text-card-foreground font-semibold">
+                      Contato
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
                       {configs.telefone || "Telefone não informado"}
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+              <Card className="border-border bg-card/50 backdrop-blur-sm">
                 <CardContent className="flex items-center gap-4 p-6">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20">
-                    <Clock className="h-6 w-6 text-amber-400" />
+                  <div className="bg-brand-primary/20 flex h-12 w-12 items-center justify-center rounded-full">
+                    <Clock className="text-brand-primary h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Horário</h3>
-                    <p className="text-sm text-gray-400">
+                    <h3 className="text-card-foreground font-semibold">
+                      Horário
+                    </h3>
+                    <p className="text-muted-foreground text-sm">
                       {configs.horaInicio} às {configs.horaFim}
                     </p>
                   </div>
@@ -382,19 +387,19 @@ export default function LandingPage() {
       )}
 
       {/* Seção de Agendamento */}
-      <section id="agendamento" className="bg-black/30 px-6 py-20">
+      <section id="agendamento" className="bg-muted/30 px-6 py-20">
         <div className="container mx-auto max-w-4xl">
           <div className="mb-12 text-center">
-            <h2 className="mb-4 text-4xl font-bold text-white">
-              <Calendar className="mr-3 inline h-8 w-8 text-amber-400" />
+            <h2 className="text-foreground mb-4 text-4xl font-bold">
+              <Calendar className="text-brand-primary mr-3 inline h-8 w-8" />
               Agende Seu Horário
             </h2>
-            <p className="text-lg text-gray-400">
+            <p className="text-muted-foreground text-lg">
               Faça seu agendamento de forma rápida e prática
             </p>
           </div>
 
-          <Card className="border-gray-700 bg-gray-800/50 backdrop-blur-sm">
+          <Card className="border-border bg-card/50 backdrop-blur-sm">
             <CardContent className="p-8">
               {!agendamentoSucesso ? (
                 <>
@@ -402,20 +407,23 @@ export default function LandingPage() {
                   {etapaAgendamento === "telefone" && (
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
-                          <Phone className="h-8 w-8 text-amber-400" />
+                        <div className="bg-brand-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                          <Phone className="text-brand-primary h-8 w-8" />
                         </div>
-                        <h3 className="mb-2 text-2xl font-bold text-white">
+                        <h3 className="text-card-foreground mb-2 text-2xl font-bold">
                           Informe seu telefone
                         </h3>
-                        <p className="text-gray-400">
+                        <p className="text-muted-foreground">
                           Vamos verificar se você já é nosso cliente
                         </p>
                       </div>
 
                       <div className="mx-auto max-w-md space-y-4">
                         <div>
-                          <Label htmlFor="telefone" className="text-white">
+                          <Label
+                            htmlFor="telefone"
+                            className="text-card-foreground"
+                          >
                             Telefone
                           </Label>
                           <Input
@@ -429,13 +437,13 @@ export default function LandingPage() {
                               );
                               setTelefoneAgendamento(valorFormatado);
                             }}
-                            className="mt-2 border-gray-600 bg-gray-700 text-white"
+                            className="border-border bg-muted text-foreground mt-2"
                             maxLength={15}
                           />
                         </div>
 
                         {buscandoCliente && (
-                          <div className="flex items-center justify-center gap-2 text-amber-400">
+                          <div className="text-brand-primary flex items-center justify-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             <span>Verificando...</span>
                           </div>
@@ -477,7 +485,7 @@ export default function LandingPage() {
                             limparTelefone(telefoneAgendamento).length < 10 ||
                             buscandoCliente
                           }
-                          className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                          className="bg-gradient-brand hover:bg-gradient-brand-hover w-full text-white"
                         >
                           Continuar
                         </Button>
@@ -489,20 +497,23 @@ export default function LandingPage() {
                   {etapaAgendamento === "dados" && (
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
-                          <User className="h-8 w-8 text-amber-400" />
+                        <div className="bg-brand-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                          <User className="text-brand-primary h-8 w-8" />
                         </div>
-                        <h3 className="mb-2 text-2xl font-bold text-white">
+                        <h3 className="text-card-foreground mb-2 text-2xl font-bold">
                           Novo cliente
                         </h3>
-                        <p className="text-gray-400">
+                        <p className="text-muted-foreground">
                           Precisamos de algumas informações básicas
                         </p>
                       </div>
 
                       <div className="mx-auto max-w-md space-y-4">
                         <div>
-                          <Label htmlFor="nome" className="text-white">
+                          <Label
+                            htmlFor="nome"
+                            className="text-card-foreground"
+                          >
                             Nome completo
                           </Label>
                           <Input
@@ -511,16 +522,18 @@ export default function LandingPage() {
                             placeholder="Seu nome completo"
                             value={nomeNovoCliente}
                             onChange={(e) => setNomeNovoCliente(e.target.value)}
-                            className="mt-2 border-gray-600 bg-gray-700 text-white"
+                            className="border-border bg-muted text-foreground mt-2"
                           />
                         </div>
 
                         <div>
-                          <Label className="text-white">Telefone</Label>
+                          <Label className="text-card-foreground">
+                            Telefone
+                          </Label>
                           <Input
                             value={telefoneAgendamento}
                             disabled
-                            className="mt-2 border-gray-500 bg-gray-600 text-gray-300"
+                            className="border-border bg-muted/50 text-muted-foreground mt-2"
                           />
                         </div>
 
@@ -528,7 +541,7 @@ export default function LandingPage() {
                           <Button
                             variant="outline"
                             onClick={() => setEtapaAgendamento("telefone")}
-                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                            className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-1"
                           >
                             Voltar
                           </Button>
@@ -541,7 +554,7 @@ export default function LandingPage() {
                               }
                             }}
                             disabled={!nomeNovoCliente.trim()}
-                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                            className="bg-gradient-brand hover:bg-gradient-brand-hover flex-1 text-white"
                           >
                             Continuar
                           </Button>
@@ -554,28 +567,30 @@ export default function LandingPage() {
                   {etapaAgendamento === "servico" && (
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
-                          <Sparkles className="h-8 w-8 text-amber-400" />
+                        <div className="bg-brand-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                          <Sparkles className="text-brand-primary h-8 w-8" />
                         </div>
-                        <h3 className="mb-2 text-2xl font-bold text-white">
+                        <h3 className="text-card-foreground mb-2 text-2xl font-bold">
                           {clienteEncontrado
                             ? `Olá, ${clienteEncontrado?.nome || ""}!`
                             : `Olá, ${nomeNovoCliente}!`}
                         </h3>
-                        <p className="text-gray-400">
+                        <p className="text-muted-foreground">
                           Escolha o serviço desejado
                         </p>
                       </div>
 
                       <div className="mx-auto max-w-md space-y-4">
                         <div>
-                          <Label className="text-white">Serviço</Label>
+                          <Label className="text-card-foreground">
+                            Serviço
+                          </Label>
                           <select
                             value={servicoSelecionado}
                             onChange={(e) =>
                               setServicoSelecionado(e.target.value)
                             }
-                            className="mt-2 w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                            className="border-border bg-muted text-foreground focus:ring-brand-primary mt-2 w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-none"
                           >
                             <option value="">Selecione um serviço</option>
                             {servicosDisponiveis?.map((servico) => (
@@ -588,7 +603,9 @@ export default function LandingPage() {
                         </div>
 
                         <div>
-                          <Label className="text-white">Data desejada</Label>
+                          <Label className="text-card-foreground">
+                            Data desejada
+                          </Label>
                           <div className="mt-2">
                             <Button
                               type="button"
@@ -596,8 +613,8 @@ export default function LandingPage() {
                               onClick={() =>
                                 setCalendarioAberto(!calendarioAberto)
                               }
-                              className={`w-full justify-start border-gray-600 bg-gray-700 text-left font-normal text-white hover:bg-gray-600 ${
-                                !dataAgendamento && "text-gray-400"
+                              className={`border-border bg-muted text-foreground hover:bg-accent hover:text-accent-foreground w-full justify-start text-left font-normal ${
+                                !dataAgendamento && "text-muted-foreground"
                               }`}
                             >
                               <Calendar className="mr-2 h-4 w-4" />
@@ -611,7 +628,7 @@ export default function LandingPage() {
                             </Button>
 
                             {calendarioAberto && (
-                              <div className="mt-2 rounded-lg border border-gray-600 bg-gray-800 p-4 shadow-lg">
+                              <div className="border-border bg-card mt-2 rounded-lg border p-4 shadow-lg">
                                 {/* Header do calendário */}
                                 <div className="mb-4 flex items-center justify-between">
                                   <Button
@@ -625,12 +642,12 @@ export default function LandingPage() {
                                       .subtract(1, "month")
                                       .endOf("month")
                                       .isBefore(hoje, "day")}
-                                    className="text-gray-300 hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     <CalendarLeft className="h-4 w-4" />
                                   </Button>
 
-                                  <h3 className="text-lg font-semibold text-white">
+                                  <h3 className="text-card-foreground text-lg font-semibold">
                                     {mesAtual
                                       .locale("pt-br")
                                       .format("MMMM [de] YYYY")}
@@ -647,7 +664,7 @@ export default function LandingPage() {
                                       .add(1, "month")
                                       .startOf("month")
                                       .isAfter(dataMaxima, "day")}
-                                    className="text-gray-300 hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     <CalendarRight className="h-4 w-4" />
                                   </Button>
@@ -666,7 +683,7 @@ export default function LandingPage() {
                                   ].map((dia) => (
                                     <div
                                       key={dia}
-                                      className="p-2 text-center text-sm font-medium text-gray-400"
+                                      className="text-muted-foreground p-2 text-center text-sm font-medium"
                                     >
                                       {dia}
                                     </div>
@@ -729,31 +746,31 @@ export default function LandingPage() {
                                           }}
                                           className={`h-10 w-10 p-0 text-sm transition-colors ${
                                             !ehMesAtual
-                                              ? "cursor-not-allowed text-gray-600"
+                                              ? "text-muted-foreground/50 cursor-not-allowed"
                                               : ""
                                           } ${
                                             ehPassado || ehAlemDoLimite
-                                              ? "cursor-not-allowed text-gray-500 opacity-50"
+                                              ? "text-muted-foreground/50 cursor-not-allowed opacity-50"
                                               : ""
                                           } ${
                                             ehMesAtual &&
                                             !ehPassado &&
                                             !ehAlemDoLimite
-                                              ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                                              ? "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                               : ""
                                           } ${
                                             ehHoje &&
                                             ehMesAtual &&
                                             !ehAlemDoLimite
-                                              ? "bg-blue-600/20 font-semibold text-blue-400"
+                                              ? "bg-info/20 text-info font-semibold"
                                               : ""
                                           } ${
                                             ehSelecionado
-                                              ? "bg-amber-500 font-semibold text-white hover:bg-amber-600"
+                                              ? "bg-brand-primary hover:bg-brand-accent font-semibold text-white"
                                               : ""
                                           } ${
                                             ehAlemDoLimite && ehMesAtual
-                                              ? "cursor-not-allowed bg-red-500/10 text-red-400"
+                                              ? "bg-error/10 text-error cursor-not-allowed"
                                               : ""
                                           }`}
                                         >
@@ -778,7 +795,7 @@ export default function LandingPage() {
                                       setDataAgendamento(null);
                                       setCalendarioAberto(false);
                                     }}
-                                    className="text-gray-400 hover:bg-gray-700 hover:text-white"
+                                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                   >
                                     Limpar
                                   </Button>
@@ -793,7 +810,7 @@ export default function LandingPage() {
                                         setDataAgendamento(new Date());
                                       }
                                     }}
-                                    className="text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                    className="text-brand-primary hover:bg-brand-primary/20 hover:text-brand-accent"
                                   >
                                     Hoje
                                   </Button>
@@ -804,10 +821,10 @@ export default function LandingPage() {
                         </div>
 
                         {/* Mensagem informativa sobre limite */}
-                        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/10 p-3">
+                        <div className="border-warning bg-warning/10 mt-4 rounded-md border p-3">
                           <div className="flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 text-amber-400" />
-                            <p className="text-sm text-amber-300">
+                            <AlertCircle className="text-warning h-4 w-4" />
+                            <p className="text-warning text-sm">
                               Agendamentos disponíveis até{" "}
                               {dataMaxima.format("DD/MM/YYYY")} (30 dias)
                             </p>
@@ -816,7 +833,7 @@ export default function LandingPage() {
 
                         {dataAgendamento && servicoSelecionado && (
                           <div>
-                            <Label className="text-white">
+                            <Label className="text-card-foreground">
                               Horário desejado (opcional)
                             </Label>
                             <div className="relative mt-2">
@@ -858,9 +875,9 @@ export default function LandingPage() {
                                   }
                                 }}
                                 maxLength={5}
-                                className="border-gray-600 bg-gray-700 pr-10 text-white"
+                                className="border-border bg-muted text-foreground pr-10"
                               />
-                              <Clock className="absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                              <Clock className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2" />
                             </div>
 
                             {horarioManual && horarioManualValido && (
@@ -868,7 +885,7 @@ export default function LandingPage() {
                                 {(() => {
                                   if (conflitoLoading) {
                                     return (
-                                      <div className="flex items-center gap-2 text-amber-400">
+                                      <div className="text-brand-primary flex items-center gap-2">
                                         <Loader2 className="h-4 w-4 animate-spin" />
                                         <span className="text-sm">
                                           Verificando disponibilidade...
@@ -879,17 +896,17 @@ export default function LandingPage() {
 
                                   if (conflito?.temConflito) {
                                     return (
-                                      <div className="rounded-md border border-yellow-200 bg-yellow-50/10 p-3">
+                                      <div className="border-warning bg-warning/10 rounded-md border p-3">
                                         <div className="flex items-start gap-2">
-                                          <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-400" />
+                                          <AlertCircle className="text-warning mt-0.5 h-4 w-4" />
                                           <div>
-                                            <p className="text-sm font-medium text-yellow-300">
+                                            <p className="text-warning text-sm font-medium">
                                               Horário {horarioManual} não
                                               disponível
                                             </p>
                                             {conflito.proximoDisponivel && (
                                               <div className="mt-2">
-                                                <p className="text-sm text-yellow-200">
+                                                <p className="text-warning/80 text-sm">
                                                   Próximo horário disponível:{" "}
                                                   {conflito.proximoDisponivel}
                                                 </p>
@@ -901,7 +918,7 @@ export default function LandingPage() {
                                                       conflito.proximoDisponivel!,
                                                     )
                                                   }
-                                                  className="mt-2 border-yellow-400 text-yellow-300 hover:bg-yellow-400/10"
+                                                  className="border-warning text-warning hover:bg-warning/10 mt-2"
                                                 >
                                                   Selecionar{" "}
                                                   {conflito.proximoDisponivel}
@@ -916,13 +933,12 @@ export default function LandingPage() {
 
                                   if (conflito && !conflito.temConflito) {
                                     return (
-                                      <div className="rounded-md border border-green-200 bg-green-50/10 p-3">
+                                      <div className="border-success bg-success/10 rounded-md border p-3">
                                         <div className="flex items-center gap-2">
-                                          <CheckCircle className="h-4 w-4 text-green-400" />
+                                          <CheckCircle className="text-success h-4 w-4" />
                                           <div>
-                                            <p className="text-sm font-medium text-green-300">
-                                              Horário {horarioManual}{" "}
-                                              disponível!
+                                            <p className="text-success text-sm font-medium">
+                                              Horário {horarioManual} disponível
                                             </p>
                                             <Button
                                               size="sm"
@@ -935,7 +951,7 @@ export default function LandingPage() {
                                                   confirmarAgendamento();
                                                 }, 0);
                                               }}
-                                              className="mt-2 bg-green-600 hover:bg-green-700"
+                                              className="bg-success hover:bg-success/80 text-success-foreground mt-2"
                                             >
                                               Confirmar {horarioManual}
                                             </Button>
@@ -953,7 +969,7 @@ export default function LandingPage() {
                             {horarioManual &&
                               !horarioManualValido &&
                               horarioManual.length === 5 && (
-                                <p className="mt-1 text-sm text-red-400">
+                                <p className="text-error mt-1 text-sm">
                                   Horário inválido. Use o formato HH:MM
                                 </p>
                               )}
@@ -968,7 +984,7 @@ export default function LandingPage() {
                                 clienteEncontrado ? "telefone" : "dados",
                               )
                             }
-                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                            className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-1"
                           >
                             Voltar
                           </Button>
@@ -983,7 +999,7 @@ export default function LandingPage() {
                                 !horarioSelecionado ||
                                 Boolean(criarAgendamentoMutation.isPending)
                               }
-                              className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                              className="bg-success hover:bg-success/80 text-success-foreground flex-1"
                             >
                               {criarAgendamentoMutation.isPending ? (
                                 <>
@@ -1004,7 +1020,7 @@ export default function LandingPage() {
                                 }
                               }}
                               disabled={!servicoSelecionado || !dataAgendamento}
-                              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                              className="bg-gradient-brand hover:bg-gradient-brand-hover flex-1 text-white"
                             >
                               Ver Horários
                             </Button>
@@ -1018,13 +1034,13 @@ export default function LandingPage() {
                   {etapaAgendamento === "horario" && (
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
-                          <Clock className="h-8 w-8 text-amber-400" />
+                        <div className="bg-brand-primary/20 mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                          <Clock className="text-brand-primary h-8 w-8" />
                         </div>
-                        <h3 className="mb-2 text-2xl font-bold text-white">
+                        <h3 className="text-card-foreground mb-2 text-2xl font-bold">
                           Escolha o horário
                         </h3>
-                        <p className="text-gray-400">
+                        <p className="text-muted-foreground">
                           {servicoSelecionado} em{" "}
                           {dataAgendamento?.toLocaleDateString("pt-BR")}
                         </p>
@@ -1032,14 +1048,14 @@ export default function LandingPage() {
 
                       <div className="mx-auto max-w-2xl space-y-4">
                         {carregandoHorarios ? (
-                          <div className="flex items-center justify-center gap-2 py-8 text-amber-400">
+                          <div className="text-brand-primary flex items-center justify-center gap-2 py-8">
                             <Loader2 className="h-6 w-6 animate-spin" />
                             <span>Carregando horários disponíveis...</span>
                           </div>
                         ) : horariosDisponiveis?.erro ? (
                           <div className="py-8 text-center">
-                            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
-                            <p className="text-red-400">
+                            <AlertCircle className="text-error mx-auto mb-4 h-12 w-12" />
+                            <p className="text-error">
                               {horariosDisponiveis.erro}
                             </p>
                           </div>
@@ -1047,14 +1063,14 @@ export default function LandingPage() {
                           <>
                             {horariosDisponiveis?.intervalos &&
                               horariosDisponiveis.intervalos.length > 0 && (
-                                <div className="mb-6 rounded-md border border-blue-200 bg-blue-50/10 p-4">
+                                <div className="border-info bg-info/10 mb-6 rounded-md border p-4">
                                   <div className="mb-2 flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-blue-400" />
-                                    <span className="text-sm font-medium text-blue-300">
+                                    <Clock className="text-info h-4 w-4" />
+                                    <span className="text-info text-sm font-medium">
                                       Funcionamento:
                                     </span>
                                   </div>
-                                  <div className="text-sm text-blue-200">
+                                  <div className="text-info/80 text-sm">
                                     {horariosDisponiveis.intervalos.map(
                                       (intervalo, index) => (
                                         <span key={index}>
@@ -1087,8 +1103,8 @@ export default function LandingPage() {
                                     }
                                     className={`text-sm ${
                                       horarioSelecionado === horario.horario
-                                        ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                                        : "border-gray-600 text-gray-300 hover:bg-gray-700"
+                                        ? "bg-gradient-brand hover:bg-gradient-brand-hover text-white"
+                                        : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                     }`}
                                   >
                                     {horario.horario}
@@ -1100,11 +1116,11 @@ export default function LandingPage() {
                               (h) => h.disponivel,
                             )?.length === 0 && (
                               <div className="py-8 text-center">
-                                <CalendarDays className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-                                <p className="text-gray-400">
+                                <CalendarDays className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+                                <p className="text-muted-foreground">
                                   Nenhum horário disponível para esta data
                                 </p>
-                                <p className="mt-2 text-sm text-gray-500">
+                                <p className="text-muted-foreground/70 mt-2 text-sm">
                                   Tente escolher outra data
                                 </p>
                               </div>
@@ -1116,7 +1132,7 @@ export default function LandingPage() {
                           <Button
                             variant="outline"
                             onClick={() => setEtapaAgendamento("servico")}
-                            className="flex-1 border-gray-600 text-gray-300 hover:bg-gray-700"
+                            className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-1"
                           >
                             Voltar
                           </Button>
@@ -1126,7 +1142,7 @@ export default function LandingPage() {
                               !horarioSelecionado ||
                               Boolean(criarAgendamentoMutation.isPending)
                             }
-                            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                            className="bg-gradient-brand hover:bg-gradient-brand-hover flex-1 text-white"
                           >
                             {criarAgendamentoMutation.isPending ? (
                               <>
@@ -1145,60 +1161,66 @@ export default function LandingPage() {
               ) : (
                 /* Etapa 5: Confirmação */
                 <div className="space-y-6 text-center">
-                  <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/20">
-                    <CheckCircle className="h-12 w-12 text-green-400" />
+                  <div className="bg-success/20 mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full">
+                    <CheckCircle className="text-success h-12 w-12" />
                   </div>
 
                   <div>
-                    <h3 className="mb-4 text-3xl font-bold text-white">
+                    <h3 className="text-card-foreground mb-4 text-3xl font-bold">
                       Agendamento Confirmado!
                     </h3>
-                    <p className="mb-6 text-lg text-gray-300">
+                    <p className="text-muted-foreground mb-6 text-lg">
                       Seu agendamento foi realizado com sucesso
                     </p>
                   </div>
 
-                  <div className="mx-auto max-w-md rounded-lg bg-gray-700/50 p-6">
-                    <h4 className="mb-4 text-lg font-semibold text-white">
+                  <div className="bg-muted/50 mx-auto max-w-md rounded-lg p-6">
+                    <h4 className="text-card-foreground mb-4 text-lg font-semibold">
                       Detalhes do Agendamento
                     </h4>
                     <div className="space-y-2 text-left">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Cliente:</span>
-                        <span className="text-white">{nomeNovoCliente}</span>
+                        <span className="text-muted-foreground">Cliente:</span>
+                        <span className="text-card-foreground">
+                          {nomeNovoCliente}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Telefone:</span>
-                        <span className="text-white">
+                        <span className="text-muted-foreground">Telefone:</span>
+                        <span className="text-card-foreground">
                           {telefoneAgendamento}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Serviço:</span>
-                        <span className="text-white">{servicoSelecionado}</span>
+                        <span className="text-muted-foreground">Serviço:</span>
+                        <span className="text-card-foreground">
+                          {servicoSelecionado}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Data:</span>
-                        <span className="text-white">
+                        <span className="text-muted-foreground">Data:</span>
+                        <span className="text-card-foreground">
                           {dataAgendamento?.toLocaleDateString("pt-BR")}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Horário:</span>
-                        <span className="text-white">{horarioSelecionado}</span>
+                        <span className="text-muted-foreground">Horário:</span>
+                        <span className="text-card-foreground">
+                          {horarioSelecionado}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-3">
-                    <p className="text-gray-400">
+                    <p className="text-muted-foreground">
                       Entraremos em contato via WhatsApp para confirmar seu
                       agendamento
                     </p>
 
                     <Button
                       onClick={resetarAgendamento}
-                      className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                      className="bg-gradient-brand hover:bg-gradient-brand-hover text-white"
                     >
                       Fazer Novo Agendamento
                     </Button>
@@ -1215,11 +1237,11 @@ export default function LandingPage() {
         <section id="parceiros" className="px-6 py-20">
           <div className="container mx-auto max-w-[90rem]">
             <div className="mb-16 text-center">
-              <h2 className="mb-4 text-4xl font-bold text-white">
-                <Award className="mr-3 inline h-8 w-8 text-amber-400" />
+              <h2 className="text-foreground mb-4 text-4xl font-bold">
+                <Award className="text-brand-primary mr-3 inline h-8 w-8" />
                 Nossos Parceiros
               </h2>
-              <p className="text-lg text-gray-400">
+              <p className="text-muted-foreground text-lg">
                 Parcerias que fortalecem nosso compromisso com a excelência
               </p>
             </div>
@@ -1248,8 +1270,8 @@ export default function LandingPage() {
                           priority={true}
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Award className="h-12 w-12 text-amber-400" />
+                        <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
+                          <Award className="text-brand-primary h-12 w-12" />
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
@@ -1257,7 +1279,7 @@ export default function LandingPage() {
                         <h4 className="truncate text-lg font-bold text-white">
                           {parcerias[getSlideIndex(-1)]?.titulo}
                         </h4>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-300">
+                        <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
                           {parcerias[getSlideIndex(-1)]?.descricao}
                         </p>
                       </div>
@@ -1297,8 +1319,8 @@ export default function LandingPage() {
                         />
                       </div>
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                        <Award className="h-16 w-16 text-amber-400" />
+                      <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
+                        <Award className="text-brand-primary h-16 w-16" />
                       </div>
                     )}
 
@@ -1314,7 +1336,7 @@ export default function LandingPage() {
                         <h3 className="mb-3 text-2xl leading-tight font-bold lg:text-3xl">
                           {parcerias[currentSlide]?.titulo}
                         </h3>
-                        <p className="mb-4 line-clamp-2 text-base leading-relaxed text-gray-200 lg:mb-6 lg:text-lg">
+                        <p className="text-muted-foreground mb-4 line-clamp-2 text-base leading-relaxed lg:mb-6 lg:text-lg">
                           {parcerias[currentSlide]?.descricao}
                         </p>
                         {parcerias[currentSlide]?.url && (
@@ -1324,7 +1346,7 @@ export default function LandingPage() {
                                 parcerias[currentSlide]?.url ?? "",
                               )
                             }
-                            className="z-50 inline-flex cursor-pointer items-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
+                            className="bg-gradient-brand hover:bg-gradient-brand-hover z-50 inline-flex cursor-pointer items-center rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
                           >
                             Visitar Site
                             <ChevronRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" />
@@ -1334,7 +1356,7 @@ export default function LandingPage() {
                     </div>
 
                     {/* Borda sutil para o card principal */}
-                    <div className="absolute inset-0 rounded-3xl ring-1 ring-amber-500/20" />
+                    <div className="border-brand-primary/20 absolute inset-0 rounded-3xl ring-1" />
                   </div>
                 </div>
 
@@ -1371,8 +1393,8 @@ export default function LandingPage() {
                           />
                         </div>
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Award className="h-12 w-12 text-amber-400" />
+                        <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
+                          <Award className="text-brand-primary h-12 w-12" />
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
@@ -1380,7 +1402,7 @@ export default function LandingPage() {
                         <h4 className="truncate text-lg font-bold text-white">
                           {parcerias[getSlideIndex(1)]?.titulo}
                         </h4>
-                        <p className="mt-1 line-clamp-2 text-sm text-gray-300">
+                        <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
                           {parcerias[getSlideIndex(1)]?.descricao}
                         </p>
                       </div>
@@ -1416,33 +1438,33 @@ export default function LandingPage() {
       )}
 
       {/* Casos de Sucesso - Clientes */}
-      <section id="clientes" className="bg-black/20 px-6 py-16">
+      <section id="clientes" className="bg-muted/20 px-6 py-16">
         <div className="container mx-auto max-w-6xl">
           <div className="mb-12 text-center">
-            <h2 className="mb-4 text-4xl font-bold text-white">
-              <Users className="mr-3 inline h-8 w-8 text-amber-400" />
+            <h2 className="text-foreground mb-4 text-4xl font-bold">
+              <Users className="text-brand-primary mr-3 inline h-8 w-8" />
               Melhores clientes
             </h2>
-            <p className="text-lg text-gray-400">
+            <p className="text-muted-foreground text-lg">
               Clientes que confiam no nosso trabalho
             </p>
           </div>
 
           {loadingClientes ? (
             <div className="text-center">
-              <div className="inline-block h-16 w-16 animate-spin rounded-full border-4 border-solid border-amber-500 border-r-transparent"></div>
-              <p className="mt-4 text-gray-300">Carregando clientes...</p>
+              <div className="border-brand-primary inline-block h-16 w-16 animate-spin rounded-full border-4 border-solid border-r-transparent"></div>
+              <p className="text-muted-foreground mt-4">
+                Carregando clientes...
+              </p>
             </div>
           ) : errorClientes ? (
-            <p className="text-center text-red-400">
-              Erro ao carregar clientes.
-            </p>
+            <p className="text-error text-center">Erro ao carregar clientes.</p>
           ) : clientes && clientes.length > 0 ? (
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               {clientes.map((cliente) => (
                 <Card
                   key={cliente.id}
-                  className="group border-gray-700 bg-gray-800/50 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-gray-800/70"
+                  className="group border-border bg-card/50 hover:bg-card/70 backdrop-blur-sm transition-all duration-300 hover:scale-105"
                 >
                   <CardContent className="p-8 text-center">
                     <div className="mb-6 flex justify-center">
@@ -1452,7 +1474,7 @@ export default function LandingPage() {
                             src={`data:${cliente.mimeType};base64,${cliente.imagem}`}
                             alt={cliente.titulo || "Imagem do cliente"}
                             fill
-                            className="rounded-full border-4 border-amber-500/30 object-cover transition-colors group-hover:border-amber-500/60"
+                            className="border-brand-primary/30 group-hover:border-brand-primary/60 rounded-full border-4 object-cover transition-colors"
                             onError={(e) => {
                               console.error(
                                 "Erro ao carregar imagem do cliente:",
@@ -1464,22 +1486,22 @@ export default function LandingPage() {
                           />
                         </div>
                       ) : (
-                        <div className="flex h-32 w-32 items-center justify-center rounded-full border-4 border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-500/20">
-                          <Users className="h-12 w-12 text-amber-400" />
+                        <div className="from-brand-primary/20 to-brand-secondary/20 border-brand-primary/30 flex h-32 w-32 items-center justify-center rounded-full border-4 bg-gradient-to-br">
+                          <Users className="text-brand-primary h-12 w-12" />
                         </div>
                       )}
                     </div>
-                    <h3 className="mb-3 text-2xl font-semibold text-white">
+                    <h3 className="text-card-foreground mb-3 text-2xl font-semibold">
                       {cliente.titulo}
                     </h3>
-                    <p className="mb-4 text-base text-gray-400">
+                    <p className="text-muted-foreground mb-4 text-base">
                       {cliente.descricao}
                     </p>
                     <div className="flex justify-center">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
-                          className="h-5 w-5 fill-current text-amber-400"
+                          className="text-brand-primary h-5 w-5 fill-current"
                         />
                       ))}
                     </div>
@@ -1489,10 +1511,10 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-800">
-                <Users className="h-8 w-8 text-gray-600" />
+              <div className="bg-card mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                <Users className="text-muted-foreground h-8 w-8" />
               </div>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 Em breve, casos de sucesso dos nossos clientes
               </p>
             </div>
@@ -1501,9 +1523,9 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-black/40 px-6 py-8">
+      <footer className="bg-muted/40 px-6 py-8">
         <div className="container mx-auto max-w-6xl">
-          <p className="text-center text-sm text-gray-400">
+          <p className="text-muted-foreground text-center text-sm">
             © 2025 {configs?.nome}. Todos os direitos reservados.
           </p>
         </div>
@@ -1512,12 +1534,14 @@ export default function LandingPage() {
       {/* Modal de Login */}
       {showLogin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 p-8">
+          <div className="border-border bg-card mx-4 w-full max-w-md rounded-xl border p-8">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">Entrar</h2>
+              <h2 className="text-card-foreground text-2xl font-bold">
+                Entrar
+              </h2>
               <button
                 onClick={() => setShowLogin(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 ×
               </button>
@@ -1531,38 +1555,38 @@ export default function LandingPage() {
               className="space-y-4"
             >
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">
+                <label className="text-muted-foreground mb-2 block text-sm font-medium">
                   Email
                 </label>
                 <input
                   type="email"
                   required
-                  className="w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-none"
                   placeholder="seu@email.com"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">
+                <label className="text-muted-foreground mb-2 block text-sm font-medium">
                   Senha
                 </label>
                 <input
                   type="password"
                   required
-                  className="w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-none"
                   placeholder="••••••••"
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                className="bg-gradient-brand hover:bg-gradient-brand-hover w-full text-white"
               >
                 Entrar
               </Button>
             </form>
 
-            <p className="mt-4 text-center text-sm text-gray-400">
+            <p className="text-muted-foreground mt-4 text-center text-sm">
               Não tem conta? Entre em contato conosco.
             </p>
           </div>
