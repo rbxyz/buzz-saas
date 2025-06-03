@@ -53,7 +53,11 @@
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
     "@trpc/server": "^11.0.0",
+<<<<<<< HEAD
     "bcryptjs": "^3.0.2",
+=======
+    "bcryptjs": "^2.4.3",
+>>>>>>> 243aac7f4e50bc07e67bf3343946dafc0fb8bfe0
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "dayjs": "^1.11.13",
@@ -89,7 +93,12 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.0.15",
+<<<<<<< HEAD
     "@types/jsonwebtoken": "^9.0.9",
+=======
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
+>>>>>>> 243aac7f4e50bc07e67bf3343946dafc0fb8bfe0
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
