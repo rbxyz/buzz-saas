@@ -41,6 +41,23 @@ export const diasSemanaEnum = pgEnum("dias_semana", [
 // NOVO: Enum para turnos
 export const turnoEnum = pgEnum("turno_enum", ["manha", "tarde", "noite"])
 
+// NOVO: Enum para roles de usuário
+export const userRoleEnum = pgEnum("user_role_enum", ["admin", "superadmin"])
+
+// NOVO: Tabela de Usuários
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  role: userRoleEnum("role").notNull(),
+  phone: varchar("phone", { length: 20 }),
+  active: boolean("active").notNull().default(true),
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+
 // 🧩 Tabela de Clientes
 export const clientes = pgTable("clientes", {
   id: uuid("id").primaryKey().defaultRandom(),
