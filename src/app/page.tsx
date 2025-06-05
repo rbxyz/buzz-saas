@@ -9,25 +9,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ChevronRight,
-  ChevronLeft,
-  Star,
   MapPin,
   Phone,
   Clock,
-  Users,
   Award,
   Sparkles,
   Calendar,
   Loader2,
   CheckCircle,
-  AlertCircle,
   User,
   CalendarDays,
-  Eye,
+  Menu,
+  ChevronLeft,
+  Users,
+  Star,
+  AlertCircle,
   EyeOff,
+  Eye,
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
@@ -37,6 +37,7 @@ import {
   LayoutPanelLeftIcon as CalendarLeft,
   PanelRightIcon as CalendarRight,
 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
@@ -270,13 +271,21 @@ export default function LandingPage() {
       <header className="bg-muted/20 relative z-10 backdrop-blur-sm">
         <div className="container mx-auto flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-brand flex h-10 w-10 items-center justify-center rounded-full">
-              <span className="text-lg font-bold text-white">D</span>
+            <div className="bg-gradient-brand flex h-10 w-10 items-center justify-center overflow-hidden rounded-full">
+              <Image
+                src={"/favicon.png"}
+                alt="Logo"
+                width={20}
+                height={20}
+                className="object-cover"
+              />
             </div>
             <span className="text-foreground text-xl font-bold">
               {configs?.nome}
             </span>
           </div>
+
+          {/* Menu para desktop */}
           <nav className="hidden items-center gap-6 md:flex">
             <a
               href="#agendamento"
@@ -299,23 +308,43 @@ export default function LandingPage() {
 
             <Button
               onClick={() => setShowLogin(true)}
-              className="bg-gradient-brand hover:bg-gradient-brand-hover text-white"
+              className="bg-gradient-brand hover:bg-gradient-brand-hover cursor-pointer text-white"
             >
               Entrar
             </Button>
           </nav>
+
+          {/* Botão hambúrguer para mobile */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowLogin(true)}
+            className="md:hidden"
+            aria-label="Menu"
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
         </div>
       </header>
 
       {/* Hero Section */}
       <section className="relative overflow-hidden px-6 py-20">
-        <div className="from-brand-primary/10 to-brand-secondary/10 pointer-events-none absolute inset-0 bg-gradient-to-r" />
-        <div className="container mx-auto max-w-6xl text-center">
+        {/* Imagem de fundo absoluta */}
+        <Image
+          src="/bg.webp"
+          alt="Background Header"
+          fill
+          className="object-cover brightness-75"
+        />
+
+        {/* Gradiente por cima da imagem */}
+        <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-black/80 via-transparent to-black/60" />
+
+        <div className="relative z-10 container mx-auto max-w-6xl text-center">
           <Badge className="border-brand-primary/30 bg-brand-primary/10 text-brand-primary mb-6">
             <Sparkles className="mr-2 h-4 w-4" />
             Experiência Premium
           </Badge>
-
           <h1 className="text-foreground mb-6 text-5xl font-bold md:text-7xl">
             Estilo que
             <span className="from-brand-primary to-brand-accent bg-gradient-to-r bg-clip-text">
@@ -324,7 +353,7 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="text-muted-foreground mx-auto mb-8 max-w-2xl text-xl">
+          <p className="mx-auto mb-8 max-w-2xl rounded-xl bg-black/40 px-4 py-2 text-xl text-white shadow-lg backdrop-blur-sm">
             Mais que um corte, uma experiência completa. Tradição, qualidade e
             inovação em cada atendimento para o homem moderno.
           </p>
@@ -351,7 +380,7 @@ export default function LandingPage() {
                   .getElementById("parceiros")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
-              className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
             >
               Ver Parceiros
             </Button>
@@ -1001,7 +1030,7 @@ export default function LandingPage() {
                                                   confirmarAgendamento();
                                                 }, 0);
                                               }}
-                                              className="bg-success hover:bg-success/80 text-success-foreground mt-2"
+                                              className="bg-success text-success-foreground hover:bg-success/80 mt-2"
                                             >
                                               Confirmar {horarioManual}
                                             </Button>
@@ -1049,7 +1078,7 @@ export default function LandingPage() {
                                 !horarioSelecionado ||
                                 Boolean(criarAgendamentoMutation.isPending)
                               }
-                              className="bg-success hover:bg-success/80 text-success-foreground flex-1"
+                              className="bg-success text-success-foreground hover:bg-success/80 flex-1"
                             >
                               {criarAgendamentoMutation.isPending ? (
                                 <>
@@ -1666,7 +1695,7 @@ export default function LandingPage() {
               <Button
                 type="submit"
                 disabled={loginMutation.isPending}
-                className="bg-gradient-brand hover:bg-gradient-brand-hover w-full text-white"
+                className="bg-gradient-brand hover:bg-gradient-brand-hover w-full cursor-pointer text-white"
               >
                 {loginMutation.isPending ? (
                   <>
