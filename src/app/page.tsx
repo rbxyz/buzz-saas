@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/trpc/react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   ChevronRight,
   ChevronLeft,
@@ -23,6 +26,8 @@ import {
   AlertCircle,
   User,
   CalendarDays,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
@@ -37,6 +42,14 @@ export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Estados para login
+  const [loginData, setLoginData] = useState({
+    email: "",
+    password: "",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   // Define interface para o cliente
   interface Cliente {
@@ -114,16 +127,46 @@ export default function LandingPage() {
       },
     });
 
+  // Mutation para login
+  const loginMutation = api.auth.login.useMutation({
+    onSuccess: (data) => {
+      // Armazenar token no localStorage
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("user_data", JSON.stringify(data.user));
+
+      // Redirecionar para dashboard
+      window.location.href = "/dashboard";
+    },
+    onError: (error) => {
+      setLoginError(error.message || "Erro ao fazer login");
+    },
+  });
+
   // Função para abrir links de parceiros
   const handleVisitarSite = (url: string) => {
     if (!url) return;
     window.open(url, "_blank"); // abre em nova aba
   };
 
-  const handleLogin = () => {
-    // Aqui você pode implementar a lógica de login
-    // Por enquanto, vamos redirecionar para o dashboard
-    window.location.href = "/dashboard";
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError("");
+
+    if (!loginData.email || !loginData.password) {
+      setLoginError("Por favor, preencha todos os campos");
+      return;
+    }
+
+    loginMutation.mutate({
+      email: loginData.email,
+      password: loginData.password,
+    });
+  };
+
+  const resetLoginForm = () => {
+    setLoginData({ email: "", password: "" });
+    setLoginError("");
+    setShowPassword(false);
   };
 
   // Funções para agendamento
@@ -203,6 +246,13 @@ export default function LandingPage() {
   useEffect(() => {
     dayjs.locale("pt-br");
   }, []);
+
+  // Limpar erro de login quando modal fecha
+  useEffect(() => {
+    if (!showLogin) {
+      resetLoginForm();
+    }
+  }, [showLogin]);
 
   const { data: conflito, isLoading: conflitoLoading } =
     api.agendamento.verificarConflito.useQuery(
@@ -1534,55 +1584,98 @@ export default function LandingPage() {
       {/* Modal de Login */}
       {showLogin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="border-border bg-card mx-4 w-full max-w-md rounded-xl border p-8">
+          <div className="border-border bg-card mx-4 w-full max-w-md rounded-xl border p-8 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-card-foreground text-2xl font-bold">
                 Entrar
               </h2>
               <button
                 onClick={() => setShowLogin(false)}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground text-2xl transition-colors"
               >
                 ×
               </button>
             </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleLogin();
-              }}
-              className="space-y-4"
-            >
+            {loginError && (
+              <Alert className="mb-4 border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {loginError}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-muted-foreground mb-2 block text-sm font-medium">
+                <Label
+                  htmlFor="email"
+                  className="text-muted-foreground mb-2 block text-sm font-medium"
+                >
                   Email
-                </label>
-                <input
+                </Label>
+                <Input
+                  id="email"
                   type="email"
                   required
-                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-none"
+                  value={loginData.email}
+                  onChange={(e) =>
+                    setLoginData({ ...loginData, email: e.target.value })
+                  }
+                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full"
                   placeholder="seu@email.com"
+                  disabled={loginMutation.isPending}
                 />
               </div>
 
               <div>
-                <label className="text-muted-foreground mb-2 block text-sm font-medium">
+                <Label
+                  htmlFor="password"
+                  className="text-muted-foreground mb-2 block text-sm font-medium"
+                >
                   Senha
-                </label>
-                <input
-                  type="password"
-                  required
-                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full rounded-md border px-3 py-2 focus:ring-2 focus:outline-none"
-                  placeholder="••••••••"
-                />
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={loginData.password}
+                    onChange={(e) =>
+                      setLoginData({ ...loginData, password: e.target.value })
+                    }
+                    className="border-border bg-muted text-foreground focus:ring-brand-primary w-full pr-10"
+                    placeholder="••••••••"
+                    disabled={loginMutation.isPending}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
+                    disabled={loginMutation.isPending}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               <Button
                 type="submit"
+                disabled={loginMutation.isPending}
                 className="bg-gradient-brand hover:bg-gradient-brand-hover w-full text-white"
               >
-                Entrar
+                {loginMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Entrando...
+                  </>
+                ) : (
+                  "Entrar"
+                )}
               </Button>
             </form>
 

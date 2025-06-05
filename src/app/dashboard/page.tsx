@@ -1,62 +1,86 @@
 "use client";
 
-import { useState, type ReactElement } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { Overview } from "@/components/dashboard/overview";
 import { RecentAppointments } from "@/components/dashboard/recent-appointments";
-import { DashboardStats } from "@/components/dashboard/dashboard-stats";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-export default function DashboardPage(): ReactElement {
-  const [isLoading, setIsLoading] = useState(false);
-
-  if (isLoading) {
-    return (
-      <div className="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div className="border-border bg-card flex items-center gap-3 rounded-lg border px-6 py-4 shadow-xl">
-          <div className="border-muted border-t-primary h-5 w-5 animate-spin rounded-full border-2" />
-          <span className="text-foreground text-sm font-medium">
-            Carregando agente inteligente...
-          </span>
-        </div>
-      </div>
-    );
-  }
+export default function DashboardPage() {
+  const isMobile = useIsMobile();
 
   return (
-    <div className="min-h-screen space-y-6 p-6">
-      <h1 className="text-foreground text-3xl font-bold tracking-tight">
-        Dashboard
-      </h1>
-
-      <DashboardStats />
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Visão Geral</CardTitle>
-            <CardDescription>Agendamentos dos últimos 30 dias</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Overview />
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Agendamentos Recentes</CardTitle>
-            <CardDescription>Últimos 5 agendamentos realizados</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RecentAppointments />
-          </CardContent>
-        </Card>
+    <div className="flex-1 space-y-4 p-4 pt-6 md:p-8">
+      <div className="flex items-center justify-between space-y-2">
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+          Dashboard
+        </h2>
       </div>
+
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList
+          className={`grid w-full ${isMobile ? "grid-cols-2" : "grid-cols-3"}`}
+        >
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="analytics">Análises</TabsTrigger>
+          {!isMobile && <TabsTrigger value="reports">Relatórios</TabsTrigger>}
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <DashboardStats />
+
+          <div
+            className={`grid gap-4 ${isMobile ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-7"}`}
+          >
+            <Card className={isMobile ? "col-span-1" : "col-span-4"}>
+              <CardHeader>
+                <CardTitle>Visão Geral</CardTitle>
+              </CardHeader>
+              <CardContent className="pl-2">
+                <Overview />
+              </CardContent>
+            </Card>
+
+            <Card className={isMobile ? "col-span-1" : "col-span-3"}>
+              <CardHeader>
+                <CardTitle>Agendamentos Recentes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RecentAppointments />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Análises Detalhados</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                Relatórios detalhados estarão disponíveis em breve.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {!isMobile && (
+          <TabsContent value="reports" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Relatórios Detalhados</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Relatórios detalhados estarão disponíveis em breve.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }
