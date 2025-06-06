@@ -15,8 +15,8 @@ export const clienteRouter = createTRPCRouter({
       z.object({
         nome: z.string().min(1, "Nome é obrigatório"),
         telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
-        email: z.string().email().optional(),
-        dataNascimento: z.string().optional(),
+        email: z.string().optional().nullable(), // Permite string, undefined ou null
+        dataNascimento: z.string().optional().nullable(), // Permite string, undefined ou null
       }),
     )
     .mutation(async ({ input }) => {
@@ -25,8 +25,8 @@ export const clienteRouter = createTRPCRouter({
         .values({
           nome: input.nome,
           telefone: input.telefone,
-          email: input.email,
-          dataNascimento: input.dataNascimento,
+          email: input.email && input.email.trim() !== "" ? input.email : null,
+          dataNascimento: input.dataNascimento && input.dataNascimento.trim() !== "" ? input.dataNascimento : null,
         })
         .returning()
 
@@ -39,7 +39,8 @@ export const clienteRouter = createTRPCRouter({
         id: z.string().uuid(),
         nome: z.string().min(1, "Nome é obrigatório"),
         telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
-        email: z.string().email().optional(),
+        email: z.string().optional().nullable(), // Permite string, undefined ou null
+        dataNascimento: z.string().optional().nullable(), // Permite string, undefined ou null
       }),
     )
     .mutation(async ({ input }) => {
@@ -48,7 +49,8 @@ export const clienteRouter = createTRPCRouter({
         .set({
           nome: input.nome,
           telefone: input.telefone,
-          email: input.email,
+          email: input.email && input.email.trim() !== "" ? input.email : null,
+          dataNascimento: input.dataNascimento && input.dataNascimento.trim() !== "" ? input.dataNascimento : null,
           updatedAt: new Date(),
         })
         .where(eq(clientes.id, input.id))
@@ -93,45 +95,45 @@ export const clienteRouter = createTRPCRouter({
       recentes: clientesRecentes[0]?.count ?? 0,
     }
   }),
-    // PROCEDIMENTO CRÍTICO: buscarPorTelefone (buscarClientePorTelefone)
-    buscarPorTelefone: publicProcedure.input(z.object({ telefone: z.string() })).query(async ({ input }) => {
-      console.log("🔍 Iniciando busca de cliente por telefone no backend:", input.telefone)
-  
-      // Limpar telefone - remover formatação
-      const telefoneNumeros = input.telefone.replace(/\D/g, "")
-  
-      console.log("📱 Telefone limpo para busca:", telefoneNumeros)
-  
-      if (!telefoneNumeros || telefoneNumeros.length < 10) {
-        console.log("❌ Telefone inválido - menos de 10 dígitos:", telefoneNumeros)
+  // PROCEDIMENTO CRÍTICO: buscarPorTelefone (buscarClientePorTelefone)
+  buscarPorTelefone: publicProcedure.input(z.object({ telefone: z.string() })).query(async ({ input }) => {
+    console.log("🔍 Iniciando busca de cliente por telefone no backend:", input.telefone)
+
+    // Limpar telefone - remover formatação
+    const telefoneNumeros = input.telefone.replace(/\D/g, "")
+
+    console.log("📱 Telefone limpo para busca:", telefoneNumeros)
+
+    if (!telefoneNumeros || telefoneNumeros.length < 10) {
+      console.log("❌ Telefone inválido - menos de 10 dígitos:", telefoneNumeros)
+      return null
+    }
+
+    try {
+      // Buscar por telefone exato (apenas números) ou com formatação
+      const cliente = await db
+        .select()
+        .from(clientes)
+        .where(
+          sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros}`,
+        )
+        .limit(1)
+
+      if (cliente[0]) {
+        console.log("✅ Cliente encontrado no banco:", {
+          id: cliente[0].id,
+          nome: cliente[0].nome,
+          telefone: cliente[0].telefone,
+          email: cliente[0].email,
+        })
+        return cliente[0]
+      } else {
+        console.log("ℹ️ Nenhum cliente encontrado para telefone:", telefoneNumeros)
         return null
       }
-  
-      try {
-        // Buscar por telefone exato (apenas números) ou com formatação
-        const cliente = await db
-          .select()
-          .from(clientes)
-          .where(
-            sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros}`
-          )
-          .limit(1)
-  
-        if (cliente[0]) {
-          console.log("✅ Cliente encontrado no banco:", {
-            id: cliente[0].id,
-            nome: cliente[0].nome,
-            telefone: cliente[0].telefone,
-            email: cliente[0].email,
-          })
-          return cliente[0]
-        } else {
-          console.log("ℹ️ Nenhum cliente encontrado para telefone:", telefoneNumeros)
-          return null
-        }
-      } catch (error) {
-        console.error("❌ Erro na consulta do banco de dados:", error)
-        throw error
-      }
-    }),
-  })
+    } catch (error) {
+      console.error("❌ Erro na consulta do banco de dados:", error)
+      throw error
+    }
+  }),
+})

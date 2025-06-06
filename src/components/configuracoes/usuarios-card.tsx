@@ -357,7 +357,7 @@ export function UsuariosCard() {
                   <SelectTrigger id="role">
                     <SelectValue placeholder="Selecione uma função" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="cursor-pointer bg-black/40 backdrop-blur-sm">
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="superadmin">Super Admin</SelectItem>
                   </SelectContent>

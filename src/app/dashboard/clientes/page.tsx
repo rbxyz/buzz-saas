@@ -19,7 +19,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { trpc as trpcUntyped } from "@/utils/trpc";
+import { toast } from "sonner";
 import dayjs from "dayjs";
+import { Search, X } from "lucide-react";
 
 // Explicit types for TRPC hooks
 import type { inferRouterOutputs } from "@trpc/server";
@@ -32,7 +34,7 @@ type ClienteDetalhe = RouterOutput["cliente"]["buscarPorId"];
 type HistoricoAgendamento =
   RouterOutput["agendamento"]["getHistoricoPorCliente"][number];
 
-// Type-safe trpc
+// Type-safe trpc - VOLTANDO À ESTRUTURA ORIGINAL
 const trpc = trpcUntyped as unknown as {
   cliente: {
     listar: {
@@ -67,8 +69,9 @@ export default function ClientesPage() {
   const [modalEditarAberto, setModalEditarAberto] = useState(false);
   const [modalConfirmarDeleteAberto, setModalConfirmarDeleteAberto] =
     useState(false);
+  const [termoBusca, setTermoBusca] = useState("");
 
-  // Apenas consome dados já em cache (sem loading states)
+  // VOLTANDO ÀS QUERIES ORIGINAIS
   const { data: clientes, refetch } = trpc.cliente.listar.useQuery(undefined, {
     // No options needed for cache-only
   });
@@ -79,17 +82,33 @@ export default function ClientesPage() {
       enabled: !!clienteSelecionadoId,
     },
   );
+
+  // VOLTANDO ÀS MUTATIONS ORIGINAIS
   const criarCliente = trpc.cliente.criar.useMutation({
     onSuccess: async () => {
       setModalCriarAberto(false);
+      toast.success("Cliente criado com sucesso!");
       await refetch();
+    },
+    onError: (error) => {
+      console.error("Erro ao criar cliente:", error);
+      toast.error(
+        "Erro ao criar cliente. Verifique os dados e tente novamente.",
+      );
     },
   });
 
   const editarCliente = trpc.cliente.editar.useMutation({
     onSuccess: async () => {
       setModalEditarAberto(false);
+      toast.success("Cliente atualizado com sucesso!");
       await refetch();
+    },
+    onError: (error) => {
+      console.error("Erro ao editar cliente:", error);
+      toast.error(
+        "Erro ao editar cliente. Verifique os dados e tente novamente.",
+      );
     },
   });
 
@@ -97,7 +116,12 @@ export default function ClientesPage() {
     onSuccess: async () => {
       setModalConfirmarDeleteAberto(false);
       setClienteSelecionadoId(null);
+      toast.success("Cliente excluído com sucesso!");
       await refetch();
+    },
+    onError: (error) => {
+      console.error("Erro ao deletar cliente:", error);
+      toast.error("Erro ao excluir cliente. Tente novamente.");
     },
   });
 
@@ -120,6 +144,32 @@ export default function ClientesPage() {
     dataNascimento: "",
   });
 
+  // Função para filtrar clientes localmente
+  const filtrarClientes = (termo: string, clientes: Cliente[]) => {
+    if (!termo.trim()) return clientes;
+
+    const termoLimpo = termo.toLowerCase().trim();
+
+    return clientes.filter((cliente) => {
+      // Buscar por nome
+      const nomeMatch = cliente.nome.toLowerCase().includes(termoLimpo);
+
+      // Buscar por telefone (remover formatação para comparar)
+      const telefoneNumeros = cliente.telefone.replace(/\D/g, "");
+      const termoNumeros = termo.replace(/\D/g, "");
+      const telefoneMatch =
+        telefoneNumeros.includes(termoNumeros) && termoNumeros.length >= 3;
+
+      return nomeMatch || telefoneMatch;
+    });
+  };
+
+  // Determinar quais clientes mostrar
+  const clientesParaMostrar =
+    termoBusca.trim() && Array.isArray(clientes)
+      ? filtrarClientes(termoBusca, clientes)
+      : (clientes ?? []);
+
   function mascararTelefone(valor: string) {
     const numeros = valor.replace(/\D/g, "");
 
@@ -139,18 +189,30 @@ export default function ClientesPage() {
     setModalAberto(true);
   }
 
-  function limparEmail(email: string) {
-    const trimmed = email.trim();
-    return trimmed === "" ? "" : trimmed;
-  }
-
   function handleCriarCliente() {
     criarCliente.mutate({
       nome: formData.nome,
       telefone: formData.telefone,
-      email: limparEmail(formData.email),
-      dataNascimento: formData.dataNascimento,
+      email: formData.email.trim() === "" ? null : formData.email,
+      dataNascimento:
+        formData.dataNascimento.trim() === "" ? null : formData.dataNascimento,
     });
+  }
+
+  function handleEditarCliente() {
+    if (!clienteSelecionadoId) return;
+    editarCliente.mutate({
+      id: clienteSelecionadoId,
+      nome: formData.nome,
+      telefone: formData.telefone,
+      email: formData.email.trim() === "" ? null : formData.email,
+      dataNascimento:
+        formData.dataNascimento.trim() === "" ? null : formData.dataNascimento,
+    });
+  }
+
+  function limparBusca() {
+    setTermoBusca("");
   }
 
   useEffect(() => {
@@ -197,17 +259,50 @@ export default function ClientesPage() {
           <CardDescription>
             Visualize e gerencie todos os seus clientes
           </CardDescription>
+
+          {/* Campo de Busca */}
+          <div className="mt-4 flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <Input
+                placeholder="Buscar por nome ou telefone..."
+                value={termoBusca}
+                onChange={(e) => setTermoBusca(e.target.value)}
+                className="pr-10 pl-10"
+              />
+              {termoBusca && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-1/2 right-1 h-6 w-6 -translate-y-1/2 p-0"
+                  onClick={limparBusca}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Indicador de resultados */}
+          {termoBusca.trim() && (
+            <div className="text-muted-foreground text-sm">
+              {clientesParaMostrar.length === 0
+                ? "Nenhum cliente encontrado"
+                : `${clientesParaMostrar.length} cliente(s) encontrado(s)`}
+            </div>
+          )}
         </CardHeader>
+
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {Array.isArray(clientes) && clientes.length ? (
-            clientes.map((cliente: Cliente) => (
+          {Array.isArray(clientesParaMostrar) && clientesParaMostrar.length ? (
+            clientesParaMostrar.map((cliente: Cliente) => (
               <Card
                 key={cliente.id}
                 className="border-border bg-card text-card-foreground border p-4 shadow-sm"
               >
                 <CardTitle className="text-base">{cliente.nome}</CardTitle>
                 <CardDescription className="text-sm">
-                  {cliente.email}
+                  {cliente.email ?? "Email não informado"}
                 </CardDescription>
                 <div className="text-muted-foreground mb-2 text-sm">
                   {cliente.telefone}
@@ -244,7 +339,22 @@ export default function ClientesPage() {
               </Card>
             ))
           ) : (
-            <p className="text-muted-foreground">Nenhum cliente encontrado.</p>
+            <div className="col-span-full py-8 text-center">
+              <p className="text-muted-foreground">
+                {termoBusca.trim()
+                  ? "Nenhum cliente encontrado com esse termo de busca."
+                  : "Nenhum cliente encontrado."}
+              </p>
+              {termoBusca.trim() && (
+                <Button
+                  variant="outline"
+                  onClick={limparBusca}
+                  className="mt-2"
+                >
+                  Limpar busca
+                </Button>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -286,7 +396,7 @@ export default function ClientesPage() {
                   value={
                     typeof clienteSelecionado.email === "string"
                       ? clienteSelecionado.email
-                      : ""
+                      : "Não informado"
                   }
                   readOnly
                 />
@@ -302,7 +412,7 @@ export default function ClientesPage() {
                             | number
                             | Date,
                         ).format("DD/MM/YYYY")
-                      : ""
+                      : "Não informado"
                   }
                   readOnly
                 />
@@ -370,7 +480,7 @@ export default function ClientesPage() {
               />
             </div>
             <div>
-              <Label>Telefone (opcional)</Label>
+              <Label>Telefone *</Label>
               <Input
                 value={formData.telefone}
                 onChange={(e) =>
@@ -389,10 +499,11 @@ export default function ClientesPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                placeholder="exemplo@email.com"
               />
             </div>
             <div>
-              <Label>Data de nascimento *</Label>
+              <Label>Data de nascimento (opcional)</Label>
               <Input
                 type="date"
                 value={formData.dataNascimento}
@@ -414,7 +525,9 @@ export default function ClientesPage() {
             <Button
               className="cursor-pointer"
               onClick={handleCriarCliente}
-              disabled={!formData.nome || criarCliente.isPending}
+              disabled={
+                !formData.nome || !formData.telefone || criarCliente.isPending
+              }
             >
               {criarCliente.isPending ? "Salvando..." : "Salvar"}
             </Button>
@@ -438,7 +551,7 @@ export default function ClientesPage() {
               />
             </div>
             <div>
-              <Label>Telefone (opcional)</Label>
+              <Label>Telefone *</Label>
               <Input
                 value={formData.telefone}
                 onChange={(e) =>
@@ -457,10 +570,11 @@ export default function ClientesPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
+                placeholder="exemplo@email.com"
               />
             </div>
             <div>
-              <Label>Data de nascimento *</Label>
+              <Label>Data de nascimento (opcional)</Label>
               <Input
                 type="date"
                 value={formData.dataNascimento}
@@ -482,14 +596,10 @@ export default function ClientesPage() {
 
             <Button
               className="cursor-pointer"
-              onClick={() => {
-                if (!clienteSelecionadoId) return;
-                editarCliente.mutate({
-                  id: clienteSelecionadoId,
-                  ...formData,
-                });
-              }}
-              disabled={Boolean(editarCliente.isPending)}
+              onClick={handleEditarCliente}
+              disabled={
+                !formData.nome || !formData.telefone || editarCliente.isPending
+              }
             >
               {editarCliente.isPending ? "Salvando..." : "Salvar alterações"}
             </Button>

@@ -214,7 +214,28 @@ export default function AgendamentosPage() {
       toast.success("Agendamento criado com sucesso!");
     },
     onError: (error) => {
-      toast.error(error.message);
+      console.error("Erro ao criar agendamento:", error);
+
+      // Tratar diferentes tipos de erro com mensagens amigáveis
+      let mensagemErro = "Erro ao criar agendamento";
+
+      if (error.message.includes("já existe um agendamento")) {
+        mensagemErro = "Já existe um agendamento para este horário";
+      } else if (error.message.includes("horário não está disponível")) {
+        mensagemErro = "Este horário não está mais disponível";
+      } else if (error.message.includes("fora do funcionamento")) {
+        mensagemErro = "Horário fora do funcionamento da barbearia";
+      } else if (error.message.includes("data inválida")) {
+        mensagemErro = "Data selecionada é inválida";
+      } else if (error.message.includes("cliente não encontrado")) {
+        mensagemErro = "Cliente não encontrado";
+      } else if (error.message.includes("serviço não encontrado")) {
+        mensagemErro = "Serviço não encontrado";
+      } else if (error.message && error.message.length > 0) {
+        mensagemErro = error.message;
+      }
+
+      toast.error(mensagemErro);
     },
   });
 
@@ -478,7 +499,7 @@ export default function AgendamentosPage() {
                           clientesEncontrados &&
                           clientesEncontrados.length > 0 &&
                           !clienteId && (
-                            <div className="border-border bg-popover absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border shadow-md backdrop-blur-sm">
+                            <div className="border-border absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded border bg-black/90 shadow-md backdrop-blur-md">
                               {clientesEncontrados.map((cliente) => (
                                 <div
                                   key={cliente.id}

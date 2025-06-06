@@ -218,10 +218,10 @@ export function IntervalosCard() {
                       atualizarIntervalo(index, "turno", value)
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="cursor-pointer">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-black/20 backdrop-blur-sm">
                       {TURNOS.map((turno) => (
                         <SelectItem key={turno.value} value={turno.value}>
                           {turno.label}

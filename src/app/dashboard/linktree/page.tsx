@@ -353,7 +353,7 @@ export default function LinktreePage() {
                     <SelectTrigger className="cursor-pointer">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="cursor-pointer bg-black/40 backdrop-blur-sm">
                       <SelectItem value="cliente">Cliente</SelectItem>
                       <SelectItem value="parceria">Parceria</SelectItem>
                     </SelectContent>
