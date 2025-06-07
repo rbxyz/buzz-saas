@@ -197,3 +197,12 @@ export const agents = pgTable("agents", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 })
+
+// 💡 Tabela de Embeddings
+export const embeddings = pgTable("embeddings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  uploadId: integer("upload_id").notNull(),
+  content: text("content").notNull(),
+  embedding: json("embedding").notNull(), // array de números
+  createdAt: timestamp("created_at").defaultNow(),
+});
