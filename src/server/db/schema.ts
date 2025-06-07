@@ -12,6 +12,7 @@ import {
   numeric,
   boolean,
   integer,
+  real,
 } from "drizzle-orm/pg-core"
 
 // 🔧 Tipo personalizado para campos binários (ex: imagens)
@@ -44,6 +45,15 @@ export const turnoEnum = pgEnum("turno_enum", ["manha", "tarde", "noite"])
 // NOVO: Enum para roles de usuário
 export const userRoleEnum = pgEnum("user_role_enum", ["admin", "superadmin"])
 
+// NOVO: Enum para status de conversas
+export const conversationStatusEnum = pgEnum("conversation_status", ["ativa", "encerrada", "pausada"])
+
+// NOVO: Enum para remetente de mensagens
+export const messageRoleEnum = pgEnum("message_role", ["cliente", "bot", "atendente"])
+
+// NOVO: Enum para tipo de mensagem
+export const messageTypeEnum = pgEnum("message_type", ["texto", "imagem", "audio", "documento"])
+
 // NOVO: Tabela de Usuários
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -74,14 +84,15 @@ export const clientes = pgTable("clientes", {
 // 🗓️ Tabela de Agendamentos
 export const agendamentos = pgTable("agendamentos", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clienteId: uuid("cliente_id").notNull().references(() => clientes.id),
+  clienteId: uuid("cliente_id")
+    .notNull()
+    .references(() => clientes.id),
   dataHora: timestamp("data_hora").notNull(),
   servico: text("servico").notNull(),
   status: text("status", {
     enum: ["agendado", "cancelado", "concluido"],
   }).notNull(),
   valorCobrado: numeric("valor_cobrado", { precision: 10, scale: 2 }).$type<number>(),
-  // NOVO: Campo para duração do serviço
   duracaoMinutos: integer("duracao_minutos").notNull().default(30),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -91,8 +102,8 @@ export const agendamentos = pgTable("agendamentos", {
 export const intervalosTrabalho = pgTable("intervalos_trabalho", {
   id: uuid("id").primaryKey().defaultRandom(),
   diaSemana: diasSemanaEnum("dia_semana").notNull(),
-  horaInicio: text("hora_inicio").notNull(), // Ex: "08:00"
-  horaFim: text("hora_fim").notNull(), // Ex: "12:00"
+  horaInicio: text("hora_inicio").notNull(),
+  horaFim: text("hora_fim").notNull(),
   turno: turnoEnum("turno").notNull(),
   ativo: boolean("ativo").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -118,7 +129,7 @@ export const configuracoes = pgTable("configuracoes", {
   modoTreinoAtivo: boolean("modo_treino_ativo").notNull().default(false),
   contextoIA: text("contexto_ia").notNull().default(""),
   dadosIA: text("dados_ia").notNull().default(""),
-  servicos: json("servicos").notNull().default("[]"), // Array JSON com { nome, preco, duracaoMinutos }
+  servicos: json("servicos").notNull().default("[]"),
   diasAntecedenciaAgendamento: integer("dias_antecedencia_agendamento").notNull().default(30),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -143,4 +154,46 @@ export const relatorios = pgTable("relatorios", {
   tipo: text("tipo").notNull(),
   payload: json("payload"),
   geradoEm: timestamp("gerado_em").defaultNow(),
+})
+
+// 🤖 NOVAS TABELAS PARA IA/WHATSAPP
+
+// Tabela de Conversas (para IA/WhatsApp)
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clienteId: uuid("cliente_id").references(() => clientes.id),
+  telefone: varchar("telefone", { length: 20 }).notNull(),
+  status: conversationStatusEnum("status").notNull().default("ativa"),
+  ultimaMensagem: timestamp("ultima_mensagem"),
+  metadata: json("metadata"), // Para dados extras como ID da conversa no WhatsApp
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+
+// Tabela de Mensagens
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversations.id),
+  remetente: messageRoleEnum("remetente").notNull(),
+  conteudo: text("conteudo").notNull(),
+  tipo: messageTypeEnum("tipo").notNull().default("texto"),
+  metadata: json("metadata"), // Para dados extras como ID da mensagem no WhatsApp
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
+// Tabela de Agentes de IA
+export const agents = pgTable("agents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  modelo: varchar("modelo", { length: 50 }).default("groq/llama-3.1-8b-instant"),
+  temperatura: real("temperatura").default(0.7),
+  ativo: boolean("ativo").default(true),
+  ultimoTreinamento: timestamp("ultimo_treinamento"),
+  contadorConsultas: integer("contador_consultas").default(0),
+  promptSistema: text("prompt_sistema"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 })

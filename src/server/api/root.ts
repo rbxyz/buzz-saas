@@ -7,6 +7,9 @@ import { linktreeRouter } from "./routers/linktree"
 import { agendamentoOptimizedRouter } from "./routers/agendamento-optimized"
 import { intervalosTrabalhoRouter } from "./routers/intervalo-trabalho"
 import { authRouter } from "./routers/auth"
+import { conversationsRouter } from "./routers/conversations"
+import { messagesRouter } from "./routers/messages"
+import { agentsRouter } from "./routers/agents"
 
 /**
  * This is the primary router for your server.
@@ -22,6 +25,9 @@ export const appRouter = createTRPCRouter({
   dashboard: dashboardRouter,
   linktree: linktreeRouter,
   auth: authRouter,
+  conversations: conversationsRouter,
+  messages: messagesRouter,
+  agents: agentsRouter,
 })
 
 // export type definition of API
