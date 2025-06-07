@@ -18,47 +18,37 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { trpc as trpcUntyped } from "@/utils/trpc";
+import { api } from "@/trpc/react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import { Search, X } from "lucide-react";
 
-// Explicit types for TRPC hooks
-import type { inferRouterOutputs } from "@trpc/server";
-import type { AppRouter } from "@/server/api/root";
+// Definindo tipos baseados no retorno real da API
+interface Cliente {
+  id: string;
+  nome: string;
+  telefone: string;
+  email: string | null;
+  dataNascimento: string | null;
+  comprasRecentes: unknown;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+}
 
-// Infer types for cliente and agendamento
-type RouterOutput = inferRouterOutputs<AppRouter>;
-type Cliente = RouterOutput["cliente"]["listar"][number];
-type ClienteDetalhe = RouterOutput["cliente"]["buscarPorId"];
-type HistoricoAgendamento =
-  RouterOutput["agendamento"]["getHistoricoPorCliente"][number];
+interface HistoricoAgendamento {
+  id: string;
+  dataHora: Date;
+  servico: string;
+  status: string;
+  clienteId: string;
+}
 
-// Type-safe trpc - VOLTANDO À ESTRUTURA ORIGINAL
-const trpc = trpcUntyped as unknown as {
-  cliente: {
-    listar: {
-      useQuery: typeof trpcUntyped.cliente.listar.useQuery;
-    };
-    getById: {
-      useQuery: typeof trpcUntyped.cliente.buscarPorId.useQuery;
-    };
-    criar: {
-      useMutation: typeof trpcUntyped.cliente.criar.useMutation;
-    };
-    editar: {
-      useMutation: typeof trpcUntyped.cliente.atualizar.useMutation;
-    };
-    deletar: {
-      useMutation: typeof trpcUntyped.cliente.excluir.useMutation;
-    };
-  };
-  agendamento: {
-    getHistoricoPorCliente: {
-      useQuery: typeof trpcUntyped.agendamento.getHistoricoPorCliente.useQuery;
-    };
-  };
-};
+interface FormData {
+  nome: string;
+  telefone: string;
+  email: string;
+  dataNascimento: string;
+}
 
 export default function ClientesPage() {
   const [modalAberto, setModalAberto] = useState(false);
@@ -71,24 +61,32 @@ export default function ClientesPage() {
     useState(false);
   const [termoBusca, setTermoBusca] = useState("");
 
-  // VOLTANDO ÀS QUERIES ORIGINAIS
-  const { data: clientes, refetch } = trpc.cliente.listar.useQuery(undefined, {
-    // No options needed for cache-only
-  });
+  const utils = api.useContext();
 
-  const { data: clienteSelecionado } = trpc.cliente.getById.useQuery(
+  // Queries tipadas corretamente
+  const { data: clientes, isLoading } = api.cliente.listar.useQuery();
+
+  const { data: clienteSelecionado } = api.cliente.buscarPorId.useQuery(
     { id: clienteSelecionadoId ?? "" },
     {
       enabled: !!clienteSelecionadoId,
     },
   );
 
-  // VOLTANDO ÀS MUTATIONS ORIGINAIS
-  const criarCliente = trpc.cliente.criar.useMutation({
+  const { data: historico } = api.agendamento.getHistoricoPorCliente.useQuery(
+    { clienteId: clienteSelecionadoId ?? "" },
+    {
+      enabled: !!clienteSelecionadoId,
+    },
+  );
+
+  // Mutations tipadas corretamente
+  const criarCliente = api.cliente.criar.useMutation({
     onSuccess: async () => {
       setModalCriarAberto(false);
       toast.success("Cliente criado com sucesso!");
-      await refetch();
+      await utils.cliente.listar.invalidate();
+      limparFormData();
     },
     onError: (error) => {
       console.error("Erro ao criar cliente:", error);
@@ -98,11 +96,12 @@ export default function ClientesPage() {
     },
   });
 
-  const editarCliente = trpc.cliente.editar.useMutation({
+  const editarCliente = api.cliente.atualizar.useMutation({
     onSuccess: async () => {
       setModalEditarAberto(false);
       toast.success("Cliente atualizado com sucesso!");
-      await refetch();
+      await utils.cliente.listar.invalidate();
+      limparFormData();
     },
     onError: (error) => {
       console.error("Erro ao editar cliente:", error);
@@ -112,12 +111,12 @@ export default function ClientesPage() {
     },
   });
 
-  const deletarCliente = trpc.cliente.deletar.useMutation({
+  const deletarCliente = api.cliente.excluir.useMutation({
     onSuccess: async () => {
       setModalConfirmarDeleteAberto(false);
       setClienteSelecionadoId(null);
       toast.success("Cliente excluído com sucesso!");
-      await refetch();
+      await utils.cliente.listar.invalidate();
     },
     onError: (error) => {
       console.error("Erro ao deletar cliente:", error);
@@ -125,37 +124,38 @@ export default function ClientesPage() {
     },
   });
 
-  const { data: historico } = trpc.agendamento.getHistoricoPorCliente.useQuery(
-    { clienteId: clienteSelecionadoId ?? "" },
-    {
-      enabled: !!clienteSelecionadoId,
-    },
-  );
-
-  const [formData, setFormData] = useState<{
-    nome: string;
-    telefone: string;
-    email: string;
-    dataNascimento: string;
-  }>({
+  const [formData, setFormData] = useState<FormData>({
     nome: "",
     telefone: "",
     email: "",
     dataNascimento: "",
   });
 
-  // Função para filtrar clientes localmente
-  const filtrarClientes = (termo: string, clientes: Cliente[]) => {
-    if (!termo.trim()) return clientes;
+  function limparFormData() {
+    setFormData({
+      nome: "",
+      telefone: "",
+      email: "",
+      dataNascimento: "",
+    });
+  }
+
+  // Função para filtrar clientes com tipos corretos
+  const filtrarClientes = (
+    termo: string,
+    clientesLista: Cliente[],
+  ): Cliente[] => {
+    if (!termo.trim()) return clientesLista;
 
     const termoLimpo = termo.toLowerCase().trim();
 
-    return clientes.filter((cliente) => {
-      // Buscar por nome
-      const nomeMatch = cliente.nome.toLowerCase().includes(termoLimpo);
+    return clientesLista.filter((cliente: Cliente) => {
+      // Buscar por nome - garantindo que é string
+      const nomeMatch =
+        cliente.nome?.toLowerCase().includes(termoLimpo) ?? false;
 
       // Buscar por telefone (remover formatação para comparar)
-      const telefoneNumeros = cliente.telefone.replace(/\D/g, "");
+      const telefoneNumeros = cliente.telefone?.replace(/\D/g, "") ?? "";
       const termoNumeros = termo.replace(/\D/g, "");
       const telefoneMatch =
         telefoneNumeros.includes(termoNumeros) && termoNumeros.length >= 3;
@@ -164,13 +164,13 @@ export default function ClientesPage() {
     });
   };
 
-  // Determinar quais clientes mostrar
-  const clientesParaMostrar =
-    termoBusca.trim() && Array.isArray(clientes)
-      ? filtrarClientes(termoBusca, clientes)
-      : (clientes ?? []);
+  // Determinar quais clientes mostrar com tipos corretos - usando conversão segura
+  const clientesParaMostrar: Cliente[] =
+    termoBusca.trim() && clientes
+      ? filtrarClientes(termoBusca, clientes as unknown as Cliente[])
+      : ((clientes as unknown as Cliente[]) ?? []);
 
-  function mascararTelefone(valor: string) {
+  function mascararTelefone(valor: string): string {
     const numeros = valor.replace(/\D/g, "");
 
     if (numeros.length <= 2) return numeros;
@@ -218,26 +218,48 @@ export default function ClientesPage() {
   useEffect(() => {
     if (clienteSelecionado && modalEditarAberto) {
       setFormData({
-        nome:
-          typeof clienteSelecionado.nome === "string"
-            ? clienteSelecionado.nome
-            : "",
-        telefone:
-          typeof clienteSelecionado.telefone === "string"
-            ? clienteSelecionado.telefone
-            : "",
-        email:
-          typeof clienteSelecionado.email === "string"
-            ? clienteSelecionado.email
-            : "",
+        nome: clienteSelecionado.nome ?? "",
+        telefone: clienteSelecionado.telefone ?? "",
+        email: clienteSelecionado.email ?? "",
         dataNascimento: clienteSelecionado.dataNascimento
-          ? dayjs(
-              clienteSelecionado.dataNascimento as string | number | Date,
-            ).format("YYYY-MM-DD")
+          ? dayjs(clienteSelecionado.dataNascimento).format("YYYY-MM-DD")
           : "",
       });
     }
   }, [clienteSelecionado, modalEditarAberto]);
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-foreground text-3xl font-bold tracking-tight">
+            Clientes
+          </h1>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Carregando clientes...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Card key={i} className="border-border bg-card p-4 shadow-sm">
+                  <div className="mb-2 h-4 animate-pulse rounded bg-gray-200"></div>
+                  <div className="mb-2 h-3 animate-pulse rounded bg-gray-200"></div>
+                  <div className="mb-4 h-3 animate-pulse rounded bg-gray-200"></div>
+                  <div className="flex gap-2">
+                    <div className="h-8 flex-1 animate-pulse rounded bg-gray-200"></div>
+                    <div className="h-8 flex-1 animate-pulse rounded bg-gray-200"></div>
+                    <div className="h-8 flex-1 animate-pulse rounded bg-gray-200"></div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex w-full flex-col gap-6 px-4 md:px-6 lg:px-8">
@@ -294,7 +316,7 @@ export default function ClientesPage() {
         </CardHeader>
 
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {Array.isArray(clientesParaMostrar) && clientesParaMostrar.length ? (
+          {clientesParaMostrar.length > 0 ? (
             clientesParaMostrar.map((cliente: Cliente) => (
               <Card
                 key={cliente.id}
@@ -370,34 +392,16 @@ export default function ClientesPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <Label>Nome completo</Label>
-                <Input
-                  value={
-                    typeof clienteSelecionado.nome === "string"
-                      ? clienteSelecionado.nome
-                      : ""
-                  }
-                  readOnly
-                />
+                <Input value={clienteSelecionado.nome ?? ""} readOnly />
               </div>
               <div>
                 <Label>Telefone</Label>
-                <Input
-                  value={
-                    typeof clienteSelecionado.telefone === "string"
-                      ? clienteSelecionado.telefone
-                      : ""
-                  }
-                  readOnly
-                />
+                <Input value={clienteSelecionado.telefone ?? ""} readOnly />
               </div>
               <div>
                 <Label>Email</Label>
                 <Input
-                  value={
-                    typeof clienteSelecionado.email === "string"
-                      ? clienteSelecionado.email
-                      : "Não informado"
-                  }
+                  value={clienteSelecionado.email ?? "Não informado"}
                   readOnly
                 />
               </div>
@@ -406,12 +410,9 @@ export default function ClientesPage() {
                 <Input
                   value={
                     clienteSelecionado.dataNascimento
-                      ? dayjs(
-                          clienteSelecionado.dataNascimento as
-                            | string
-                            | number
-                            | Date,
-                        ).format("DD/MM/YYYY")
+                      ? dayjs(clienteSelecionado.dataNascimento).format(
+                          "DD/MM/YYYY",
+                        )
                       : "Não informado"
                   }
                   readOnly
@@ -420,19 +421,20 @@ export default function ClientesPage() {
 
               <div className="col-span-2 mt-2">
                 <Label>Histórico de Agendamentos</Label>
-                {Array.isArray(historico) && historico.length === 0 ? (
+                {!historico || historico.length === 0 ? (
                   <p className="text-muted-foreground">
                     Nenhum serviço registrado ainda.
                   </p>
                 ) : (
                   <ul className="text-muted-foreground list-disc pl-5 text-sm">
-                    {Array.isArray(historico) &&
-                      historico.map((h: HistoricoAgendamento) => (
+                    {(historico as unknown as HistoricoAgendamento[]).map(
+                      (h: HistoricoAgendamento) => (
                         <li key={h.id}>
                           {dayjs(h.dataHora).format("DD/MM/YYYY HH:mm")} –{" "}
                           {h.servico} ({h.status})
                         </li>
-                      ))}
+                      ),
+                    )}
                   </ul>
                 )}
               </div>
@@ -456,12 +458,7 @@ export default function ClientesPage() {
         onOpenChange={(open) => {
           setModalCriarAberto(open);
           if (!open) {
-            setFormData({
-              nome: "",
-              telefone: "",
-              email: "",
-              dataNascimento: "",
-            });
+            limparFormData();
           }
         }}
       >

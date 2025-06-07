@@ -77,9 +77,30 @@ export function UsuariosCard() {
       void refetch();
     },
     onError: (error) => {
+      let errorMessage = error.message;
+
+      // Tratar erros específicos de senha
+      if (
+        error.message.includes("password") ||
+        error.message.includes("senha")
+      ) {
+        if (
+          error.message.includes("short") ||
+          error.message.includes("curta")
+        ) {
+          errorMessage = "A senha deve ter pelo menos 6 caracteres.";
+        } else if (
+          error.message.includes("weak") ||
+          error.message.includes("fraca")
+        ) {
+          errorMessage =
+            "A senha deve ser mais forte. Use letras, números e símbolos.";
+        }
+      }
+
       toast({
         title: "Erro ao criar usuário",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive",
       });
     },
@@ -163,6 +184,16 @@ export function UsuariosCard() {
   }
 
   function handleSubmit() {
+    // Validação personalizada de senha
+    if (!selectedUser && formData.password && formData.password.length < 6) {
+      toast({
+        title: "Senha muito curta",
+        description: "A senha deve ter pelo menos 6 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (selectedUser) {
       // Atualizar usuário existente
       updateUserMutation.mutate({

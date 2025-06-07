@@ -223,34 +223,34 @@ export default function LinktreePage() {
     }
 
     return (
-      <div className="space-y-3">
+      <div className="w-full space-y-3 overflow-hidden">
         {lista.map((link: LinkItem) => (
           <Card
             key={link.id}
-            className="group border-border bg-card text-card-foreground hover:bg-accent/15 relative flex flex-row items-center gap-4 border p-4 transition-colors"
+            className="group border-border bg-card text-card-foreground hover:bg-accent/15 relative flex w-full max-w-full flex-row items-center gap-3 overflow-hidden border p-3 transition-colors"
           >
             <div className="flex-shrink-0">
               {link.imagem && link.mimeType ? (
                 <Image
                   src={`data:${link.mimeType};base64,${link.imagem}`}
                   alt={`Imagem de ${link.titulo}`}
-                  width={64}
-                  height={64}
-                  className="border-muted rounded border-2 object-cover"
+                  width={48}
+                  height={48}
+                  className="border-muted h-12 w-12 rounded border-2 object-cover"
                 />
               ) : (
-                <div className="bg-muted text-muted-foreground flex h-16 w-16 items-center justify-center rounded text-xs">
+                <div className="bg-muted text-muted-foreground flex h-12 w-12 flex-shrink-0 items-center justify-center rounded text-xs">
                   Sem imagem
                 </div>
               )}
             </div>
 
-            <div className="flex min-w-0 flex-grow flex-col">
-              <p className="text-foreground truncate font-semibold">
+            <div className="flex min-w-0 flex-grow flex-col overflow-hidden">
+              <p className="text-foreground truncate text-sm font-semibold">
                 {link.titulo}
               </p>
               {link.descricao && (
-                <p className="text-muted-foreground truncate text-sm">
+                <p className="text-muted-foreground truncate text-xs">
                   {link.descricao}
                 </p>
               )}
@@ -265,7 +265,7 @@ export default function LinktreePage() {
               menuButton={
                 <Button
                   variant="ghost"
-                  className="ml-auto h-8 w-8 flex-shrink-0 p-0 text-xl font-bold"
+                  className="ml-auto h-8 w-8 flex-shrink-0 p-0 text-lg font-bold"
                   aria-label="Ações do link"
                 >
                   ⋮
@@ -447,12 +447,12 @@ export default function LinktreePage() {
           </Dialog>
         </CardHeader>
 
-        <CardContent className="grid gap-6 md:grid-cols-2">
+        <CardContent className="grid w-full gap-6 overflow-hidden md:grid-cols-2">
           {[
             { titulo: "Clientes", lista: clientes },
             { titulo: "Parcerias", lista: parcerias },
           ].map(({ titulo, lista }) => (
-            <section key={titulo}>
+            <section key={titulo} className="w-full min-w-0 overflow-hidden">
               <h2 className="text-foreground mb-4 text-lg font-semibold">
                 {titulo}
               </h2>
