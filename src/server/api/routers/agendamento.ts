@@ -6,6 +6,9 @@ import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
 import { sql, desc } from "drizzle-orm"
 
+// Importe o serviço de WhatsApp no topo do arquivo
+import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
+
 // Tipos específicos
 type DiaSemana = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado"
 
@@ -52,6 +55,20 @@ function gerarHorarios(inicio: string, fim: string, duracaoServico: number): str
   }
 
   return horarios
+}
+
+// Função para formatar telefone
+function formatarTelefone(telefone: string): string {
+  // Remover caracteres não numéricos
+  const numeroLimpo = telefone.replace(/\D/g, "")
+
+  // Verificar se já tem o código do país (55)
+  if (numeroLimpo.startsWith("55")) {
+    return numeroLimpo
+  }
+
+  // Adicionar código do país
+  return `55${numeroLimpo}`
 }
 
 export const agendamentoRouter = createTRPCRouter({
@@ -312,11 +329,18 @@ export const agendamentoRouter = createTRPCRouter({
         telefone: z.string(),
         email: z.string().optional(),
         data: z.string(),
-        horario: z.string(),
+        horario: z.string().min(1, "Horário é obrigatório"),
         servico: z.string(),
       }),
     )
     .mutation(async ({ input }) => {
+      console.log("🔍 [AGENDAMENTO] Dados recebidos:", input)
+
+      // Validação adicional de horário
+      if (!input.horario || input.horario.trim() === "") {
+        throw new Error("Horário não pode estar vazio")
+      }
+
       // Verificar se já existe cliente com este telefone
       let cliente = await db.query.clientes.findFirst({
         where: eq(clientes.telefone, input.telefone),
@@ -388,7 +412,87 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .returning()
 
-      return result[0]
+      const agendamento = result[0]!
+
+      // Enviar mensagem de confirmação via WhatsApp
+      let whatsappEnviado = false
+      let whatsappError = null
+
+      try {
+        console.log("🚀 [WHATSAPP] Iniciando processo de envio...")
+
+        // Verificar se as configurações do Z-API estão disponíveis
+        const whatsappAtivo = configuracao.whatsappAtivo
+
+        console.log("🔍 [WHATSAPP] Verificando configurações:", {
+          whatsappAtivo,
+        })
+
+        if (!whatsappAtivo) {
+          console.log("❌ [WHATSAPP] WhatsApp inativo nas configurações")
+          whatsappError = "WhatsApp inativo nas configurações"
+        } else {
+          console.log("✅ [WHATSAPP] Configurações OK, preparando mensagem...")
+
+          const dataFormatada = dataHora.format("DD/MM/YYYY")
+          const mensagemConfirmacao = `🎉 *Agendamento Confirmado!*
+
+Olá, ${input.nome}! Seu agendamento foi realizado com sucesso.
+
+📋 *Detalhes do Agendamento:*
+• *Serviço:* ${input.servico}
+• *Data:* ${dataFormatada}
+• *Horário:* ${input.horario}
+• *Valor:* R$ ${servicoSelecionado.preco.toFixed(2)}
+
+📍 *Local:* ${configuracao.endereco || "Endereço não informado"}
+📞 *Contato:* ${configuracao.telefone || "Telefone não informado"}
+
+⏰ *Importante:* Chegue com 10 minutos de antecedência.
+
+Se precisar reagendar ou cancelar, responda esta mensagem que nosso assistente virtual te ajudará!
+
+Obrigado pela preferência! 💈✨`
+
+          console.log("📱 [WHATSAPP] Preparando envio para:", {
+            telefone: input.telefone,
+            mensagemLength: mensagemConfirmacao.length,
+          })
+
+          console.log("📝 [WHATSAPP] Mensagem a ser enviada:")
+          console.log(mensagemConfirmacao)
+
+          // Enviar mensagem usando o serviço dedicado
+          const resultado = await enviarMensagemWhatsApp(input.telefone, mensagemConfirmacao)
+
+          console.log("📊 [WHATSAPP] Resultado do envio:", resultado)
+
+          if (resultado.success) {
+            whatsappEnviado = true
+            console.log("✅ [WHATSAPP] Mensagem enviada com sucesso!")
+          } else {
+            whatsappError = resultado.error ?? "Erro desconhecido no envio"
+            console.error("❌ [WHATSAPP] Falha no envio:", whatsappError)
+          }
+        }
+      } catch (error) {
+        console.error("💥 [WHATSAPP] Erro crítico no processo:", {
+          errorMessage: error instanceof Error ? error.message : "Erro desconhecido",
+          errorStack: error instanceof Error ? error.stack : undefined,
+        })
+        whatsappError = error instanceof Error ? error.message : "Erro crítico desconhecido"
+      }
+
+      console.log("🏁 [WHATSAPP] Processo finalizado:", {
+        whatsappEnviado,
+        whatsappError,
+      })
+
+      return {
+        ...agendamento,
+        whatsappEnviado,
+        whatsappError,
+      }
     }),
 
   criarSolicitacaoAgendamento: publicProcedure

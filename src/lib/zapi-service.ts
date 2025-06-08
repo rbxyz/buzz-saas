@@ -1,170 +1,172 @@
-interface ZApiConfig {
-    instanceId: string
-    token: string
-    baseUrl?: string
-  }
-  
-  interface SendMessagePayload {
-    phone: string
-    message: string
-    messageId?: string
-  }
-  
-  interface ZApiResponse {
-    success: boolean
-    data?: any
-    error?: string
-  }
-  
-  export class ZApiService {
-    private config: ZApiConfig
-    private baseUrl: string
-  
-    constructor(config: ZApiConfig) {
-      this.config = config
-      this.baseUrl = config.baseUrl ?? "https://api.z-api.io"
+/**
+ * Serviço para integração com a Z-API para envio de mensagens WhatsApp
+ */
+
+// Função para enviar mensagem via Z-API
+export async function enviarMensagemWhatsApp(
+  telefone: string,
+  mensagem: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log("🚀 [ZAPI] Iniciando envio de mensagem WhatsApp...")
+
+    // Obter configurações da Z-API
+    const instanceId = process.env.ZAPI_INSTANCE_ID
+    const token = process.env.ZAPI_TOKEN
+    const clientToken = process.env.ZAPI_CLIENT_TOKEN
+
+    // Validar configurações
+    if (!instanceId || !token || !clientToken) {
+      console.error("❌ [ZAPI] Configurações incompletas:", {
+        hasInstanceId: !!instanceId,
+        hasToken: !!token,
+        hasClientToken: !!clientToken,
+      })
+      return { success: false, error: "Configurações Z-API incompletas" }
     }
-  
-    private async makeRequest(endpoint: string, method: "GET" | "POST" = "GET", data?: any): Promise<ZApiResponse> {
-      try {
-        const url = `${this.baseUrl}/instances/${this.config.instanceId}/${endpoint}`
-  
-        const response = await fetch(url, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            "Client-Token": this.config.token,
-          },
-          body: data ? JSON.stringify(data) : undefined,
-        })
-  
-        const result = await response.json()
-  
-        if (!response.ok) {
-          return {
-            success: false,
-            error: result.message || "Erro na requisição para Z-API",
-          }
-        }
-  
-        return {
-          success: true,
-          data: result,
-        }
-      } catch (error) {
-        console.error("Erro na requisição Z-API:", error)
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Erro desconhecido",
-        }
-      }
+
+    // Formatar telefone (garantir que tenha o código do país)
+    const telefoneFormatado = formatarTelefone(telefone)
+
+    console.log("📱 [ZAPI] Preparando envio:", {
+      telefoneOriginal: telefone,
+      telefoneFormatado,
+      mensagemLength: mensagem.length,
+    })
+
+    // Construir URL conforme documentação
+    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`
+
+    // Preparar payload
+    const payload = {
+      phone: telefoneFormatado,
+      message: mensagem,
     }
-  
-    async sendMessage({ phone, message, messageId }: SendMessagePayload): Promise<ZApiResponse> {
-      const payload = {
-        phone: this.formatPhone(phone),
-        message,
-        messageId,
-      }
-  
-      return this.makeRequest("send-text", "POST", payload)
+
+    console.log("🌐 [ZAPI] Enviando requisição para:", url.replace(token, "***"))
+    console.log("🔑 [ZAPI] Headers incluem Client-Token:", !!clientToken)
+
+    // Enviar requisição
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    console.log("📥 [ZAPI] Resposta recebida:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    })
+
+    // Processar resposta
+    const data = await response.json()
+    console.log("📊 [ZAPI] Corpo da resposta:", data)
+
+    // Verificar se a mensagem foi enviada com sucesso
+    // Z-API pode retornar diferentes formatos de resposta
+    if (data.zaapId || data.messageId || data.id || (data.status && data.status === "success")) {
+      console.log("✅ [ZAPI] Mensagem enviada com sucesso:", data)
+      return { success: true }
     }
-  
-    async sendImage(phone: string, imageUrl: string, caption?: string): Promise<ZApiResponse> {
-      const payload = {
-        phone: this.formatPhone(phone),
-        image: imageUrl,
-        caption,
-      }
-  
-      return this.makeRequest("send-image", "POST", payload)
+
+    // Se chegou aqui, houve algum problema
+    console.error("❌ [ZAPI] Erro na resposta:", data)
+    return {
+      success: false,
+      error: data.message || data.error || `Erro na resposta da API`,
     }
-  
-    async getInstanceStatus(): Promise<ZApiResponse> {
-      return this.makeRequest("status")
-    }
-  
-    async getQRCode(): Promise<ZApiResponse> {
-      return this.makeRequest("qr-code")
-    }
-  
-    async disconnectInstance(): Promise<ZApiResponse> {
-      return this.makeRequest("disconnect", "POST")
-    }
-  
-    async restartInstance(): Promise<ZApiResponse> {
-      return this.makeRequest("restart", "POST")
-    }
-  
-    private formatPhone(phone: string): string {
-      // Remove todos os caracteres não numéricos
-      const cleanPhone = phone.replace(/\D/g, "")
-  
-      // Se não começar com 55 (código do Brasil), adiciona
-      if (!cleanPhone.startsWith("55")) {
-        return `55${cleanPhone}`
-      }
-  
-      return cleanPhone
-    }
-  
-    // Método para validar se a instância está conectada
-    async isConnected(): Promise<boolean> {
-      try {
-        const status = await this.getInstanceStatus()
-        return status.success && status.data?.connected === true
-      } catch {
-        return false
-      }
-    }
-  
-    // Método para enviar mensagem com retry
-    async sendMessageWithRetry(payload: SendMessagePayload, maxRetries = 3): Promise<ZApiResponse> {
-      let lastError = ""
-  
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        const result = await this.sendMessage(payload)
-  
-        if (result.success) {
-          return result
-        }
-  
-        lastError = result.error || "Erro desconhecido"
-  
-        if (attempt < maxRetries) {
-          // Aguarda antes de tentar novamente (backoff exponencial)
-          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000))
-        }
-      }
-  
-      return {
-        success: false,
-        error: `Falha após ${maxRetries} tentativas. Último erro: ${lastError}`,
-      }
+  } catch (error) {
+    console.error("💥 [ZAPI] Erro ao enviar mensagem:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido ao enviar mensagem",
     }
   }
-  
-  // Função helper para criar uma instância do serviço
-  export function createZApiService(instanceId: string, token: string): ZApiService {
-    return new ZApiService({ instanceId, token })
+}
+
+// Função para formatar telefone
+function formatarTelefone(telefone: string): string {
+  // Remover caracteres não numéricos
+  const numeroLimpo = telefone.replace(/\D/g, "")
+
+  // Verificar se já tem o código do país (55)
+  if (numeroLimpo.startsWith("55")) {
+    return numeroLimpo
   }
-  
-  // Função para obter configurações do banco de dados
-  export async function getZApiConfigFromDB(): Promise<ZApiConfig | null> {
-    try {
-      // Aqui você buscaria as configurações do banco de dados
-      // Por enquanto, vamos usar variáveis de ambiente como fallback
-      const instanceId = process.env.ZAPI_INSTANCE_ID
-      const token = process.env.ZAPI_TOKEN
-  
-      if (!instanceId || !token) {
-        return null
-      }
-  
-      return { instanceId, token }
-    } catch (error) {
-      console.error("Erro ao buscar configurações Z-API:", error)
-      return null
+
+  // Adicionar código do país
+  return `55${numeroLimpo}`
+}
+
+// Função para verificar status da instância Z-API
+export async function verificarStatusZApi(): Promise<{ connected: boolean; error?: string }> {
+  try {
+    const instanceId = process.env.ZAPI_INSTANCE_ID
+    const token = process.env.ZAPI_TOKEN
+    const clientToken = process.env.ZAPI_CLIENT_TOKEN
+
+    if (!instanceId || !token || !clientToken) {
+      return { connected: false, error: "Configurações Z-API incompletas" }
+    }
+
+    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/status`
+
+    console.log("🔍 [ZAPI-STATUS] Verificando status em:", url.replace(token, "***"))
+    console.log("🔑 [ZAPI-STATUS] Headers incluem Client-Token:", !!clientToken)
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Client-Token": clientToken,
+      },
+    })
+
+    console.log("📥 [ZAPI-STATUS] Resposta HTTP:", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+    })
+
+    const data = await response.json()
+    console.log("📊 [ZAPI-STATUS] Corpo da resposta:", data)
+
+    // Verificar se a instância está conectada
+    // A Z-API pode retornar diferentes formatos de resposta
+
+    // Caso especial: "You are already connected" significa que está conectado
+    if (data.error === "You are already connected.") {
+      console.log("✅ [ZAPI-STATUS] Instância já está conectada")
+      return { connected: true }
+    }
+
+    // Verificar outros formatos de resposta positiva
+    const connected =
+      data.connected === true ||
+      data.status === "CONNECTED" ||
+      data.status === "ONLINE" ||
+      (data.value && data.value.status === "CONNECTED")
+
+    if (connected) {
+      console.log("✅ [ZAPI-STATUS] Instância está conectada")
+      return { connected: true }
+    }
+
+    // Se chegou aqui, não está conectado
+    console.log("❌ [ZAPI-STATUS] Instância não está conectada:", data)
+    return {
+      connected: false,
+      error: data.message || data.error || "Status desconhecido",
+    }
+  } catch (error) {
+    console.error("💥 [ZAPI-STATUS] Erro ao verificar status:", error)
+    return {
+      connected: false,
+      error: error instanceof Error ? error.message : "Erro ao verificar status",
     }
   }
-  
+}

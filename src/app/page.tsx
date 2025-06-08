@@ -28,6 +28,9 @@ import {
   AlertCircle,
   EyeOff,
   Eye,
+  MessageCircle,
+  Send,
+  XCircle,
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
@@ -77,6 +80,10 @@ export default function LandingPage() {
   const [horarioManualValido, setHorarioManualValido] = useState(false);
   const [calendarioAberto, setCalendarioAberto] = useState(false);
   const [mesAtual, setMesAtual] = useState(dayjs());
+  const [whatsappStatus, setWhatsappStatus] = useState<{
+    enviado: boolean;
+    erro?: string;
+  }>({ enviado: false });
 
   // Definir limites de data para agendamentos
   const hoje = dayjs();
@@ -119,11 +126,18 @@ export default function LandingPage() {
 
   const criarAgendamentoMutation =
     api.agendamento.criarAgendamentoPublico.useMutation({
-      onSuccess: () => {
+      onSuccess: (data) => {
+        console.log("✅ [AGENDAMENTO] Sucesso:", data);
         setAgendamentoSucesso(true);
         setEtapaAgendamento("confirmacao");
+        // Atualizar status do WhatsApp
+        setWhatsappStatus({
+          enviado: data.whatsappEnviado || false,
+          erro: data.whatsappError ?? undefined,
+        });
       },
       onError: (error) => {
+        console.error("❌ [AGENDAMENTO] Erro:", error);
         alert(`Erro ao criar agendamento: ${error.message}`);
       },
     });
@@ -192,13 +206,36 @@ export default function LandingPage() {
     setHorarioSelecionado("");
     setEtapaAgendamento("telefone");
     setAgendamentoSucesso(false);
+    setWhatsappStatus({ enviado: false });
   };
 
   const confirmarAgendamento = () => {
     const telefoneNumeros = limparTelefone(telefoneAgendamento);
 
+    // Validar que temos um horário selecionado
+    if (!horarioSelecionado || horarioSelecionado.trim() === "") {
+      alert(
+        "Por favor, selecione um horário válido antes de confirmar o agendamento",
+      );
+      return;
+    }
+
+    // Validar dados obrigatórios
+    if (!nomeNovoCliente || !dataAgendamento || !servicoSelecionado) {
+      alert("Por favor, preencha todos os campos obrigatórios");
+      return;
+    }
+
+    console.log("📋 [AGENDAMENTO] Confirmando agendamento:", {
+      nome: nomeNovoCliente,
+      telefone: telefoneNumeros,
+      data: dataAgendamento?.toISOString().split("T")[0],
+      horario: horarioSelecionado,
+      servico: servicoSelecionado,
+    });
+
     criarAgendamentoMutation.mutate({
-      nome: nomeNovoCliente || "",
+      nome: nomeNovoCliente,
       telefone: telefoneNumeros,
       data: dataAgendamento?.toISOString().split("T")[0] ?? "",
       horario: horarioSelecionado,
@@ -476,6 +513,37 @@ export default function LandingPage() {
             <p className="text-muted-foreground text-lg">
               Faça seu agendamento de forma rápida e prática
             </p>
+            {configs?.telefone && (
+              <div className="text-muted-foreground mt-4 flex items-center justify-center gap-2 text-sm">
+                <MessageCircle className="h-4 w-4" />
+                <span>
+                  Ou converse conosco pelo WhatsApp: {configs.telefone}
+                </span>
+              </div>
+            )}
+
+            {/* Status do WhatsApp */}
+            {configs && (
+              <div className="mt-2 flex items-center justify-center gap-2">
+                {configs.whatsappAtivo ? (
+                  <Badge
+                    variant="outline"
+                    className="border-green-500 text-green-700"
+                  >
+                    <CheckCircle className="mr-1 h-3 w-3" />
+                    WhatsApp Ativo
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="border-orange-500 text-orange-700"
+                  >
+                    <XCircle className="mr-1 h-3 w-3" />
+                    WhatsApp Inativo
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
 
           <Card className="border-border bg-card/50 backdrop-blur-sm">
@@ -553,7 +621,6 @@ export default function LandingPage() {
                                 return;
                               } else {
                                 // Forçar a execução da query se ainda não foi executada
-                                // Isso não deveria acontecer, mas é uma segurança
                                 alert("Aguarde a verificação do telefone");
                               }
                             } else {
@@ -1025,10 +1092,9 @@ export default function LandingPage() {
                                                 setHorarioSelecionado(
                                                   horarioManual,
                                                 );
-                                                // aguarda o estado atualizar e chama a função
                                                 setTimeout(() => {
                                                   confirmarAgendamento();
-                                                }, 0);
+                                                }, 100);
                                               }}
                                               className="bg-success text-success-foreground hover:bg-success/80 mt-2"
                                             >
@@ -1076,7 +1142,7 @@ export default function LandingPage() {
                                 !servicoSelecionado ||
                                 !dataAgendamento ||
                                 !horarioSelecionado ||
-                                Boolean(criarAgendamentoMutation.isPending)
+                                criarAgendamentoMutation.isPending
                               }
                               className="bg-success text-success-foreground hover:bg-success/80 flex-1"
                             >
@@ -1219,7 +1285,7 @@ export default function LandingPage() {
                             onClick={confirmarAgendamento}
                             disabled={
                               !horarioSelecionado ||
-                              Boolean(criarAgendamentoMutation.isPending)
+                              criarAgendamentoMutation.isPending
                             }
                             className="bg-gradient-brand hover:bg-gradient-brand-hover flex-1 text-white"
                           >
@@ -1291,10 +1357,50 @@ export default function LandingPage() {
                     </div>
                   </div>
 
+                  {/* Status do WhatsApp */}
                   <div className="space-y-3">
-                    <p className="text-muted-foreground">
-                      Entraremos em contato via WhatsApp para confirmar seu
-                      agendamento
+                    {whatsappStatus.enviado ? (
+                      <div className="border-success bg-success/10 mx-auto max-w-md rounded-md border p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-success/20 flex h-10 w-10 items-center justify-center rounded-full">
+                            <Send className="text-success h-5 w-5" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-success text-sm font-medium">
+                              Confirmação enviada via WhatsApp!
+                            </p>
+                            <p className="text-success/80 text-xs">
+                              Você receberá uma mensagem com todos os detalhes
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-warning bg-warning/10 mx-auto max-w-md rounded-md border p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-warning/20 flex h-10 w-10 items-center justify-center rounded-full">
+                            <MessageCircle className="text-warning h-5 w-5" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-warning text-sm font-medium">
+                              {whatsappStatus.erro
+                                ? "Erro ao enviar WhatsApp"
+                                : "Entraremos em contato via WhatsApp"}
+                            </p>
+                            <p className="text-warning/80 text-xs">
+                              {whatsappStatus.erro
+                                ? `Erro: ${whatsappStatus.erro}`
+                                : "Para confirmar seu agendamento"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-muted-foreground text-sm">
+                      Nosso agente inteligente também pode ajudar você pelo
+                      WhatsApp com reagendamentos, cancelamentos e outras
+                      dúvidas!
                     </p>
 
                     <Button
