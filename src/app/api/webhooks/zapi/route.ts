@@ -1,23 +1,49 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages } from "@/server/db/schema"
+import { conversations, messages, clientes } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 
 // Tipos para o webhook da Z-API
 interface WebhookBody {
-  instanceId?: string
+  // Campos originais
   phone?: string
+  fromMe?: boolean
+  chatName?: string
+  senderName?: string
+  messageId?: string
+  type?: string
+  body?: string
+  text?: {
+    message?: string
+  }
+  isGroup?: boolean
+  timestamp?: number
+  instanceId?: string
   message?: {
     text?: string
     body?: string
     type?: string
   }
-  messageId?: string
-  timestamp?: number
   event?: string
   data?: any
+
+  // Novos campos específicos do Z-API
+  isStatusReply?: boolean
+  chatLid?: string | null
+  connectedPhone?: string
+  waitingMessage?: boolean
+  isEdit?: boolean
+  isNewsletter?: boolean
+  momment?: number
+  status?: string
+  senderPhoto?: string | null
+  photo?: string
+  broadcast?: boolean
+  participantLid?: string | null
+  forwarded?: boolean
+  fromApi?: boolean
 }
 
 type MessageTipo = "texto" | "imagem" | "audio" | "documento"
@@ -43,50 +69,90 @@ interface DbMessage {
   createdAt: Date | null
 }
 
-interface AIResponse {
-  message: string
-  action?: string
-  data?: unknown
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as WebhookBody
+    let body: WebhookBody
+
+    try {
+      body = (await request.json()) as WebhookBody
+    } catch (error) {
+      console.error("❌ [WEBHOOK] Erro ao analisar JSON:", error)
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+    }
 
     console.log(`📨 [WEBHOOK] Recebido:`, JSON.stringify(body, null, 2))
 
-    if (typeof body !== "object" || !body) {
-      console.log(`❌ [WEBHOOK] Body inválido`)
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
+    // Verificar se é uma mensagem de callback de recebimento
+    if (body.type !== "ReceivedCallback") {
+      console.log(`🔄 [WEBHOOK] Ignorando evento que não é ReceivedCallback: ${body.type}`)
+      return NextResponse.json({ success: true, ignored: true })
     }
 
-    // Verificar se é uma mensagem recebida
-    if (body.phone && (body.message?.text || body.message?.body)) {
-      await handleIncomingMessage({
-        phone: body.phone,
-        message: body.message,
-        messageId: body.messageId ?? "",
-        timestamp: body.timestamp ?? Date.now(),
-      })
+    // Ignorar mensagens enviadas pelo próprio sistema (fromMe: true)
+    if (body.fromMe === true) {
+      console.log(`🔄 [WEBHOOK] Ignorando mensagem enviada pelo sistema`)
+      return NextResponse.json({ success: true, ignored: true })
     }
 
+    // Ignorar mensagens de grupos
+    if (body.isGroup === true) {
+      console.log(`🔄 [WEBHOOK] Ignorando mensagem de grupo`)
+      return NextResponse.json({ success: true, ignored: true })
+    }
+
+    // Extrair informações da mensagem do formato Z-API
+    const phone = body.phone || ""
+    const messageText = body.text?.message || body.body || ""
+    const messageId = body.messageId || ""
+    const timestamp = body.momment || Date.now()
+    const senderName = body.senderName || ""
+
+    // Verificar se temos os dados mínimos necessários
+    if (!phone || !messageText) {
+      console.log(`❌ [WEBHOOK] Dados insuficientes: telefone=${phone}, mensagem=${messageText}`)
+      return NextResponse.json({ error: "Dados insuficientes" }, { status: 400 })
+    }
+
+    console.log(`📱 [WEBHOOK] Processando mensagem válida de ${phone}: "${messageText}"`)
+    console.log(`👤 [WEBHOOK] Nome do remetente: ${senderName || "Não informado"}`)
+
+    // Processar a mensagem recebida de forma assíncrona
+    // Não esperamos a conclusão para responder rapidamente ao webhook
+    processIncomingMessage({
+      phone,
+      message: messageText,
+      messageId,
+      timestamp,
+      senderName,
+    }).catch((error) => {
+      console.error("💥 [WEBHOOK] Erro ao processar mensagem:", error)
+    })
+
+    // Responder imediatamente para evitar timeout
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("💥 [WEBHOOK] Erro:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Erro interno do servidor",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
   }
 }
 
-async function handleIncomingMessage(messageData: {
+async function processIncomingMessage(data: {
   phone: string
-  message: { text?: string; body?: string; type?: string }
+  message: string
   messageId: string
   timestamp: number
+  senderName?: string
 }): Promise<void> {
   try {
-    const { phone, message, messageId, timestamp } = messageData
+    const { phone, message, messageId, timestamp, senderName } = data
 
-    console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message.text || message.body)
+    console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message)
 
     // Limpar telefone (remover caracteres especiais)
     const telefoneClean = phone.replace(/\D/g, "")
@@ -106,7 +172,7 @@ async function handleIncomingMessage(messageData: {
         .values({
           telefone: telefoneClean,
           status: "ativa",
-          ultimaMensagem: new Date(),
+          ultimaMensagem: null, // Deixar null inicialmente
         })
         .returning()
         .then((rows) => rows[0] ?? null)
@@ -116,28 +182,44 @@ async function handleIncomingMessage(messageData: {
       throw new Error("Erro ao criar ou encontrar conversa!")
     }
 
-    // Garantir tipo suportado
-    const tipo: MessageTipo =
-      message.type && ["texto", "imagem", "audio", "documento"].includes(message.type as string)
-        ? (message.type as MessageTipo)
-        : "texto"
+    // Buscar cliente pelo telefone
+    let cliente = await db
+      .select()
+      .from(clientes)
+      .where(eq(clientes.telefone, telefoneClean))
+      .limit(1)
+      .then((rows) => rows[0] ?? null)
 
-    const conteudoMensagem = message.text ?? message.body ?? ""
+    // Se temos o nome do remetente e não temos cliente, criar um novo cliente
+    if (!cliente && senderName && senderName.trim() !== "") {
+      console.log(`🆕 [WEBHOOK] Criando novo cliente com nome do WhatsApp: ${senderName}`)
+      cliente = await db
+        .insert(clientes)
+        .values({
+          nome: senderName,
+          telefone: telefoneClean,
+        })
+        .returning()
+        .then((rows) => rows[0] ?? null)
 
-    console.log(`💾 [WEBHOOK] Salvando mensagem do cliente na conversa ${conversation.id}`)
+      // Atualizar a conversa com o ID do cliente
+      if (cliente) {
+        await db.update(conversations).set({ clienteId: cliente.id }).where(eq(conversations.id, conversation.id))
+
+        console.log(`✅ [WEBHOOK] Cliente criado e vinculado à conversa: ${cliente.id}`)
+      }
+    }
 
     // Salvar mensagem do cliente
     await db.insert(messages).values({
       conversationId: conversation.id,
       remetente: "cliente",
-      conteudo: conteudoMensagem,
-      tipo,
+      conteudo: message,
+      tipo: "texto",
       metadata: { messageId, timestamp },
     })
 
     // Buscar histórico da conversa
-    console.log(`🔍 [WEBHOOK] Buscando histórico da conversa ${conversation.id}`)
-
     const conversationHistory: DbMessage[] = await db
       .select()
       .from(messages)
@@ -145,11 +227,11 @@ async function handleIncomingMessage(messageData: {
       .orderBy(messages.createdAt)
       .limit(20)
 
-    console.log(`🧠 [WEBHOOK] Processando mensagem com IA. Histórico: ${conversationHistory.length} mensagens`)
+    console.log(`🧠 [WEBHOOK] Processando com IA. Histórico: ${conversationHistory.length} mensagens`)
 
     // Processar mensagem com IA
-    const aiResponse: AIResponse = await aiService.processMessage(
-      conteudoMensagem,
+    const aiResponse = await aiService.processMessage(
+      message,
       telefoneClean,
       conversationHistory.map((msg) => ({
         role: msg.remetente === "cliente" ? "user" : "assistant",
@@ -169,7 +251,7 @@ async function handleIncomingMessage(messageData: {
 
     console.log(`📤 [WEBHOOK] Enviando resposta via WhatsApp para ${telefoneClean}`)
 
-    // Enviar resposta via WhatsApp usando nosso novo serviço
+    // Enviar resposta via WhatsApp
     const sendResult = await enviarMensagemWhatsApp(telefoneClean, aiResponse.message)
 
     if (!sendResult.success) {
@@ -181,11 +263,17 @@ async function handleIncomingMessage(messageData: {
     // Processar ações específicas se necessário
     if (aiResponse.action) {
       console.log(`🎬 [WEBHOOK] Processando ação: ${aiResponse.action}`)
-      await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, telefoneClean, conteudoMensagem)
+      await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, telefoneClean, message)
     }
 
     // Atualizar última mensagem da conversa
-    await db.update(conversations).set({ ultimaMensagem: new Date() }).where(eq(conversations.id, conversation.id))
+    await db
+      .update(conversations)
+      .set({
+        ultimaMensagem: aiResponse.message.substring(0, 100), // Salvar o texto da mensagem
+        updatedAt: new Date(),
+      })
+      .where(eq(conversations.id, conversation.id))
 
     console.log(`✅ [WEBHOOK] Processamento de mensagem concluído para ${telefoneClean}`)
   } catch (error) {
@@ -204,8 +292,9 @@ async function handleAIAction(
     console.log(`🎬 [WEBHOOK-ACTION] Iniciando ação ${action}`)
 
     switch (action) {
-      case "agendar":
-        await processAgendamento(data, conversationId, phone, userMessage)
+      case "agendar_direto":
+        // Já processado na resposta da IA
+        console.log(`📅 [WEBHOOK-ACTION] Agendamento direto já processado`)
         break
       case "listar_servicos":
         // Já processado na resposta da IA
@@ -232,68 +321,6 @@ async function handleAIAction(
     console.log(`✅ [WEBHOOK-ACTION] Ação ${action} concluída`)
   } catch (error) {
     console.error("💥 [WEBHOOK-ACTION] Erro ao processar ação da IA:", error)
-  }
-}
-
-async function processAgendamento(
-  data: unknown,
-  conversationId: string,
-  phone: string,
-  userMessage: string,
-): Promise<void> {
-  try {
-    console.log(`📅 [WEBHOOK-AGENDAMENTO] Processando agendamento:`, data)
-
-    // Verificar se é confirmação de agendamento
-    if (userMessage.toLowerCase().includes("sim") || userMessage.toLowerCase().includes("confirmo")) {
-      // Buscar dados do agendamento na conversa (implementar lógica de estado)
-      if (data && typeof data === "object" && "nome" in data && "servico" in data) {
-        const dadosAgendamento = data as any
-
-        console.log(`📝 [WEBHOOK-AGENDAMENTO] Criando agendamento com IA:`, dadosAgendamento)
-
-        const resultado = await aiService.criarAgendamentoIA({
-          telefone: phone,
-          nome: dadosAgendamento.nome,
-          servico: dadosAgendamento.servico,
-          data: dadosAgendamento.data,
-          horario: dadosAgendamento.horario,
-        })
-
-        console.log(`💾 [WEBHOOK-AGENDAMENTO] Salvando resposta no banco:`, resultado.message.substring(0, 50))
-
-        // Salvar resposta no banco
-        await db.insert(messages).values({
-          conversationId,
-          remetente: "bot",
-          conteudo: resultado.message,
-          tipo: "texto",
-        })
-
-        console.log(`📤 [WEBHOOK-AGENDAMENTO] Enviando confirmação via WhatsApp`)
-
-        // Enviar resposta
-        const sendResult = await enviarMensagemWhatsApp(phone, resultado.message)
-
-        if (!sendResult.success) {
-          console.error(`❌ [WEBHOOK-AGENDAMENTO] Erro ao enviar confirmação:`, sendResult.error)
-        } else {
-          console.log(`✅ [WEBHOOK-AGENDAMENTO] Confirmação enviada com sucesso`)
-        }
-      } else {
-        console.log(`❌ [WEBHOOK-AGENDAMENTO] Dados de agendamento inválidos:`, data)
-      }
-    } else {
-      console.log(`⏳ [WEBHOOK-AGENDAMENTO] Aguardando confirmação do usuário`)
-    }
-  } catch (error) {
-    console.error("💥 [WEBHOOK-AGENDAMENTO] Erro ao processar agendamento:", error)
-
-    // Enviar mensagem de erro
-    await enviarMensagemWhatsApp(
-      phone,
-      "❌ Erro ao processar agendamento. Tente novamente ou entre em contato conosco.",
-    )
   }
 }
 

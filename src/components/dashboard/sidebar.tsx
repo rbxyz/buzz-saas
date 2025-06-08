@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/auth-context";
+import { title } from "process";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
@@ -61,17 +62,13 @@ export function DashboardSidebar() {
     { title: "Agendamentos", href: "/dashboard/agendamentos", icon: Calendar },
     { title: "Clientes", href: "/dashboard/clientes", icon: Users },
     { title: "Linktree", href: "/dashboard/linktree", icon: LinkIcon },
+    { title: "Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
     {
       title: "Configurações",
       href: "/dashboard/configuracoes",
       icon: Settings,
     },
-    {
-      title: "Chatbot",
-      href: "#blocked",
-      icon: MessageSquare,
-      blocked: true,
-    },
+
     { title: "Página Inicial", href: "/", icon: Home },
   ];
 

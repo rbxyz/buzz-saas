@@ -135,9 +135,6 @@ export async function verificarStatusZApi(): Promise<{ connected: boolean; error
     const data = await response.json()
     console.log("📊 [ZAPI-STATUS] Corpo da resposta:", data)
 
-    // Verificar se a instância está conectada
-    // A Z-API pode retornar diferentes formatos de resposta
-
     // Caso especial: "You are already connected" significa que está conectado
     if (data.error === "You are already connected.") {
       console.log("✅ [ZAPI-STATUS] Instância já está conectada")

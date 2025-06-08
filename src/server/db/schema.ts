@@ -39,22 +39,22 @@ export const diasSemanaEnum = pgEnum("dias_semana", [
   "domingo",
 ])
 
-// NOVO: Enum para turnos
+// Enum para turnos
 export const turnoEnum = pgEnum("turno_enum", ["manha", "tarde", "noite"])
 
-// NOVO: Enum para roles de usuário
+// Enum para roles de usuário
 export const userRoleEnum = pgEnum("user_role_enum", ["admin", "superadmin"])
 
-// NOVO: Enum para status de conversas
+// Enum para status de conversas
 export const conversationStatusEnum = pgEnum("conversation_status", ["ativa", "encerrada", "pausada"])
 
-// NOVO: Enum para remetente de mensagens
+// Enum para remetente de mensagens
 export const messageRoleEnum = pgEnum("message_role", ["cliente", "bot", "atendente"])
 
-// NOVO: Enum para tipo de mensagem
+// Enum para tipo de mensagem
 export const messageTypeEnum = pgEnum("message_type", ["texto", "imagem", "audio", "documento"])
 
-// NOVO: Tabela de Usuários
+// Tabela de Usuários
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -75,7 +75,7 @@ export const clientes = pgTable("clientes", {
   nome: text("nome").notNull(),
   dataNascimento: date("data_nascimento"),
   email: text("email"),
-  telefone: varchar("telefone", { length: 20 }).notNull(),
+  telefone: varchar("telefone", { length: 20 }).notNull().unique(), // Adicionado unique para evitar duplicatas
   comprasRecentes: json("compras_recentes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -86,7 +86,7 @@ export const agendamentos = pgTable("agendamentos", {
   id: uuid("id").primaryKey().defaultRandom(),
   clienteId: uuid("cliente_id")
     .notNull()
-    .references(() => clientes.id),
+    .references(() => clientes.id, { onDelete: "cascade" }), // Adicionado onDelete cascade
   dataHora: timestamp("data_hora").notNull(),
   servico: text("servico").notNull(),
   status: text("status", {
@@ -98,7 +98,7 @@ export const agendamentos = pgTable("agendamentos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 })
 
-// NOVA: Tabela de Intervalos de Trabalho
+// Tabela de Intervalos de Trabalho
 export const intervalosTrabalho = pgTable("intervalos_trabalho", {
   id: uuid("id").primaryKey().defaultRandom(),
   diaSemana: diasSemanaEnum("dia_semana").notNull(),
@@ -141,7 +141,7 @@ export const links = pgTable("links", {
   titulo: text("titulo").notNull(),
   url: text("url"),
   descricao: text("descricao").default(""),
-  clienteId: uuid("cliente_id").references(() => clientes.id),
+  clienteId: uuid("cliente_id").references(() => clientes.id, { onDelete: "set null" }), // Adicionado onDelete set null
   tipo: linkTypeEnum("tipo").notNull(),
   imagem: bytea("imagem"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -156,18 +156,24 @@ export const relatorios = pgTable("relatorios", {
   geradoEm: timestamp("gerado_em").defaultNow(),
 })
 
-// 🤖 NOVAS TABELAS PARA IA/WHATSAPP
+// 🤖 TABELAS PARA IA/WHATSAPP
 
 // Tabela de Conversas (para IA/WhatsApp)
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
-  clienteId: uuid("cliente_id").references(() => clientes.id),
+  clienteId: uuid("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
   telefone: varchar("telefone", { length: 20 }).notNull(),
   status: conversationStatusEnum("status").notNull().default("ativa"),
-  ultimaMensagem: timestamp("ultima_mensagem"),
+  ultimaMensagem: text("ultima_mensagem"), // Texto da última mensagem
   metadata: json("metadata"), // Para dados extras como ID da conversa no WhatsApp
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+
+  // Índices para melhorar performance
+  // Índice para busca por telefone
+  telefoneIdx: varchar("telefone_idx").references(() => conversations.telefone),
+  // Índice para busca por status
+  statusIdx: conversationStatusEnum("status_idx").references(() => conversations.status),
 })
 
 // Tabela de Mensagens
@@ -175,12 +181,18 @@ export const messages = pgTable("messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   conversationId: uuid("conversation_id")
     .notNull()
-    .references(() => conversations.id),
+    .references(() => conversations.id, { onDelete: "cascade" }), // Adicionado onDelete cascade
   remetente: messageRoleEnum("remetente").notNull(),
   conteudo: text("conteudo").notNull(),
   tipo: messageTypeEnum("tipo").notNull().default("texto"),
   metadata: json("metadata"), // Para dados extras como ID da mensagem no WhatsApp
   createdAt: timestamp("created_at").defaultNow(),
+
+  // Índices para melhorar performance
+  // Índice para busca por conversationId
+  conversationIdIdx: uuid("conversation_id_idx").references(() => messages.conversationId),
+  // Índice para ordenação por data
+  createdAtIdx: timestamp("created_at_idx").references(() => messages.createdAt),
 })
 
 // Tabela de Agentes de IA
@@ -205,4 +217,4 @@ export const embeddings = pgTable("embeddings", {
   content: text("content").notNull(),
   embedding: json("embedding").notNull(), // array de números
   createdAt: timestamp("created_at").defaultNow(),
-});
+})

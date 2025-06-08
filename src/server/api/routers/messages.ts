@@ -1,66 +1,163 @@
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc"
 import { z } from "zod"
-import { messages, conversations } from "@/server/db/schema"
-import { eq } from "drizzle-orm"
+import { createTRPCRouter, publicProcedure } from "@/server/api/trpc"
+import { neon } from "@neondatabase/serverless"
+import { env } from "@/env"
 
-const MessageSchema = z.object({
-  conversationId: z.string().uuid(),
-  remetente: z.enum(["cliente", "bot", "atendente"]),
-  conteudo: z.string().max(10000),
-  tipo: z.enum(["texto", "imagem", "audio", "documento"]).optional(),
-  metadata: z.any().optional(),
-})
+// Criar conexão SQL direta para este router
+const sql = neon(env.DATABASE_URL)
 
 export const messagesRouter = createTRPCRouter({
-  create: protectedProcedure.input(MessageSchema).mutation(async ({ ctx, input }) => {
-    const message = await ctx.db
-      .insert(messages)
-      .values(input)
-      .returning()
-      .then((rows) => rows[0])
-
-    // Update the conversation's ultimaMensagem timestamp
-    await ctx.db
-      .update(conversations)
-      .set({
-        ultimaMensagem: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(conversations.id, input.conversationId))
-
-    return message
-  }),
-
-  getByConversation: protectedProcedure
-    .input(z.object({ conversationId: z.string().uuid() }))
-    .query(async ({ ctx, input }) => {
-      const conversationMessages = await ctx.db
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, input.conversationId))
-        .orderBy(messages.createdAt)
-      return conversationMessages
-    }),
-
-  getRecent: protectedProcedure
+  listarPorConversa: publicProcedure
     .input(
       z.object({
-        conversationId: z.string().uuid(),
-        limit: z.number().default(10),
+        conversationId: z.string(),
+        limite: z.number().default(100),
       }),
     )
-    .query(async ({ ctx, input }) => {
-      const recentMessages = await ctx.db
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, input.conversationId))
-        .orderBy(messages.createdAt)
-        .limit(input.limit)
-      return recentMessages
+    .query(async ({ input }) => {
+      console.log(`🔍 [MESSAGES] Listando mensagens da conversa: ${input.conversationId}`)
+
+      try {
+        const result = await sql`
+          SELECT 
+            id,
+            conversation_id as "conversationId",
+            conteudo,
+            remetente,
+            tipo,
+            created_at as "createdAt",
+            metadata
+          FROM messages
+          WHERE conversation_id = ${input.conversationId}
+          ORDER BY created_at ASC
+          LIMIT ${input.limite}
+        `
+
+        // Processar mensagens garantindo que tudo seja string
+        const mensagensFormatadas = result.map((msg: any) => ({
+          id: String(msg.id),
+          conversationId: String(msg.conversationId),
+          conteudo: String(msg.conteudo || ""),
+          tipo: msg.remetente === "cliente" ? "recebida" : msg.remetente === "bot" ? "enviada" : "sistema",
+          // GARANTIR que timestamp seja string ISO
+          timestamp: new Date(msg.createdAt).toISOString(),
+          lida: true, // Por enquanto, marcar todas como lidas
+          metadata: msg.metadata || {},
+        }))
+
+        console.log(`✅ [MESSAGES] Encontradas ${mensagensFormatadas.length} mensagens`)
+        return mensagensFormatadas
+      } catch (error) {
+        console.error("💥 [MESSAGES] Erro ao listar mensagens:", error)
+        throw new Error(`Erro ao carregar mensagens: ${error.message}`)
+      }
     }),
 
-  delete: protectedProcedure.input(z.object({ id: z.string().uuid() })).mutation(async ({ ctx, input }) => {
-    await ctx.db.delete(messages).where(eq(messages.id, input.id))
-    return { success: true }
-  }),
+  enviar: publicProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+        conteudo: z.string(),
+        tipo: z.enum(["recebida", "enviada", "sistema"]),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      console.log(`📤 [MESSAGES] Enviando mensagem:`, {
+        conversationId: input.conversationId,
+        tipo: input.tipo,
+        tamanho: input.conteudo.length,
+      })
+
+      try {
+        // Sempre enviar como bot quando a mensagem é enviada pelo sistema
+        const remetente = input.tipo === "recebida" ? "cliente" : "bot"
+
+        // Inserir mensagem
+        const insertResult = await sql`
+          INSERT INTO messages (conversation_id, conteudo, remetente, tipo)
+          VALUES (${input.conversationId}, ${input.conteudo}, ${remetente}, 'texto')
+          RETURNING id, created_at
+        `
+
+        const novaMensagem = insertResult[0]
+
+        // Atualizar última mensagem da conversa
+        await sql`
+          UPDATE conversations 
+          SET ultima_mensagem = ${input.conteudo.substring(0, 100)}, updated_at = NOW()
+          WHERE id = ${input.conversationId}
+        `
+
+        console.log(`✅ [MESSAGES] Mensagem enviada:`, novaMensagem.id)
+        return {
+          id: String(novaMensagem.id),
+          conversationId: input.conversationId,
+          conteudo: input.conteudo,
+          remetente,
+          tipo: "texto",
+          createdAt: new Date(novaMensagem.created_at).toISOString(),
+        }
+      } catch (error) {
+        console.error("💥 [MESSAGES] Erro ao enviar mensagem:", error)
+        throw new Error(`Erro ao enviar mensagem: ${error.message}`)
+      }
+    }),
+
+  marcarComoLida: publicProcedure
+    .input(
+      z.object({
+        messageId: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      console.log(`👁️ [MESSAGES] Marcando mensagem como lida: ${input.messageId}`)
+
+      try {
+        // Por enquanto, apenas log - implementar campo 'lida' no schema se necessário
+        console.log(`✅ [MESSAGES] Mensagem marcada como lida`)
+        return { success: true }
+      } catch (error) {
+        console.error("💥 [MESSAGES] Erro ao marcar como lida:", error)
+        throw new Error("Erro ao marcar mensagem como lida")
+      }
+    }),
+
+  buscarRecentes: publicProcedure
+    .input(
+      z.object({
+        limite: z.number().default(50),
+      }),
+    )
+    .query(async ({ input }) => {
+      console.log(`🔍 [MESSAGES] Buscando mensagens recentes`)
+
+      try {
+        const result = await sql`
+          SELECT 
+            id,
+            conversation_id as "conversationId",
+            conteudo,
+            remetente,
+            created_at as "createdAt"
+          FROM messages
+          ORDER BY created_at DESC
+          LIMIT ${input.limite}
+        `
+
+        // Processar mensagens garantindo que tudo seja string
+        const mensagensFormatadas = result.map((msg: any) => ({
+          id: String(msg.id),
+          conversationId: String(msg.conversationId),
+          conteudo: String(msg.conteudo),
+          remetente: String(msg.remetente),
+          createdAt: new Date(msg.createdAt).toISOString(),
+        }))
+
+        console.log(`✅ [MESSAGES] Encontradas ${mensagensFormatadas.length} mensagens recentes`)
+        return mensagensFormatadas
+      } catch (error) {
+        console.error("💥 [MESSAGES] Erro ao buscar mensagens recentes:", error)
+        throw new Error("Erro ao buscar mensagens recentes")
+      }
+    }),
 })

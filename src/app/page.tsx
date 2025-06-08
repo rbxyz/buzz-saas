@@ -31,6 +31,7 @@ import {
   MessageCircle,
   Send,
   XCircle,
+  Info,
 } from "lucide-react";
 import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
@@ -105,9 +106,26 @@ export default function LandingPage() {
   // Queries para agendamento
   const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
 
+  // Função para adicionar prefixo 55 ao telefone
+  const adicionarPrefixo55 = (telefone: string): string => {
+    // Remove todos os caracteres não numéricos
+    const numeroLimpo = telefone.replace(/\D/g, "");
+
+    // Se já começa com 55, retorna o número limpo
+    if (numeroLimpo.startsWith("55")) {
+      return numeroLimpo;
+    }
+
+    // Adiciona o prefixo 55
+    return `55${numeroLimpo}`;
+  };
+
   const { data: clientePorTelefone, isLoading: buscandoCliente } =
     api.cliente.buscarPorTelefone.useQuery(
-      { telefone: telefoneAgendamento },
+      {
+        // Adiciona prefixo 55 ao telefone para busca
+        telefone: adicionarPrefixo55(telefoneAgendamento),
+      },
       {
         enabled: telefoneAgendamento.length >= 10,
       },
@@ -210,7 +228,10 @@ export default function LandingPage() {
   };
 
   const confirmarAgendamento = () => {
-    const telefoneNumeros = limparTelefone(telefoneAgendamento);
+    // Adiciona prefixo 55 ao telefone para o agendamento
+    const telefoneNumeros = adicionarPrefixo55(
+      limparTelefone(telefoneAgendamento),
+    );
 
     // Validar que temos um horário selecionado
     if (!horarioSelecionado || horarioSelecionado.trim() === "") {
@@ -587,6 +608,13 @@ export default function LandingPage() {
                             className="border-border bg-muted text-foreground mt-2"
                             maxLength={15}
                           />
+                          <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+                            <Info className="h-3 w-3" />
+                            <span>
+                              O código do país (55) será adicionado
+                              automaticamente
+                            </span>
+                          </div>
                         </div>
 
                         {buscandoCliente && (
@@ -681,6 +709,13 @@ export default function LandingPage() {
                             disabled
                             className="border-border bg-muted/50 text-muted-foreground mt-2"
                           />
+                          <div className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+                            <Info className="h-3 w-3" />
+                            <span>
+                              O código do país (55) será adicionado
+                              automaticamente
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex gap-3">
@@ -1464,9 +1499,6 @@ export default function LandingPage() {
                         <h4 className="truncate text-lg font-bold text-white">
                           {parcerias[getSlideIndex(-1)]?.titulo}
                         </h4>
-                        <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-                          {parcerias[getSlideIndex(-1)]?.descricao}
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1474,56 +1506,42 @@ export default function LandingPage() {
 
                 {/* Card Principal (Centro) */}
                 <div
-                  className={`w-full transition-all duration-400 ease-out lg:w-[44%] ${
-                    isTransitioning ? "opacity-95" : "opacity-100"
+                  className={`w-full transition-all duration-300 ease-out lg:w-[40%] ${
+                    isTransitioning ? "scale-95 opacity-70" : "scale-100"
                   }`}
                 >
-                  <div className="relative aspect-[16/10] transform overflow-hidden rounded-3xl shadow-2xl transition-all duration-400">
-                    {parcerias[currentSlide]?.imagem &&
-                    parcerias[currentSlide]?.mimeType ? (
-                      <div className="relative h-full w-full">
+                  <Card className="border-border bg-card/80 group hover:shadow-3xl relative overflow-hidden rounded-3xl shadow-2xl backdrop-blur-sm transition-all duration-300">
+                    <div className="relative aspect-[16/9] overflow-hidden">
+                      {parcerias[currentSlide]?.imagem &&
+                      parcerias[currentSlide]?.mimeType ? (
                         <Image
                           src={`data:${parcerias[currentSlide]?.mimeType};base64,${parcerias[currentSlide]?.imagem}`}
-                          alt={
-                            parcerias[currentSlide]?.titulo ||
-                            "Imagem da parceria"
-                          }
+                          alt={parcerias[currentSlide]?.titulo ?? "Imagem"}
                           fill
-                          className={`object-cover transition-all duration-400 ${
-                            isTransitioning ? "scale-[1.01]" : "scale-100"
-                          }`}
-                          onError={(e) => {
-                            console.error(
-                              "Erro ao carregar imagem da parceria:",
-                              parcerias[currentSlide]?.titulo,
-                            );
-                            (e.target as HTMLImageElement).style.display =
-                              "none";
-                          }}
-                          priority
+                          className="object-cover transition-transform duration-500 group-hover:scale-110"
+                          priority={true}
                         />
-                      </div>
-                    ) : (
-                      <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
-                        <Award className="text-brand-primary h-16 w-16" />
-                      </div>
-                    )}
+                      ) : (
+                        <div className="from-brand-primary/30 to-brand-secondary/30 flex h-full w-full items-center justify-center bg-gradient-to-br">
+                          <Award className="text-brand-primary h-16 w-16" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    </div>
 
-                    {/* Overlay com informações */}
-                    <div className="absolute inset-0 z-10 flex items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent">
-                      <div
-                        className={`w-full p-6 text-white transition-all duration-400 lg:p-8 ${
-                          isTransitioning
-                            ? "translate-y-1 opacity-90"
-                            : "translate-y-0 opacity-100"
-                        }`}
-                      >
-                        <h3 className="mb-3 text-2xl leading-tight font-bold lg:text-3xl">
-                          {parcerias[currentSlide]?.titulo}
-                        </h3>
-                        <p className="text-muted-foreground mb-4 line-clamp-2 text-base leading-relaxed lg:mb-6 lg:text-lg">
-                          {parcerias[currentSlide]?.descricao}
-                        </p>
+                    <CardContent className="absolute right-6 bottom-6 left-6 p-0">
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="mb-2 text-2xl font-bold text-white">
+                            {parcerias[currentSlide]?.titulo}
+                          </h3>
+                          {parcerias[currentSlide]?.descricao && (
+                            <p className="line-clamp-3 text-white/90">
+                              {parcerias[currentSlide]?.descricao}
+                            </p>
+                          )}
+                        </div>
+
                         {parcerias[currentSlide]?.url && (
                           <Button
                             onClick={() =>
@@ -1531,21 +1549,18 @@ export default function LandingPage() {
                                 parcerias[currentSlide]?.url ?? "",
                               )
                             }
-                            className="bg-gradient-brand hover:bg-gradient-brand-hover z-50 inline-flex cursor-pointer items-center rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:shadow-lg lg:px-6 lg:py-3 lg:text-base"
+                            className="bg-gradient-brand hover:bg-gradient-brand-hover cursor-pointer text-white shadow-lg transition-all duration-300 hover:shadow-xl"
                           >
                             Visitar Site
-                            <ChevronRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" />
+                            <ChevronRight className="ml-2 h-4 w-4" />
                           </Button>
                         )}
                       </div>
-                    </div>
-
-                    {/* Borda sutil para o card principal */}
-                    <div className="border-brand-primary/20 absolute inset-0 rounded-3xl ring-1" />
-                  </div>
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Card Posterior (Direita) */}
+                {/* Card Próximo (Direita) */}
                 {parcerias.length > 1 && (
                   <div
                     className={`hidden w-[28%] cursor-pointer transition-all duration-300 ease-out lg:block ${
@@ -1558,25 +1573,13 @@ export default function LandingPage() {
                     <div className="relative aspect-[16/9] transform overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 hover:scale-[1.02]">
                       {parcerias[getSlideIndex(1)]?.imagem &&
                       parcerias[getSlideIndex(1)]?.mimeType ? (
-                        <div className="relative h-full w-full">
-                          <Image
-                            src={`data:${parcerias[getSlideIndex(1)]?.mimeType};base64,${parcerias[getSlideIndex(1)]?.imagem}`}
-                            alt={
-                              parcerias[getSlideIndex(1)]?.titulo ??
-                              "Imagem da parceria seguinte"
-                            }
-                            fill
-                            className="object-cover transition-transform duration-300"
-                            onError={(e) => {
-                              console.error(
-                                "Erro ao carregar imagem da parceria (seguinte):",
-                                parcerias[getSlideIndex(1)]?.titulo,
-                              );
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                        </div>
+                        <Image
+                          src={`data:${parcerias[getSlideIndex(1)]?.mimeType};base64,${parcerias[getSlideIndex(1)]?.imagem}`}
+                          alt={parcerias[getSlideIndex(1)]?.titulo ?? "Imagem"}
+                          fill
+                          className="object-cover transition-transform duration-300"
+                          priority={true}
+                        />
                       ) : (
                         <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
                           <Award className="text-brand-primary h-12 w-12" />
@@ -1587,237 +1590,274 @@ export default function LandingPage() {
                         <h4 className="truncate text-lg font-bold text-white">
                           {parcerias[getSlideIndex(1)]?.titulo}
                         </h4>
-                        <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-                          {parcerias[getSlideIndex(1)]?.descricao}
-                        </p>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Navegação do carrossel */}
+              {/* Controles de navegação */}
               {parcerias.length > 1 && (
                 <>
-                  <button
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={prevSlide}
                     disabled={isTransitioning}
-                    className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:left-4"
-                    aria-label="Slide anterior"
+                    className="border-border bg-card/80 text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-1/2 left-4 z-10 h-12 w-12 -translate-y-1/2 rounded-full shadow-lg backdrop-blur-sm transition-all duration-300 hover:shadow-xl disabled:opacity-50 lg:left-8"
                   >
-                    <ChevronLeft className="h-5 w-5 lg:h-6 lg:w-6" />
-                  </button>
-                  <button
+                    <ChevronLeft className="h-6 w-6" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
                     onClick={nextSlide}
                     disabled={isTransitioning}
-                    className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50 lg:right-4"
-                    aria-label="Próximo slide"
+                    className="border-border bg-card/80 text-muted-foreground hover:bg-accent hover:text-accent-foreground absolute top-1/2 right-4 z-10 h-12 w-12 -translate-y-1/2 rounded-full shadow-lg backdrop-blur-sm transition-all duration-300 hover:shadow-xl disabled:opacity-50 lg:right-8"
                   >
-                    <ChevronRight className="h-5 w-5 lg:h-6 lg:w-6" />
-                  </button>
+                    <ChevronRight className="h-6 w-6" />
+                  </Button>
                 </>
+              )}
+
+              {/* Indicadores */}
+              {parcerias.length > 1 && (
+                <div className="mt-8 flex justify-center gap-2">
+                  {parcerias.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => goToSlide(index)}
+                      disabled={isTransitioning}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        index === currentSlide
+                          ? "bg-brand-primary w-8"
+                          : "bg-muted-foreground/30 hover:bg-muted-foreground/50 w-2"
+                      } ${isTransitioning ? "opacity-50" : ""}`}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </div>
         </section>
       )}
 
-      {/* Casos de Sucesso - Clientes */}
-      <section id="clientes" className="bg-muted/20 px-6 py-16">
-        <div className="container mx-auto max-w-6xl">
-          <div className="mb-12 text-center">
-            <h2 className="text-foreground mb-4 text-4xl font-bold">
-              <Users className="text-brand-primary mr-3 inline h-8 w-8" />
-              Melhores clientes
-            </h2>
-            <p className="text-muted-foreground text-lg">
-              Clientes que confiam no nosso trabalho
-            </p>
-          </div>
-
-          {loadingClientes ? (
-            <div className="text-center">
-              <div className="border-brand-primary inline-block h-16 w-16 animate-spin rounded-full border-4 border-solid border-r-transparent"></div>
-              <p className="text-muted-foreground mt-4">
-                Carregando clientes...
+      {/* Seção de Clientes */}
+      {clientes && clientes.length > 0 && (
+        <section id="clientes" className="bg-muted/30 px-6 py-20">
+          <div className="container mx-auto max-w-6xl">
+            <div className="mb-16 text-center">
+              <h2 className="text-foreground mb-4 text-4xl font-bold">
+                <Users className="text-brand-primary mr-3 inline h-8 w-8" />
+                Nossos Clientes
+              </h2>
+              <p className="text-muted-foreground text-lg">
+                Conheça alguns dos nossos clientes satisfeitos
               </p>
             </div>
-          ) : errorClientes ? (
-            <p className="text-error text-center">Erro ao carregar clientes.</p>
-          ) : clientes && clientes.length > 0 ? (
-            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {clientes.map((cliente) => (
-                <Card
-                  key={cliente.id}
-                  className="group border-border bg-card/50 hover:bg-card/70 backdrop-blur-sm transition-all duration-300 hover:scale-105"
-                >
-                  <CardContent className="p-8 text-center">
-                    <div className="mb-6 flex justify-center">
+
+            {loadingClientes ? (
+              <div className="text-brand-primary flex items-center justify-center gap-2 py-12">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span>Carregando clientes...</span>
+              </div>
+            ) : errorClientes ? (
+              <div className="py-12 text-center">
+                <AlertCircle className="text-error mx-auto mb-4 h-12 w-12" />
+                <p className="text-error">Erro ao carregar clientes</p>
+              </div>
+            ) : (
+              <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                {clientes.slice(0, 6).map((cliente) => (
+                  <Card
+                    key={cliente.id}
+                    className="border-border bg-card/50 group overflow-hidden backdrop-blur-sm transition-all duration-300 hover:shadow-lg"
+                  >
+                    <div className="relative aspect-square overflow-hidden">
                       {cliente.imagem && cliente.mimeType ? (
-                        <div className="relative h-32 w-32">
-                          <Image
-                            src={`data:${cliente.mimeType};base64,${cliente.imagem}`}
-                            alt={cliente.titulo || "Imagem do cliente"}
-                            fill
-                            className="border-brand-primary/30 group-hover:border-brand-primary/60 rounded-full border-4 object-cover transition-colors"
-                            onError={(e) => {
-                              console.error(
-                                "Erro ao carregar imagem do cliente:",
-                                cliente.titulo,
-                              );
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                        </div>
+                        <Image
+                          src={`data:${cliente.mimeType};base64,${cliente.imagem}`}
+                          alt={cliente.titulo ?? "Cliente"}
+                          fill
+                          className="object-cover transition-transform duration-300 group-hover:scale-110"
+                        />
                       ) : (
-                        <div className="from-brand-primary/20 to-brand-secondary/20 border-brand-primary/30 flex h-32 w-32 items-center justify-center rounded-full border-4 bg-gradient-to-br">
-                          <Users className="text-brand-primary h-12 w-12" />
+                        <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
+                          <User className="text-brand-primary h-16 w-16" />
                         </div>
                       )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     </div>
-                    <h3 className="text-card-foreground mb-3 text-2xl font-semibold">
-                      {cliente.titulo}
-                    </h3>
-                    <p className="text-muted-foreground mb-4 text-base">
-                      {cliente.descricao}
-                    </p>
-                    <div className="flex justify-center">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className="text-brand-primary h-5 w-5 fill-current"
-                        />
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center">
-              <div className="bg-card mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                <Users className="text-muted-foreground h-8 w-8" />
+
+                    <CardContent className="p-6">
+                      <div className="space-y-3">
+                        <h3 className="text-card-foreground text-xl font-bold">
+                          {cliente.titulo}
+                        </h3>
+                        {cliente.descricao && (
+                          <p className="text-muted-foreground line-clamp-3 text-sm">
+                            {cliente.descricao}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {[...Array(5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              className="h-4 w-4 fill-current text-yellow-400"
+                            />
+                          ))}
+                        </div>
+                        {cliente.url && (
+                          <Button
+                            onClick={() => handleVisitarSite(cliente.url ?? "")}
+                            variant="outline"
+                            size="sm"
+                            className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full"
+                          >
+                            Ver Perfil
+                            <ChevronRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <p className="text-muted-foreground">
-                Em breve, casos de sucesso dos nossos clientes
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
-      <footer className="bg-muted/40 px-6 py-8">
-        <div className="container mx-auto max-w-6xl">
-          <p className="text-muted-foreground text-center text-sm">
-            © 2025 {configs?.nome}. Todos os direitos reservados.
+      <footer className="bg-muted/50 px-6 py-12">
+        <div className="container mx-auto max-w-4xl text-center">
+          <div className="mb-8 flex items-center justify-center gap-3">
+            <div className="bg-gradient-brand flex h-12 w-12 items-center justify-center overflow-hidden rounded-full">
+              <Image
+                src={"/favicon.png"}
+                alt="Logo"
+                width={24}
+                height={24}
+                className="object-cover"
+              />
+            </div>
+            <span className="text-foreground text-2xl font-bold">
+              {configs?.nome}
+            </span>
+          </div>
+
+          <p className="text-muted-foreground mb-8">
+            Transformando estilo em experiência. Sua satisfação é nossa
+            prioridade.
           </p>
+
+          <div className="border-border mb-8 border-t pt-8">
+            <p className="text-muted-foreground/70 text-sm">
+              © 2024 {configs?.nome}. Todos os direitos reservados.
+            </p>
+          </div>
         </div>
       </footer>
 
       {/* Modal de Login */}
       {showLogin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="border-border bg-card mx-4 w-full max-w-md rounded-xl border p-8 shadow-2xl">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-card-foreground text-2xl font-bold">
-                Entrar
-              </h2>
-              <button
-                onClick={() => setShowLogin(false)}
-                className="text-muted-foreground hover:text-foreground text-2xl transition-colors"
-              >
-                ×
-              </button>
-            </div>
-
-            {loginError && (
-              <Alert className="mb-4 border-red-200 bg-red-50">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-800">
-                  {loginError}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label
-                  htmlFor="email"
-                  className="text-muted-foreground mb-2 block text-sm font-medium"
-                >
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  required
-                  value={loginData.email}
-                  onChange={(e) =>
-                    setLoginData({ ...loginData, email: e.target.value })
-                  }
-                  className="border-border bg-muted text-foreground focus:ring-brand-primary w-full"
-                  placeholder="seu@email.com"
-                  disabled={loginMutation.isPending}
-                />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md">
+            <CardContent className="p-6">
+              <div className="mb-6 text-center">
+                <h2 className="text-card-foreground mb-2 text-2xl font-bold">
+                  Entrar no Sistema
+                </h2>
+                <p className="text-muted-foreground">
+                  Acesse o painel administrativo
+                </p>
               </div>
 
-              <div>
-                <Label
-                  htmlFor="password"
-                  className="text-muted-foreground mb-2 block text-sm font-medium"
-                >
-                  Senha
-                </Label>
-                <div className="relative">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <Label htmlFor="email" className="text-card-foreground">
+                    Email
+                  </Label>
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    required
-                    value={loginData.password}
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={loginData.email}
                     onChange={(e) =>
-                      setLoginData({ ...loginData, password: e.target.value })
+                      setLoginData({ ...loginData, email: e.target.value })
                     }
-                    className="border-border bg-muted text-foreground focus:ring-brand-primary w-full pr-10"
-                    placeholder="••••••••"
-                    disabled={loginMutation.isPending}
+                    className="border-border bg-muted text-foreground mt-2"
+                    required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transition-colors"
-                    disabled={loginMutation.isPending}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
                 </div>
-              </div>
 
-              <Button
-                type="submit"
-                disabled={loginMutation.isPending}
-                className="bg-gradient-brand hover:bg-gradient-brand-hover w-full cursor-pointer text-white"
-              >
-                {loginMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Entrando...
-                  </>
-                ) : (
-                  "Entrar"
+                <div>
+                  <Label htmlFor="password" className="text-card-foreground">
+                    Senha
+                  </Label>
+                  <div className="relative mt-2">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Sua senha"
+                      value={loginData.password}
+                      onChange={(e) =>
+                        setLoginData({ ...loginData, password: e.target.value })
+                      }
+                      className="border-border bg-muted text-foreground pr-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-muted-foreground hover:text-foreground absolute top-0 right-0 h-full px-3"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {loginError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{loginError}</AlertDescription>
+                  </Alert>
                 )}
-              </Button>
-            </form>
 
-            <p className="text-muted-foreground mt-4 text-center text-sm">
-              Não tem conta? Entre em contato conosco.
-            </p>
-          </div>
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowLogin(false)}
+                    className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loginMutation.isPending}
+                    className="bg-gradient-brand hover:bg-gradient-brand-hover flex-1 text-white"
+                  >
+                    {loginMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Entrando...
+                      </>
+                    ) : (
+                      "Entrar"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
     </main>
