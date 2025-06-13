@@ -38,6 +38,7 @@ interface AIResponse {
     | "cancelar"
     | "reagendar"
     | "consultar_agendamentos"
+    | "criar_cliente"
   data?: any
 }
 
@@ -62,7 +63,7 @@ export class AIService {
   async processMessage(
     message: string,
     telefone: string,
-    conversationHistory: Array<{ role: string; content: string }> = [],
+    conversationHistory: Array<{ role: string; content?: string }> = [],
   ): Promise<AIResponse> {
     try {
       console.log(`🧠 [AI-SERVICE] Processando mensagem: "${message}"`)
@@ -114,12 +115,19 @@ export class AIService {
       // Criar prompt do sistema personalizado
       const systemPrompt = this.createPersonalizedSystemPrompt(context)
 
+      // CORREÇÃO: Filtrar mensagens inválidas e garantir que todas têm content
+      const validMessages = context.conversationHistory
+        .filter((msg) => msg.content && msg.content.trim() !== "")
+        .slice(-10)
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content || "", // Garantir que content nunca é undefined
+        }))
+
+      console.log(`🧹 [AI-SERVICE] Mensagens válidas após filtragem: ${validMessages.length}`)
+
       // Preparar mensagens para a IA
-      const messages = [
-        { role: "system", content: systemPrompt },
-        ...context.conversationHistory.slice(-10),
-        { role: "user", content: message },
-      ]
+      const messages = [{ role: "system", content: systemPrompt }, ...validMessages, { role: "user", content: message }]
 
       console.log(`🤖 [AI-SERVICE] Enviando para IA: ${messages.length} mensagens`)
 
@@ -187,10 +195,14 @@ export class AIService {
           .orderBy(desc(messages.createdAt))
           .limit(20)
 
-        conversationHistory = dbMessages.reverse().map((msg) => ({
-          role: msg.remetente === "cliente" ? "user" : "assistant",
-          content: msg.conteudo,
-        }))
+        // CORREÇÃO: Garantir que todas as mensagens têm content
+        conversationHistory = dbMessages
+          .filter((msg) => msg.content && msg.content.trim() !== "")
+          .reverse()
+          .map((msg) => ({
+            role: msg.role === "user" ? "user" : "assistant",
+            content: msg.content || "", // Garantir que content nunca é undefined
+          }))
       }
 
       console.log(`✅ [AI-SERVICE] Contexto carregado via webhooks:`, {
@@ -230,7 +242,7 @@ export class AIService {
 
     const clienteInfo = cliente
       ? `Cliente conhecido: ${cliente.nome} (telefone: ${cliente.telefone})`
-      : "Cliente novo (precisa perguntar o nome para cadastro)"
+      : "Cliente novo (PRECISA PERGUNTAR O NOME COMPLETO para cadastro)"
 
     const agendamentosInfo =
       agendamentos && agendamentos.length > 0
@@ -253,7 +265,7 @@ ${agendamentoEmAndamento.horario ? `• Horário: ${agendamentoEmAndamento.horar
 `
     }
 
-    return `Você é o assistente virtual da ${configuracao?.nome || "Barbearia do Ruan"}.
+    return `Você é o assistente virtual da ${configuracao?.nome_empresa || "Barbearia do Ruan"}.
 
 🎯 **SUA PERSONALIDADE:**
 - Seja CORDIAL, AMIGÁVEL e NATURAL como uma pessoa real
@@ -263,7 +275,7 @@ ${agendamentoEmAndamento.horario ? `• Horário: ${agendamentoEmAndamento.horar
 - Lembre-se sempre do contexto da conversa
 
 🏪 **INFORMAÇÕES DO NEGÓCIO:**
-- Nome: ${configuracao?.nome || "Barbearia do Ruan"}
+- Nome: ${configuracao?.nome_empresa || "Barbearia do Ruan"}
 - Telefone: ${configuracao?.telefone || "(51) 98761-4130"}
 - Endereço: ${configuracao?.endereco || "Rua Principal, 123"}
 - Horário: ${configuracao?.horaInicio || "09:00"} às ${configuracao?.horaFim || "18:00"}
@@ -282,7 +294,7 @@ ${historicoInfo}
 🎯 **SUAS RESPONSABILIDADES:**
 1. **Cumprimentar** de forma calorosa na primeira mensagem
 2. **Lembrar** do contexto das mensagens anteriores
-3. **Perguntar o nome** se for cliente novo (MUITO IMPORTANTE)
+3. **PERGUNTAR O NOME COMPLETO** se for cliente novo (OBRIGATÓRIO)
 4. **Verificar disponibilidade** antes de agendar
 5. **Agendar AUTOMATICAMENTE** quando tiver: nome, serviço, data e horário disponível
 6. **Perguntar** de forma natural o que falta para agendar
@@ -297,9 +309,15 @@ ${historicoInfo}
 ⚠️ **IMPORTANTE PARA NOVOS CLIENTES:**
 - Se o cliente não estiver cadastrado, SEMPRE pergunte o nome completo
 - Explique que o nome é necessário para o cadastro
+- Use frases como: "Para fazer seu agendamento, preciso saber seu nome completo, por favor!"
 - Só prossiga com agendamento após ter o nome
 
 🔧 **AÇÕES OBRIGATÓRIAS - USE SEMPRE QUE NECESSÁRIO:**
+
+**PARA CRIAR CLIENTE NOVO:**
+- Quando tiver o nome de um cliente não cadastrado
+- SEMPRE use: "WEBHOOK:criar_cliente"
+- Exemplo: Cliente novo diz "Meu nome é João Silva" → "WEBHOOK:criar_cliente"
 
 **PARA LISTAR SERVIÇOS:**
 - Quando cliente perguntar sobre serviços, preços ou o que vocês fazem
@@ -326,7 +344,21 @@ ${historicoInfo}
 - SEMPRE use: "WEBHOOK:consultar_agendamentos"
 - Exemplo: "Quais são meus agendamentos?" → "WEBHOOK:consultar_agendamentos"
 
+📋 **FLUXO PARA CLIENTES NOVOS:**
+
+1. Cliente não cadastrado envia primeira mensagem
+2. Você: Saudação + "Para começar, qual é o seu nome completo?"
+3. Cliente: "Meu nome é João Silva"
+4. Você: "WEBHOOK:criar_cliente" (sistema cadastra automaticamente)
+5. Continue com o atendimento normalmente
+
 📋 **EXEMPLOS PRÁTICOS:**
+
+Cliente novo: "Oi, quero agendar um corte"
+Você: "Olá! Que bom ter você aqui! 😊 Para fazer seu agendamento, preciso saber seu nome completo, por favor!"
+
+Cliente: "Meu nome é João Silva"
+Você: "WEBHOOK:criar_cliente"
 
 Cliente: "Quais serviços vocês fazem?"
 Você: "WEBHOOK:listar_servicos"
@@ -347,11 +379,13 @@ Você: "WEBHOOK:consultar_agendamentos"
 - NUNCA liste horários sem usar WEBHOOK:listar_horarios
 - SEMPRE use os webhooks para qualquer consulta ou ação
 - Se não souber algo, use o webhook apropriado
+- SEMPRE cadastre clientes novos com WEBHOOK:criar_cliente
 
 🚨 **IMPORTANTE:**
 - Toda vez que precisar de informações do sistema, use WEBHOOK:(ação)
 - Não invente respostas - sempre consulte via webhook
-- Os webhooks são sua fonte de verdade para tudo`
+- Os webhooks são sua fonte de verdade para tudo
+- SEMPRE cadastre clientes novos antes de agendar`
   }
 
   private async parseAndProcessResponse(
@@ -377,6 +411,26 @@ Você: "WEBHOOK:consultar_agendamentos"
     console.log(`📋 [AI-SERVICE] Dados combinados para agendamento:`, dadosAgendamento)
 
     // 1. DETECTAR WEBHOOKS EXPLÍCITOS NA RESPOSTA DA IA
+
+    // Criar cliente novo
+    if (lowerAI.includes("webhook:criar_cliente")) {
+      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:criar_cliente`)
+
+      const nomeExtraido = this.extrairNome(userMessage)
+      if (!nomeExtraido) {
+        return {
+          message: "Não consegui entender seu nome. Pode me falar seu nome completo novamente? 😊",
+        }
+      }
+
+      const resultado = await this.criarClienteViaWebhook(telefone, nomeExtraido)
+      return {
+        message: resultado.message,
+        action: "criar_cliente",
+        data: resultado,
+      }
+    }
+
     if (lowerAI.includes("webhook:listar_servicos")) {
       console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:listar_servicos`)
       const servicosTexto = this.formatarServicosNatural(context.servicos)
@@ -526,6 +580,20 @@ Você: "WEBHOOK:consultar_agendamentos"
 
     // 2. DETECTAR INTENÇÕES NA MENSAGEM DO USUÁRIO (fallback)
 
+    // Detectar se cliente novo está fornecendo o nome
+    if (!context.cliente && this.extrairNome(userMessage)) {
+      console.log(`🎯 [AI-SERVICE] Detectado: Cliente novo fornecendo nome`)
+      const nomeExtraido = this.extrairNome(userMessage)
+      if (nomeExtraido) {
+        const resultado = await this.criarClienteViaWebhook(telefone, nomeExtraido)
+        return {
+          message: resultado.message,
+          action: "criar_cliente",
+          data: resultado,
+        }
+      }
+    }
+
     // Listar serviços
     if (
       lowerMessage.includes("serviços") ||
@@ -656,6 +724,48 @@ Você: "WEBHOOK:consultar_agendamentos"
     // 3. Resposta padrão da IA
     console.log(`💬 [AI-SERVICE] Usando resposta padrão da IA`)
     return { message: aiText }
+  }
+
+  private async criarClienteViaWebhook(telefone: string, nome: string) {
+    try {
+      console.log(`🆕 [AI-SERVICE] Criando cliente via webhook: ${nome} - ${telefone}`)
+
+      const response = await fetch(`${this.baseUrl}/api/webhooks/criar-cliente`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ telefone, nome }),
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      console.log(`✅ [AI-SERVICE] Cliente criado via webhook:`, result.cliente?.id)
+
+      if (result.jaExistia) {
+        return {
+          success: true,
+          message: `Oi ${result.cliente.nome}! Que bom te ver de novo! 😊 Como posso te ajudar hoje?`,
+          cliente: result.cliente,
+        }
+      } else {
+        return {
+          success: true,
+          message: `Prazer em conhecer você, ${result.cliente.nome}! 😊 Agora você está cadastrado. Como posso te ajudar hoje?`,
+          cliente: result.cliente,
+        }
+      }
+    } catch (error) {
+      console.error("💥 [AI-SERVICE] Erro ao criar cliente:", error)
+      return {
+        success: false,
+        message: "Ops! Tive um probleminha para cadastrar você. 😅 Pode tentar me falar seu nome novamente?",
+      }
+    }
   }
 
   private atualizarContextoAgendamento(telefone: string, dados: any) {
@@ -1038,7 +1148,7 @@ Você: "WEBHOOK:consultar_agendamentos"
 
   private isPrimeiraMensagemDaConversa(
     telefone: string,
-    conversationHistory: Array<{ role: string; content: string }>,
+    conversationHistory: Array<{ role: string; content?: string }>,
   ): boolean {
     // Se já fizemos a saudação para este telefone, não é primeira mensagem
     if (this.saudacoesFeitas.has(telefone)) {
@@ -1166,7 +1276,7 @@ Você: "WEBHOOK:consultar_agendamentos"
       perguntaContextual = " Em que posso te ajudar?"
     } else {
       // Para clientes novos, perguntar o nome
-      perguntaContextual = " Para começar, qual é o seu nome?"
+      perguntaContextual = " Para começar, qual é o seu nome completo?"
     }
 
     return saudacaoEscolhida + perguntaContextual

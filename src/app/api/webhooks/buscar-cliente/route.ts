@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
       cliente,
       agendamentos: agendamentosCliente,
       encontrado: !!cliente,
+      telefone: telefoneClean,
     })
   } catch (error) {
     console.error("💥 [WEBHOOK-CLIENTE] Erro:", error)

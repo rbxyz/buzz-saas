@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { createTRPCRouter, publicProcedure } from "../trpc"
 import { db } from "@/server/db"
-import { agendamentos, clientes, intervalosTrabalho } from "@/server/db/schema"
+import { agendamentos, clientes, intervalosTrabalho, servicos } from "@/server/db/schema"
 import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
 import { sql, desc } from "drizzle-orm"
@@ -18,15 +18,9 @@ type ServicoConfigurado = {
   duracaoMinutos?: number
 }
 
-// Função helper para converter dia da semana com tipagem segura
-function getDiaSemana(date: Date): DiaSemana {
-  const dias: DiaSemana[] = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
-  const dayIndex = date.getDay()
-  const dia = dias[dayIndex]
-  if (!dia) {
-    throw new Error(`Índice de dia inválido: ${dayIndex}`)
-  }
-  return dia
+// Função helper para converter dia da semana para número (conforme schema)
+function getDiaSemanaNumero(date: Date): number {
+  return date.getDay() // 0=Domingo, 1=Segunda, etc.
 }
 
 // Função helper para validar se uma string é um dia da semana válido
@@ -71,6 +65,24 @@ function formatarTelefone(telefone: string): string {
   return `55${numeroLimpo}`
 }
 
+// Função para verificar colunas que realmente existem no banco
+async function obterColunasReais(nomeTabela: string): Promise<string[]> {
+  try {
+    const result = await db.execute(sql`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = ${nomeTabela}
+    `)
+
+    const colunas = result.rows.map((row: any) => row.column_name as string)
+    console.log(`🔍 [SCHEMA] Colunas reais da tabela ${nomeTabela}:`, colunas)
+    return colunas
+  } catch (error) {
+    console.error(`❌ [SCHEMA] Erro ao verificar colunas da tabela ${nomeTabela}:`, error)
+    return []
+  }
+}
+
 export const agendamentoRouter = createTRPCRouter({
   getByData: publicProcedure.input(z.object({ date: z.string() })).query(async ({ input }) => {
     const start = dayjs(input.date).startOf("day").toDate()
@@ -95,10 +107,41 @@ export const agendamentoRouter = createTRPCRouter({
     return agendamentosDoDia
   }),
 
+  getByDateRange: publicProcedure
+    .input(
+      z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const start = dayjs(input.startDate).startOf("day").toDate();
+      const end = dayjs(input.endDate).endOf("day").toDate();
+
+      const agendamentosDoPeriodo = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          duracaoMinutos: agendamentos.duracaoMinutos,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end)))
+        .orderBy(agendamentos.dataHora);
+
+      return agendamentosDoPeriodo;
+    }),
+
+
   create: publicProcedure
     .input(
       z.object({
-        clienteId: z.string().uuid(),
+        clienteId: z.string(), // Aceitar string para IDs numéricos
         data: z.string(),
         horario: z.string(),
         servico: z.string(),
@@ -106,20 +149,26 @@ export const agendamentoRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
+      console.log("🚀 [AGENDAMENTO] Iniciando criação de agendamento:", input)
+
       const dataHora = dayjs(`${input.data}T${input.horario}`).toDate()
 
       const configuracao = await db.query.configuracoes.findFirst()
       if (!configuracao) throw new Error("Configuração não encontrada")
 
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome.toLowerCase() === input.servico.toLowerCase())
+      // Buscar serviços da tabela servicos
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, configuracao.userId),
+      })
+
+      const servicoSelecionado = servicosUsuario.find((s) => s.nome.toLowerCase() === input.servico.toLowerCase())
 
       if (!servicoSelecionado) {
-        throw new Error(`Serviço "${input.servico}" não encontrado na configuração`)
+        throw new Error(`Serviço "${input.servico}" não encontrado`)
       }
 
-      const valorCobrado = servicoSelecionado.preco
-      const duracaoMinutos = servicoSelecionado.duracaoMinutos ?? 30
+      const valorCobrado = Number.parseFloat(servicoSelecionado.preco?.toString() ?? "0")
+      const duracaoMinutos = servicoSelecionado.duracao ?? 30
 
       // Verificar conflitos de horário
       const dataInicio = dayjs(`${input.data}T${input.horario}`)
@@ -141,7 +190,7 @@ export const agendamentoRouter = createTRPCRouter({
       // Verificar se há conflito
       const temConflito = agendamentosExistentes.some((agendamento) => {
         const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
+        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos || 30, "minute")
 
         // Verifica se há sobreposição
         return dataInicio.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
@@ -151,45 +200,98 @@ export const agendamentoRouter = createTRPCRouter({
         throw new Error("Horário não disponível - conflita com outro agendamento")
       }
 
-      const result = await db
-        .insert(agendamentos)
-        .values({
-          clienteId: input.clienteId,
-          dataHora,
-          servico: input.servico,
-          status: input.status,
-          valorCobrado,
-          duracaoMinutos,
-        })
-        .returning({
+      // Verificar quais colunas realmente existem no banco
+      const colunasReais = await obterColunasReais("agendamentos")
+      console.log("📋 [AGENDAMENTO] Colunas disponíveis:", colunasReais)
+
+      // Converter clienteId para número se for string numérica
+      const clienteIdNumerico = Number.parseInt(input.clienteId, 10)
+
+      if (isNaN(clienteIdNumerico)) {
+        throw new Error("ID do cliente inválido")
+      }
+
+      // Preparar objeto de valores base com apenas campos obrigatórios
+      const valoresBase: any = {
+        clienteId: clienteIdNumerico,
+        dataHora,
+        servico: input.servico,
+        status: input.status,
+      }
+
+      // Adicionar campos condicionalmente baseado nas colunas reais
+      if (colunasReais.includes("user_id")) {
+        valoresBase.userId = 1
+      }
+
+      if (colunasReais.includes("servico_id")) {
+        valoresBase.servicoId = servicoSelecionado.id
+      }
+
+      if (colunasReais.includes("duracao_minutos")) {
+        valoresBase.duracaoMinutos = duracaoMinutos
+      }
+
+      if (colunasReais.includes("valor_cobrado") && valorCobrado > 0) {
+        valoresBase.valorCobrado = valorCobrado
+      }
+
+      console.log("📝 [AGENDAMENTO] Valores finais para inserção:", valoresBase)
+
+      try {
+        const result = await db.insert(agendamentos).values(valoresBase).returning({
           id: agendamentos.id,
         })
 
-      return result[0]
+        console.log("✅ [AGENDAMENTO] Agendamento criado com sucesso:", result[0])
+        return result[0]
+      } catch (error) {
+        console.error("💥 [AGENDAMENTO] Erro na inserção:", error)
+        throw new Error(`Erro ao criar agendamento: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
+      }
     }),
 
   getServicos: publicProcedure.query(async () => {
-    const configuracao = await db.query.configuracoes.findFirst()
-    if (!configuracao) return []
+    console.log("🔍 [AGENDAMENTO] Iniciando busca de serviços...")
 
-    const servicos = configuracao.servicos as ServicoConfigurado[]
-    return servicos.map((servico) => ({
-      nome: servico.nome,
-      preco: servico.preco,
-      duracaoMinutos: servico.duracaoMinutos ?? 30,
-    }))
-  }),
+    try {
+      // Buscar configuração para obter o userId
+      const configuracao = await db.query.configuracoes.findFirst()
+      console.log("📋 [AGENDAMENTO] Configuração encontrada:", {
+        existe: !!configuracao,
+        id: configuracao?.id,
+        userId: configuracao?.userId,
+      })
 
-  getConfiguracoes: publicProcedure.query(async () => {
-    const configuracao = await db.query.configuracoes.findFirst()
-    return configuracao
-      ? {
-          nome: configuracao.nome,
-          telefone: configuracao.telefone,
-          endereco: configuracao.endereco,
-          diasAntecedenciaAgendamento: configuracao.diasAntecedenciaAgendamento ?? 30,
+      if (!configuracao) {
+        console.log("❌ [AGENDAMENTO] Nenhuma configuração encontrada")
+        return []
+      }
+
+      // Buscar serviços da tabela servicos usando o userId da configuração
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, configuracao.userId),
+        orderBy: (servicos, { asc }) => [asc(servicos.nome)],
+      })
+
+      console.log("🎯 [AGENDAMENTO] Serviços encontrados na tabela servicos:", servicosUsuario)
+
+      // Converter serviços para o formato esperado pelo componente
+      const servicosFormatados = servicosUsuario.map((servico) => {
+        console.log("🔄 [AGENDAMENTO] Processando serviço:", servico)
+        return {
+          nome: servico.nome,
+          preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
+          duracaoMinutos: servico.duracao,
         }
-      : null
+      })
+
+      console.log("✅ [AGENDAMENTO] Serviços formatados:", servicosFormatados)
+      return servicosFormatados
+    } catch (error) {
+      console.error("💥 [AGENDAMENTO] Erro ao buscar serviços:", error)
+      return []
+    }
   }),
 
   getHorariosDisponiveis: publicProcedure
@@ -205,7 +307,7 @@ export const agendamentoRouter = createTRPCRouter({
       }
 
       const data = dayjs(input.data)
-      const diaSemana = getDiaSemana(data.toDate())
+      const diaSemanaNumero = getDiaSemanaNumero(data.toDate())
 
       // Verificar se a data não é no passado
       if (data.isBefore(dayjs(), "day")) {
@@ -220,7 +322,7 @@ export const agendamentoRouter = createTRPCRouter({
 
       // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
+        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
@@ -247,8 +349,9 @@ export const agendamentoRouter = createTRPCRouter({
       } else {
         // Se não existem intervalos configurados, usar horário padrão
         const diasPadrao = (configuracao.dias as string[]) ?? []
+        const diaSemana = getDiaSemanaNumero(data.toDate())
 
-        if (!diasPadrao.includes(diaSemana)) {
+        if (!configuracao.dias?.includes(diaSemana)) {
           return { horarios: [], erro: "Estabelecimento fechado neste dia" }
         }
 
@@ -265,14 +368,17 @@ export const agendamentoRouter = createTRPCRouter({
         return { horarios: [], erro: "Estabelecimento fechado neste dia" }
       }
 
-      // Buscar duração do serviço
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
+      // Buscar serviços da tabela servicos
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, configuracao.userId),
+      })
+
+      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
       if (!servicoSelecionado) {
         return { horarios: [], erro: "Serviço não encontrado" }
       }
 
-      const duracaoServico = servicoSelecionado.duracaoMinutos ?? 30
+      const duracaoServico = servicoSelecionado.duracao ?? 30
 
       // Gerar todos os horários possíveis dos intervalos
       for (const intervalo of intervalosInfo) {
@@ -367,14 +473,19 @@ export const agendamentoRouter = createTRPCRouter({
         throw new Error("Configuração não encontrada")
       }
 
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
+      // Buscar serviços da tabela servicos
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, configuracao.userId),
+      })
+
+      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
 
       if (!servicoSelecionado) {
         throw new Error("Serviço não encontrado")
       }
 
-      const duracaoMinutos = servicoSelecionado.duracaoMinutos ?? 30
+      const duracaoMinutos = servicoSelecionado.duracao ?? 30
+      const valorCobrado = Number.parseFloat(servicoSelecionado.preco?.toString() ?? "0")
       const fimAgendamento = dataHora.add(duracaoMinutos, "minute")
 
       // Verificar conflitos
@@ -390,7 +501,7 @@ export const agendamentoRouter = createTRPCRouter({
 
       const temConflito = conflitos.some((agendamento) => {
         const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
+        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos || 30, "minute")
 
         return dataHora.isBefore(fimExistente) && fimAgendamento.isAfter(inicioExistente)
       })
@@ -399,18 +510,36 @@ export const agendamentoRouter = createTRPCRouter({
         throw new Error("Horário não disponível")
       }
 
+      // Verificar quais colunas realmente existem no banco
+      const colunasReais = await obterColunasReais("agendamentos")
+
+      // Preparar objeto de valores base
+      const valoresBase: any = {
+        clienteId: cliente.id,
+        dataHora: dataHora.toDate(),
+        servico: input.servico,
+        status: "agendado",
+      }
+
+      // Adicionar campos condicionalmente baseado nas colunas reais
+      if (colunasReais.includes("user_id")) {
+        valoresBase.userId = 1
+      }
+
+      if (colunasReais.includes("servico_id")) {
+        valoresBase.servicoId = servicoSelecionado.id
+      }
+
+      if (colunasReais.includes("duracao_minutos")) {
+        valoresBase.duracaoMinutos = duracaoMinutos
+      }
+
+      if (colunasReais.includes("valor_cobrado") && valorCobrado > 0) {
+        valoresBase.valorCobrado = valorCobrado
+      }
+
       // Criar agendamento
-      const result = await db
-        .insert(agendamentos)
-        .values({
-          clienteId: cliente.id,
-          dataHora: dataHora.toDate(),
-          servico: input.servico,
-          status: "agendado",
-          valorCobrado: servicoSelecionado.preco,
-          duracaoMinutos,
-        })
-        .returning()
+      const result = await db.insert(agendamentos).values(valoresBase).returning()
 
       const agendamento = result[0]!
 
@@ -443,7 +572,7 @@ Olá, ${input.nome}! Seu agendamento foi realizado com sucesso.
 • *Serviço:* ${input.servico}
 • *Data:* ${dataFormatada}
 • *Horário:* ${input.horario}
-• *Valor:* R$ ${servicoSelecionado.preco.toFixed(2)}
+• *Valor:* R$ ${valorCobrado.toFixed(2)}
 
 📍 *Local:* ${configuracao.endereco || "Endereço não informado"}
 📞 *Contato:* ${configuracao.telefone || "Telefone não informado"}
@@ -596,6 +725,9 @@ Obrigado pela preferência! 💈✨`
         ),
       )
       .orderBy(desc(agendamentos.dataHora))
+console.log("TRPC INPUT:", input);
+console.log("Start:", startDate.toISOString());
+console.log("End:", endDate.toISOString());
 
     return cortes
   }),
@@ -632,83 +764,6 @@ Obrigado pela preferência! 💈✨`
     return resultado
   }),
 
-  criarAgendamentoManual: publicProcedure
-    .input(
-      z.object({
-        clienteId: z.string().uuid(),
-        data: z.string(),
-        horario: z.string(),
-        servico: z.string(),
-        status: z.enum(["agendado", "concluido", "cancelado"]),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const dataHora = dayjs(`${input.data}T${input.horario}`).toDate()
-
-      const configuracao = await db.query.configuracoes.findFirst()
-      if (!configuracao) throw new Error("Configuração não encontrada")
-
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
-
-      if (!servicoSelecionado) {
-        throw new Error(`Serviço "${input.servico}" não encontrado`)
-      }
-
-      const valorCobrado = servicoSelecionado.preco
-      const duracaoMinutos = servicoSelecionado.duracaoMinutos ?? 30
-
-      // Verificar conflitos apenas se o status for "agendado"
-      if (input.status === "agendado") {
-        const dataInicio = dayjs(`${input.data}T${input.horario}`)
-        const dataFim = dataInicio.add(duracaoMinutos, "minute")
-
-        const start = dataInicio.startOf("day").toDate()
-        const end = dataInicio.endOf("day").toDate()
-
-        const agendamentosExistentes = await db
-          .select({
-            dataHora: agendamentos.dataHora,
-            duracaoMinutos: agendamentos.duracaoMinutos,
-          })
-          .from(agendamentos)
-          .where(
-            and(
-              gte(agendamentos.dataHora, start),
-              lte(agendamentos.dataHora, end),
-              eq(agendamentos.status, "agendado"),
-            ),
-          )
-
-        const temConflito = agendamentosExistentes.some((agendamento) => {
-          const inicioExistente = dayjs(agendamento.dataHora)
-          const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
-
-          return dataInicio.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
-        })
-
-        if (temConflito) {
-          throw new Error("Horário não disponível - conflita com outro agendamento")
-        }
-      }
-
-      const result = await db
-        .insert(agendamentos)
-        .values({
-          clienteId: input.clienteId,
-          dataHora,
-          servico: input.servico,
-          status: input.status,
-          valorCobrado,
-          duracaoMinutos,
-        })
-        .returning({
-          id: agendamentos.id,
-        })
-
-      return result[0]
-    }),
-
   getHorariosDisponiveisPorData: publicProcedure
     .input(
       z.object({
@@ -718,7 +773,7 @@ Obrigado pela preferência! 💈✨`
     )
     .query(async ({ input }) => {
       const data = dayjs(input.data)
-      const diaSemana = getDiaSemana(data.toDate())
+      const diaSemanaNumero = getDiaSemanaNumero(data.toDate())
 
       // Buscar configuração
       const configuracao = await db.query.configuracoes.findFirst()
@@ -728,7 +783,7 @@ Obrigado pela preferência! 💈✨`
 
       // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
+        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
@@ -759,7 +814,7 @@ Obrigado pela preferência! 💈✨`
         // Se não existem intervalos configurados, usar horário padrão
         const diasPadrao = (configuracao.dias as string[]) ?? []
 
-        if (!diasPadrao.includes(diaSemana)) {
+        if (!diasPadrao.includes(diaSemanaNumero)) {
           return {
             horarios: [],
             intervalos: [],
@@ -785,13 +840,16 @@ Obrigado pela preferência! 💈✨`
       }
 
       // Buscar duração do serviço
-      const servicos = configuracao.servicos as ServicoConfigurado[]
-      const servicoSelecionado = servicos.find((s) => s.nome === input.servico)
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, configuracao.userId),
+      })
+
+      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
       if (!servicoSelecionado) {
         return { horarios: [], intervalos: [], erro: "Serviço não encontrado" }
       }
 
-      const duracaoServico = servicoSelecionado.duracaoMinutos ?? 30
+      const duracaoServico = servicoSelecionado.duracao ?? 30
 
       // Gerar todos os horários possíveis dos intervalos (de 10 em 10 minutos)
       const horariosDisponiveis: string[] = []
@@ -917,9 +975,12 @@ Obrigado pela preferência! 💈✨`
       }
 
       // Buscar duração do serviço no array de serviços da configuração
-      const servicos = config.servicos as ServicoConfigurado[]
-      const servicoInfo = servicos.find((s) => s.nome === servico)
-      const duracaoMinutos = servicoInfo?.duracaoMinutos ?? 30
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, config.userId),
+      })
+
+      const servicoInfo = servicosUsuario.find((s) => s.nome === servico)
+      const duracaoMinutos = servicoInfo?.duracao ?? 30
 
       // Converter horário para minutos para facilitar cálculos
       const [horas, minutos] = horario.split(":").map(Number)
@@ -936,10 +997,10 @@ Obrigado pela preferência! 💈✨`
 
       // Buscar intervalos de trabalho para este dia
       const dataObj = dayjs(data)
-      const diaSemana = getDiaSemana(dataObj.toDate())
+      const diaSemanaNumero = getDiaSemanaNumero(dataObj.toDate())
 
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)),
+        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
         orderBy: [intervalosTrabalho.horaInicio],
       })
 
@@ -970,7 +1031,7 @@ Obrigado pela preferência! 💈✨`
         // Se não existem intervalos configurados, usar horário padrão
         const diasPadrao = (config.dias as string[]) ?? []
 
-        if (!diasPadrao.includes(diaSemana)) {
+        if (!diasPadrao.includes(diaSemanaNumero)) {
           return {
             temConflito: true,
             motivo: "Estabelecimento fechado neste dia",

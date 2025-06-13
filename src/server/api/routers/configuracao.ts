@@ -1,28 +1,266 @@
 import { z } from "zod"
-import { createTRPCRouter, publicProcedure } from "../trpc"
+import { createTRPCRouter, publicProcedure } from "@/server/api/trpc"
 import { db } from "@/server/db"
-import { configuracoes } from "@/server/db/schema"
+import { configuracoes, servicos } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
+import { TRPCError } from "@trpc/server"
 
 export const configuracaoRouter = createTRPCRouter({
+  // Adicionar o procedimento listar que está faltando
   listar: publicProcedure.query(async () => {
-    const resultado = await db.query.configuracoes.findFirst()
-    return resultado
+    try {
+      console.log("🔍 [CONFIGURACAO] Iniciando busca de configuração...")
+
+      const config = await db.query.configuracoes.findFirst({
+        orderBy: (configuracoes, { desc }) => [desc(configuracoes.createdAt)],
+      })
+
+      console.log("📋 [CONFIGURACAO] Configuração encontrada:", {
+        existe: !!config,
+        id: config?.id,
+        userId: config?.userId,
+        nomeEmpresa: config?.nomeEmpresa,
+      })
+
+      if (!config) {
+        console.log("❌ [CONFIGURACAO] Nenhuma configuração encontrada, retornando padrão")
+        // Retornar configuração padrão se não existir
+        return {
+          id: null,
+          userId: null,
+          nomeEmpresa: "",
+          telefone: "",
+          endereco: "",
+          logoUrl: "",
+          corPrimaria: "#3B82F6",
+          corSecundaria: "#1E40AF",
+          zapiInstanceId: "",
+          zapiToken: "",
+          zapiClientToken: "",
+          aiEnabled: false,
+          whatsappAgentEnabled: false,
+          servicos: [], // Adicionar array vazio de serviços
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      }
+
+      console.log("🔍 [CONFIGURACAO] Buscando serviços para userId:", config.userId)
+
+      // Buscar serviços associados ao usuário da configuração
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, config.userId),
+        orderBy: (servicos, { asc }) => [asc(servicos.nome)],
+      })
+
+      console.log("🎯 [CONFIGURACAO] Serviços encontrados:", servicosUsuario)
+
+      // Converter serviços para o formato esperado pelo componente
+      const servicosFormatados = servicosUsuario.map((servico) => {
+        console.log("🔄 [CONFIGURACAO] Processando serviço:", servico)
+        return {
+          nome: servico.nome,
+          preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
+          duracaoMinutos: servico.duracao,
+        }
+      })
+
+      console.log("✅ [CONFIGURACAO] Serviços formatados:", servicosFormatados)
+
+      const resultado = {
+        ...config,
+        servicos: servicosFormatados,
+      }
+
+      console.log("🏁 [CONFIGURACAO] Resultado final:", resultado)
+      return resultado
+    } catch (error) {
+      console.error("❌ [CONFIGURACAO] Erro ao listar configurações:", error)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao listar configurações",
+      })
+    }
   }),
 
-  salvar: publicProcedure
+  obterConfiguracao: publicProcedure.query(async () => {
+    try {
+      console.log("🔍 [CONFIGURACAO] Iniciando obtenção de configuração...")
+
+      const config = await db.query.configuracoes.findFirst()
+
+      console.log("📋 [CONFIGURACAO] Configuração obtida:", {
+        existe: !!config,
+        id: config?.id,
+        userId: config?.userId,
+      })
+
+      if (!config) {
+        console.log("❌ [CONFIGURACAO] Nenhuma configuração encontrada, retornando padrão")
+        // Retornar configuração padrão se não existir
+        return {
+          id: null,
+          userId: null,
+          nomeEmpresa: "",
+          telefone: "",
+          endereco: "",
+          logoUrl: "",
+          corPrimaria: "#3B82F6",
+          corSecundaria: "#1E40AF",
+          zapiInstanceId: "",
+          zapiToken: "",
+          zapiClientToken: "",
+          aiEnabled: false,
+          whatsappAgentEnabled: false,
+          servicos: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+      }
+
+      // Buscar serviços associados ao usuário da configuração
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.userId, config.userId),
+        orderBy: (servicos, { asc }) => [asc(servicos.nome)],
+      })
+
+      console.log("🎯 [CONFIGURACAO] Serviços encontrados para obter:", servicosUsuario)
+
+      // Converter serviços para o formato esperado pelo componente
+      const servicosFormatados = servicosUsuario.map((servico) => ({
+        nome: servico.nome,
+        preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
+        duracaoMinutos: servico.duracao,
+      }))
+
+      const resultado = {
+        ...config,
+        servicos: servicosFormatados,
+      }
+
+      console.log("🏁 [CONFIGURACAO] Resultado final obter:", resultado)
+      return resultado
+    } catch (error) {
+      console.error("❌ [CONFIGURACAO] Erro ao obter configuração:", error)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao obter configuração",
+      })
+    }
+  }),
+
+  atualizarConfiguracao: publicProcedure
     .input(
       z.object({
-        id: z.string().uuid().optional(),
-        nome: z.string(),
-        telefone: z.string(),
-        endereco: z.string(),
-        instanceId: z.string(),
-        token: z.string(),
-        whatsappAtivo: z.boolean(),
-        modoTreinoAtivo: z.boolean(),
-        contextoIA: z.string(),
-        dadosIA: z.string(),
+        id: z.number().optional().nullable(),
+        userId: z.number().optional().nullable(),
+        nomeEmpresa: z.string().optional(),
+        telefone: z.string().optional(),
+        endereco: z.string().optional(),
+        logoUrl: z.string().optional(),
+        corPrimaria: z.string().optional(),
+        corSecundaria: z.string().optional(),
+        zapiInstanceId: z.string().optional(),
+        zapiToken: z.string().optional(),
+        zapiClientToken: z.string().optional(),
+        aiEnabled: z.boolean().optional(),
+        whatsappAgentEnabled: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        console.log("🔧 Atualizando configuração:", input)
+
+        const { id, ...configData } = input
+
+        // Se tem ID, é uma atualização
+        if (id) {
+          console.log("📝 Atualizando configuração existente ID:", id)
+
+          const updated = await db
+            .update(configuracoes)
+            .set({
+              ...configData,
+              updatedAt: new Date(),
+            })
+            .where(eq(configuracoes.id, id))
+            .returning()
+
+          if (updated.length === 0) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Configuração não encontrada",
+            })
+          }
+
+          console.log("✅ Configuração atualizada com sucesso!")
+          return updated[0]
+        } else {
+          // Se não tem ID, é uma criação
+          console.log("➕ Criando nova configuração")
+
+          // Verificar se já existe configuração
+          const existing = await db.query.configuracoes.findFirst()
+
+          if (existing) {
+            // Se já existe, atualizar
+            console.log("📝 Configuração já existe, atualizando...")
+            const updated = await db
+              .update(configuracoes)
+              .set({
+                ...configData,
+                updatedAt: new Date(),
+              })
+              .where(eq(configuracoes.id, existing.id))
+              .returning()
+
+            return updated[0]
+          } else {
+            // Se não existe, criar
+            // Precisamos garantir que userId seja fornecido, pois é NOT NULL
+            if (!configData.userId) {
+              // Tentar obter o primeiro usuário disponível
+              const firstUser = await db.query.users.findFirst()
+              if (!firstUser) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "É necessário fornecer um userId válido",
+                })
+              }
+              configData.userId = firstUser.id
+            }
+
+            const created = await db
+              .insert(configuracoes)
+              .values({
+                ...configData,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning()
+
+            console.log("✅ Nova configuração criada com sucesso!")
+            return created[0]
+          }
+        }
+      } catch (error) {
+        console.error("❌ Erro ao atualizar configuração:", error)
+
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Erro ao salvar configuração",
+        })
+      }
+    }),
+
+  atualizarServicos: publicProcedure
+    .input(
+      z.object({
+        id: z.number().optional().nullable(),
         servicos: z.array(
           z.object({
             nome: z.string(),
@@ -30,172 +268,69 @@ export const configuracaoRouter = createTRPCRouter({
             duracaoMinutos: z.number().optional(),
           }),
         ),
-        diasAntecedenciaAgendamento: z.number().optional(),
       }),
     )
     .mutation(async ({ input }) => {
-      const now = new Date()
+      try {
+        console.log("🔧 Atualizando serviços:", input)
 
-      const existente = await db.query.configuracoes.findFirst()
+        // Buscar configuração existente
+        const existing = await db.query.configuracoes.findFirst()
 
-      if (existente) {
-        await db
-          .update(configuracoes)
-          .set({
-            nome: input.nome,
-            telefone: input.telefone,
-            endereco: input.endereco,
-            instanceId: input.instanceId,
-            token: input.token,
-            whatsappAtivo: input.whatsappAtivo,
-            modoTreinoAtivo: input.modoTreinoAtivo,
-            contextoIA: input.contextoIA,
-            dadosIA: input.dadosIA,
-            servicos: input.servicos,
-            diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento ?? 30,
-            updatedAt: now,
+        if (!existing) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Configuração não encontrada",
           })
-          .where(eq(configuracoes.id, existente.id))
+        }
 
-        return { ok: true, tipo: "atualizado" }
+        // Remover todos os serviços existentes do usuário
+        await db.delete(servicos).where(eq(servicos.userId, existing.userId))
+
+        // Inserir novos serviços
+        if (input.servicos.length > 0) {
+          const novosServicos = input.servicos.map((servico) => ({
+            userId: existing.userId,
+            nome: servico.nome,
+            preco: servico.preco.toString(),
+            duracao: servico.duracaoMinutos ?? 30,
+            ativo: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }))
+
+          await db.insert(servicos).values(novosServicos)
+        }
+
+        console.log("✅ Serviços atualizados com sucesso!")
+
+        // Retornar configuração atualizada com serviços
+        const servicosAtualizados = await db.query.servicos.findMany({
+          where: eq(servicos.userId, existing.userId),
+          orderBy: (servicos, { asc }) => [asc(servicos.nome)],
+        })
+
+        const servicosFormatados = servicosAtualizados.map((servico) => ({
+          nome: servico.nome,
+          preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
+          duracaoMinutos: servico.duracao,
+        }))
+
+        return {
+          ...existing,
+          servicos: servicosFormatados,
+        }
+      } catch (error) {
+        console.error("❌ Erro ao atualizar serviços:", error)
+
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Erro ao salvar serviços",
+        })
       }
-
-      await db.insert(configuracoes).values({
-        nome: input.nome,
-        telefone: input.telefone,
-        endereco: input.endereco,
-        instanceId: input.instanceId,
-        token: input.token,
-        whatsappAtivo: input.whatsappAtivo,
-        modoTreinoAtivo: input.modoTreinoAtivo,
-        contextoIA: input.contextoIA,
-        dadosIA: input.dadosIA,
-        servicos: input.servicos,
-        diasAntecedenciaAgendamento: input.diasAntecedenciaAgendamento ?? 30,
-        createdAt: now,
-        updatedAt: now,
-      })
-
-      return { ok: true, tipo: "criado" }
     }),
-
-  atualizarConfiguracao: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        nome: z.string().optional(),
-        telefone: z.string().optional(),
-        endereco: z.string().optional(),
-        diasAntecedenciaAgendamento: z.number().optional(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const { id, ...dadosAtualizar } = input
-
-      if (Object.keys(dadosAtualizar).length === 0) {
-        throw new Error("Nenhum campo para atualizar.")
-      }
-
-      await db
-        .update(configuracoes)
-        .set({
-          ...dadosAtualizar,
-          updatedAt: new Date(),
-        })
-        .where(eq(configuracoes.id, id))
-
-      return { ok: true }
-    }),
-
-  atualizarIntegracaoWhatsapp: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        instanceId: z.string(),
-        token: z.string(),
-        whatsappAtivo: z.boolean(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      await db
-        .update(configuracoes)
-        .set({
-          instanceId: input.instanceId,
-          token: input.token,
-          whatsappAtivo: input.whatsappAtivo,
-          updatedAt: new Date(),
-        })
-        .where(eq(configuracoes.id, input.id))
-      return { ok: true }
-    }),
-
-  atualizarModoTreino: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        modoTreinoAtivo: z.boolean(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      await db
-        .update(configuracoes)
-        .set({
-          modoTreinoAtivo: input.modoTreinoAtivo,
-          updatedAt: new Date(),
-        })
-        .where(eq(configuracoes.id, input.id))
-      return { ok: true }
-    }),
-
-  atualizarIA: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        contextoIA: z.string(),
-        dadosIA: z.string(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      await db
-        .update(configuracoes)
-        .set({
-          contextoIA: input.contextoIA,
-          dadosIA: input.dadosIA,
-          updatedAt: new Date(),
-        })
-        .where(eq(configuracoes.id, input.id))
-      return { ok: true }
-    }),
-
-  atualizarServicos: publicProcedure
-    .input(
-      z.object({
-        id: z.string().uuid(),
-        servicos: z
-          .array(
-            z.object({
-              nome: z.string(),
-              preco: z.number(),
-              duracaoMinutos: z.number().optional(),
-            }),
-          )
-          .min(1),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      await db
-        .update(configuracoes)
-        .set({
-          servicos: input.servicos,
-          updatedAt: new Date(),
-        })
-        .where(eq(configuracoes.id, input.id))
-      return { ok: true }
-    }),
-
-  getServicos: publicProcedure.query(async () => {
-    const resultado = await db.query.configuracoes.findFirst()
-    if (!resultado) return []
-    return resultado.servicos ?? []
-  }),
 })

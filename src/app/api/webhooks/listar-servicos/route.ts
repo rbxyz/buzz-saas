@@ -1,12 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { configuracoes } from "@/server/db/schema"
-
-interface ServicoConfigurado {
-  nome: string
-  preco: number
-  duracaoMinutos: number
-}
+import { configuracoes, servicos } from "@/server/db/schema"
+import { eq } from "drizzle-orm"
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,31 +19,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
     }
 
-    // Extrair serviços
-    let servicos: ServicoConfigurado[] = []
-    if (config.servicos && Array.isArray(config.servicos)) {
-      servicos = config.servicos as ServicoConfigurado[]
-    } else {
-      // Serviços padrão
-      servicos = [
-        { nome: "Corte", preco: 25.0, duracaoMinutos: 30 },
-        { nome: "Barba", preco: 15.0, duracaoMinutos: 20 },
-        { nome: "Corte + Barba", preco: 35.0, duracaoMinutos: 45 },
-      ]
-    }
+    // CORREÇÃO: Buscar serviços da tabela servicos
+    console.log(`🔍 [WEBHOOK-SERVICOS] Buscando serviços da tabela servicos`)
+    const servicosDisponiveis = await db.select().from(servicos).where(eq(servicos.ativo, true))
 
-    console.log(`✅ [WEBHOOK-SERVICOS] ${servicos.length} serviços encontrados`)
+    // Converter para o formato esperado
+    const servicosFormatados = servicosDisponiveis.map((servico) => ({
+      nome: servico.nome,
+      preco: Number(servico.preco),
+      duracaoMinutos: servico.duracao,
+    }))
+
+    console.log(
+      `✅ [WEBHOOK-SERVICOS] ${servicosFormatados.length} serviços encontrados:`,
+      servicosFormatados.map((s) => s.nome),
+    )
 
     return NextResponse.json({
       success: true,
-      servicos,
+      servicos: servicosFormatados,
       configuracao: {
-        nome: config.nome,
+        nome_empresa: config.nomeEmpresa,
         telefone: config.telefone,
         endereco: config.endereco,
-        horaInicio: config.horaInicio,
-        horaFim: config.horaFim,
-        dias: config.dias,
+        horaInicio: "09:00", // Valores padrão por enquanto
+        horaFim: "18:00",
+        dias: ["segunda", "terca", "quarta", "quinta", "sexta", "sabado"],
       },
     })
   } catch (error) {

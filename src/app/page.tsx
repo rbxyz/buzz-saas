@@ -23,8 +23,6 @@ import {
   CalendarDays,
   Menu,
   ChevronLeft,
-  Users,
-  Star,
   AlertCircle,
   EyeOff,
   Eye,
@@ -92,13 +90,6 @@ export default function LandingPage() {
 
   // Busca parceiros (tipo "parceria")
   const { data: parcerias } = api.linktree.listarParcerias.useQuery();
-
-  // Busca clientes (tipo "cliente")
-  const {
-    data: clientes,
-    isLoading: loadingClientes,
-    isError: errorClientes,
-  } = api.linktree.listarClientes.useQuery();
 
   // Busca configurações da barbearia
   const { data: configs } = api.configuracao.listar.useQuery();
@@ -481,7 +472,7 @@ export default function LandingPage() {
                       Localização
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      {configs.endereco || "Endereço não informado"}
+                      {configs.endereco ?? "Endereço não informado"}
                     </p>
                   </div>
                 </CardContent>
@@ -497,7 +488,7 @@ export default function LandingPage() {
                       Contato
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      {configs.telefone || "Telefone não informado"}
+                      {configs.telefone ?? "Telefone não informado"}
                     </p>
                   </div>
                 </CardContent>
@@ -1639,92 +1630,6 @@ export default function LandingPage() {
                 </div>
               )}
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* Seção de Clientes */}
-      {clientes && clientes.length > 0 && (
-        <section id="clientes" className="bg-muted/30 px-6 py-20">
-          <div className="container mx-auto max-w-6xl">
-            <div className="mb-16 text-center">
-              <h2 className="text-foreground mb-4 text-4xl font-bold">
-                <Users className="text-brand-primary mr-3 inline h-8 w-8" />
-                Nossos Clientes
-              </h2>
-              <p className="text-muted-foreground text-lg">
-                Conheça alguns dos nossos clientes satisfeitos
-              </p>
-            </div>
-
-            {loadingClientes ? (
-              <div className="text-brand-primary flex items-center justify-center gap-2 py-12">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <span>Carregando clientes...</span>
-              </div>
-            ) : errorClientes ? (
-              <div className="py-12 text-center">
-                <AlertCircle className="text-error mx-auto mb-4 h-12 w-12" />
-                <p className="text-error">Erro ao carregar clientes</p>
-              </div>
-            ) : (
-              <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-                {clientes.slice(0, 6).map((cliente) => (
-                  <Card
-                    key={cliente.id}
-                    className="border-border bg-card/50 group overflow-hidden backdrop-blur-sm transition-all duration-300 hover:shadow-lg"
-                  >
-                    <div className="relative aspect-square overflow-hidden">
-                      {cliente.imagem && cliente.mimeType ? (
-                        <Image
-                          src={`data:${cliente.mimeType};base64,${cliente.imagem}`}
-                          alt={cliente.titulo ?? "Cliente"}
-                          fill
-                          className="object-cover transition-transform duration-300 group-hover:scale-110"
-                        />
-                      ) : (
-                        <div className="from-brand-primary/20 to-brand-secondary/20 flex h-full w-full items-center justify-center bg-gradient-to-br">
-                          <User className="text-brand-primary h-16 w-16" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    </div>
-
-                    <CardContent className="p-6">
-                      <div className="space-y-3">
-                        <h3 className="text-card-foreground text-xl font-bold">
-                          {cliente.titulo}
-                        </h3>
-                        {cliente.descricao && (
-                          <p className="text-muted-foreground line-clamp-3 text-sm">
-                            {cliente.descricao}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className="h-4 w-4 fill-current text-yellow-400"
-                            />
-                          ))}
-                        </div>
-                        {cliente.url && (
-                          <Button
-                            onClick={() => handleVisitarSite(cliente.url ?? "")}
-                            variant="outline"
-                            size="sm"
-                            className="border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full"
-                          >
-                            Ver Perfil
-                            <ChevronRight className="ml-2 h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
           </div>
         </section>
       )}

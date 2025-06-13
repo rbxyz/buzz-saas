@@ -3,6 +3,7 @@ import { createTRPCRouter, publicProcedure } from "../trpc"
 import { db } from "@/server/db"
 import { clientes } from "@/server/db/schema"
 import { eq, sql, desc } from "drizzle-orm"
+import { TRPCError } from "@trpc/server"
 
 export const clienteRouter = createTRPCRouter({
   listar: publicProcedure.query(async () => {
@@ -15,58 +16,184 @@ export const clienteRouter = createTRPCRouter({
       z.object({
         nome: z.string().min(1, "Nome é obrigatório"),
         telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
-        email: z.string().optional().nullable(), // Permite string, undefined ou null
-        dataNascimento: z.string().optional().nullable(), // Permite string, undefined ou null
+        email: z.string().optional().nullable(),
       }),
     )
     .mutation(async ({ input }) => {
-      const novoCliente = await db
-        .insert(clientes)
-        .values({
-          nome: input.nome,
-          telefone: input.telefone,
-          email: input.email && input.email.trim() !== "" ? input.email : null,
-          dataNascimento: input.dataNascimento && input.dataNascimento.trim() !== "" ? input.dataNascimento : null,
-        })
-        .returning()
+      console.log("🔍 Input recebido para criar cliente:", input)
 
-      return novoCliente[0]
+      try {
+        // Verificar se já existe um cliente com este telefone ANTES de tentar inserir
+        const telefoneNumeros = input.telefone.replace(/\D/g, "")
+
+        const clienteExistente = await db
+          .select()
+          .from(clientes)
+          .where(
+            sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros}`,
+          )
+          .limit(1)
+
+        if (clienteExistente.length > 0) {
+          console.log("❌ Cliente já existe com este telefone:", clienteExistente[0])
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "TELEFONE_DUPLICADO",
+            cause: {
+              clienteExistente: clienteExistente[0],
+              telefone: input.telefone,
+            },
+          })
+        }
+
+        const novoCliente = await db
+          .insert(clientes)
+          .values({
+            nome: input.nome,
+            telefone: input.telefone,
+            email: input.email ?? null,
+          })
+          .returning()
+
+        console.log("✅ Cliente criado com sucesso:", novoCliente[0])
+        return novoCliente[0]
+      } catch (error) {
+        console.error("❌ Erro detalhado ao criar cliente:", error)
+
+        // Se é um erro que já tratamos (TELEFONE_DUPLICADO), re-throw
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Verificar se é um erro de chave duplicada do banco
+        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+        if (errorMessage.includes("unique constraint") && errorMessage.includes("telefone")) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "TELEFONE_DUPLICADO",
+            cause: {
+              telefone: input.telefone,
+            },
+          })
+        }
+
+        // Outros erros
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao criar cliente: ${errorMessage}`,
+        })
+      }
     }),
 
   atualizar: publicProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.number(),
         nome: z.string().min(1, "Nome é obrigatório"),
         telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
-        email: z.string().optional().nullable(), // Permite string, undefined ou null
-        dataNascimento: z.string().optional().nullable(), // Permite string, undefined ou null
+        email: z.string().optional().nullable(),
       }),
     )
     .mutation(async ({ input }) => {
-      const clienteAtualizado = await db
-        .update(clientes)
-        .set({
-          nome: input.nome,
-          telefone: input.telefone,
-          email: input.email && input.email.trim() !== "" ? input.email : null,
-          dataNascimento: input.dataNascimento && input.dataNascimento.trim() !== "" ? input.dataNascimento : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(clientes.id, input.id))
-        .returning()
+      try {
+        // Verificar se já existe outro cliente com este telefone (exceto o atual)
+        const telefoneNumeros = input.telefone.replace(/\D/g, "")
 
-      return clienteAtualizado[0]
+        const clienteExistente = await db
+          .select()
+          .from(clientes)
+          .where(
+            sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros} AND ${clientes.id} != ${input.id}`,
+          )
+          .limit(1)
+
+        if (clienteExistente.length > 0) {
+          console.log("❌ Outro cliente já existe com este telefone:", clienteExistente[0])
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "TELEFONE_DUPLICADO",
+            cause: {
+              clienteExistente: clienteExistente[0],
+              telefone: input.telefone,
+            },
+          })
+        }
+
+        const clienteAtualizado = await db
+          .update(clientes)
+          .set({
+            nome: input.nome,
+            telefone: input.telefone,
+            email: input.email ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(clientes.id, input.id))
+          .returning()
+
+        return clienteAtualizado[0]
+      } catch (error) {
+        console.error("❌ Erro ao atualizar cliente:", error)
+
+        // Se é um erro que já tratamos (TELEFONE_DUPLICADO), re-throw
+        if (error instanceof TRPCError) {
+          throw error
+        }
+
+        // Verificar se é um erro de chave duplicada do banco
+        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+        if (errorMessage.includes("unique constraint") && errorMessage.includes("telefone")) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "TELEFONE_DUPLICADO",
+            cause: {
+              telefone: input.telefone,
+            },
+          })
+        }
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao atualizar cliente: ${errorMessage}`,
+        })
+      }
     }),
 
-  excluir: publicProcedure.input(z.object({ id: z.string().uuid() })).mutation(async ({ input }) => {
-    await db.delete(clientes).where(eq(clientes.id, input.id))
-    return { success: true }
+  excluir: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+    try {
+      await db.delete(clientes).where(eq(clientes.id, input.id))
+      return { success: true }
+    } catch (error) {
+      console.error("❌ Erro ao excluir cliente:", error)
+
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+      if (errorMessage.includes("foreign key") || errorMessage.includes("constraint")) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "CLIENTE_COM_AGENDAMENTOS",
+          cause: {
+            clienteId: input.id,
+          },
+        })
+      }
+
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Erro ao excluir cliente: ${errorMessage}`,
+      })
+    }
   }),
 
-  buscarPorId: publicProcedure.input(z.object({ id: z.string().uuid() })).query(async ({ input }) => {
-    const cliente = await db.select().from(clientes).where(eq(clientes.id, input.id)).limit(1)
-    return cliente[0] ?? null
+  buscarPorId: publicProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
+    try {
+      const cliente = await db.select().from(clientes).where(eq(clientes.id, input.id)).limit(1)
+      return cliente[0] ?? null
+    } catch (error) {
+      console.error("❌ Erro ao buscar cliente por ID:", error)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao buscar cliente",
+      })
+    }
   }),
 
   buscarPorNome: publicProcedure.input(z.object({ nome: z.string() })).query(async ({ input }) => {
@@ -95,11 +222,10 @@ export const clienteRouter = createTRPCRouter({
       recentes: clientesRecentes[0]?.count ?? 0,
     }
   }),
-  // PROCEDIMENTO CRÍTICO: buscarPorTelefone (buscarClientePorTelefone)
+
   buscarPorTelefone: publicProcedure.input(z.object({ telefone: z.string() })).query(async ({ input }) => {
     console.log("🔍 Iniciando busca de cliente por telefone no backend:", input.telefone)
 
-    // Limpar telefone - remover formatação
     const telefoneNumeros = input.telefone.replace(/\D/g, "")
 
     console.log("📱 Telefone limpo para busca:", telefoneNumeros)
@@ -110,7 +236,6 @@ export const clienteRouter = createTRPCRouter({
     }
 
     try {
-      // Buscar por telefone exato (apenas números) ou com formatação
       const cliente = await db
         .select()
         .from(clientes)
@@ -133,7 +258,10 @@ export const clienteRouter = createTRPCRouter({
       }
     } catch (error) {
       console.error("❌ Erro na consulta do banco de dados:", error)
-      throw error
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao buscar cliente por telefone",
+      })
     }
   }),
 })

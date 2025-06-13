@@ -6,102 +6,54 @@ import { eq, isNotNull } from "drizzle-orm"
 
 export const linktreeRouter = createTRPCRouter({
   listar: publicProcedure.query(async () => {
+    console.log("🔍 [LINKTREE] Buscando todos os links...")
+
     const result = await db.query.links.findMany()
+    console.log("📋 [LINKTREE] Links encontrados:", result.length)
 
     return result.map((link) => {
-      let imagemBase64 = null
-      let mimeType = "image/png" // default
+      console.log(`🔍 [LINKTREE] Processando link ${link.titulo}, tipo imagem:`, typeof link.imagem)
 
-      if (link.imagem) {
-        try {
-          // Converte Uint8Array para Buffer e depois para base64
-          const buffer = Buffer.from(link.imagem)
-          imagemBase64 = buffer.toString("base64")
-
-          // Detecta o tipo de imagem pelos primeiros bytes
-          if (buffer.length > 0) {
-            const firstBytes = buffer.subarray(0, 4)
-            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
-              mimeType = "image/jpeg"
-            } else if (
-              firstBytes[0] === 0x89 &&
-              firstBytes[1] === 0x50 &&
-              firstBytes[2] === 0x4e &&
-              firstBytes[3] === 0x47
-            ) {
-              mimeType = "image/png"
-            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-              mimeType = "image/gif"
-            } else if (
-              firstBytes[0] === 0x52 &&
-              firstBytes[1] === 0x49 &&
-              firstBytes[2] === 0x46 &&
-              firstBytes[3] === 0x46
-            ) {
-              mimeType = "image/webp"
-            }
-          }
-
-          console.log(`Link ${link.titulo}: imagem detectada, tipo: ${mimeType}, tamanho: ${buffer.length} bytes`)
-        } catch (error) {
-          console.error(`Erro ao processar imagem do link ${link.titulo}:`, error)
+      // Se já é uma string, assumimos que é base64
+      if (typeof link.imagem === "string" && link.imagem) {
+        return {
+          ...link,
+          imagem: link.imagem,
+          mimeType: "image/png", // Tipo padrão
         }
       }
 
+      // Se não há imagem
       return {
         ...link,
-        imagem: imagemBase64,
-        mimeType,
+        imagem: null,
+        mimeType: null,
       }
     })
   }),
 
   listarClientes: publicProcedure.query(async () => {
+    console.log("🔍 [LINKTREE] Buscando clientes...")
+
     const result = await db.query.links.findMany({
       where: eq(links.tipo, "cliente"),
     })
 
+    console.log("👥 [LINKTREE] Clientes encontrados:", result.length)
+
     return result.map((link) => {
-      let imagemBase64 = null
-      let mimeType = "image/png"
-
-      if (link.imagem) {
-        try {
-          const buffer = Buffer.from(link.imagem)
-          imagemBase64 = buffer.toString("base64")
-
-          // Detecta o tipo de imagem
-          if (buffer.length > 0) {
-            const firstBytes = buffer.subarray(0, 4)
-            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
-              mimeType = "image/jpeg"
-            } else if (
-              firstBytes[0] === 0x89 &&
-              firstBytes[1] === 0x50 &&
-              firstBytes[2] === 0x4e &&
-              firstBytes[3] === 0x47
-            ) {
-              mimeType = "image/png"
-            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-              mimeType = "image/gif"
-            } else if (
-              firstBytes[0] === 0x52 &&
-              firstBytes[1] === 0x49 &&
-              firstBytes[2] === 0x46 &&
-              firstBytes[3] === 0x46
-            ) {
-              mimeType = "image/webp"
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao processar imagem do cliente ${link.titulo}:`, error)
+      if (typeof link.imagem === "string" && link.imagem) {
+        return {
+          ...link,
+          imagem: link.imagem,
+          mimeType: "image/png",
         }
       }
 
       return {
         ...link,
-        imagem: imagemBase64,
-        mimeType,
+        imagem: null,
+        mimeType: null,
       }
     })
   }),
@@ -109,51 +61,23 @@ export const linktreeRouter = createTRPCRouter({
   listarClientesLanding: publicProcedure.query(async () => {
     const result = await db.query.links.findMany({
       where: eq(links.tipo, "cliente"),
-      limit: 5, // Máximo 5 clientes para a landing page
-      orderBy: [links.createdAt], // Ordena pelos mais recentes
+      limit: 5,
+      orderBy: [links.createdAt],
     })
 
     return result.map((link) => {
-      let imagemBase64 = null
-      let mimeType = "image/png"
-
-      if (link.imagem) {
-        try {
-          const buffer = Buffer.from(link.imagem)
-          imagemBase64 = buffer.toString("base64")
-
-          // Detecta o tipo de imagem
-          if (buffer.length > 0) {
-            const firstBytes = buffer.subarray(0, 4)
-            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
-              mimeType = "image/jpeg"
-            } else if (
-              firstBytes[0] === 0x89 &&
-              firstBytes[1] === 0x50 &&
-              firstBytes[2] === 0x4e &&
-              firstBytes[3] === 0x47
-            ) {
-              mimeType = "image/png"
-            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-              mimeType = "image/gif"
-            } else if (
-              firstBytes[0] === 0x52 &&
-              firstBytes[1] === 0x49 &&
-              firstBytes[2] === 0x46 &&
-              firstBytes[3] === 0x46
-            ) {
-              mimeType = "image/webp"
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao processar imagem do cliente ${link.titulo}:`, error)
+      if (typeof link.imagem === "string" && link.imagem) {
+        return {
+          ...link,
+          imagem: link.imagem,
+          mimeType: "image/png",
         }
       }
 
       return {
         ...link,
-        imagem: imagemBase64,
-        mimeType,
+        imagem: null,
+        mimeType: null,
       }
     })
   }),
@@ -164,46 +88,18 @@ export const linktreeRouter = createTRPCRouter({
     })
 
     return result.map((link) => {
-      let imagemBase64 = null
-      let mimeType = "image/png"
-
-      if (link.imagem) {
-        try {
-          const buffer = Buffer.from(link.imagem)
-          imagemBase64 = buffer.toString("base64")
-
-          // Detecta o tipo de imagem
-          if (buffer.length > 0) {
-            const firstBytes = buffer.subarray(0, 4)
-            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
-              mimeType = "image/jpeg"
-            } else if (
-              firstBytes[0] === 0x89 &&
-              firstBytes[1] === 0x50 &&
-              firstBytes[2] === 0x4e &&
-              firstBytes[3] === 0x47
-            ) {
-              mimeType = "image/png"
-            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-              mimeType = "image/gif"
-            } else if (
-              firstBytes[0] === 0x52 &&
-              firstBytes[1] === 0x49 &&
-              firstBytes[2] === 0x46 &&
-              firstBytes[3] === 0x46
-            ) {
-              mimeType = "image/webp"
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao processar imagem da parceria ${link.titulo}:`, error)
+      if (typeof link.imagem === "string" && link.imagem) {
+        return {
+          ...link,
+          imagem: link.imagem,
+          mimeType: "image/png",
         }
       }
 
       return {
         ...link,
-        imagem: imagemBase64,
-        mimeType,
+        imagem: null,
+        mimeType: null,
       }
     })
   }),
@@ -213,7 +109,7 @@ export const linktreeRouter = createTRPCRouter({
       z
         .object({
           titulo: z.string().min(1, "Título é obrigatório"),
-          url: z.string().optional(), // Removido .url() para aceitar string vazia
+          url: z.string().optional(),
           descricao: z.string().optional(),
           clienteId: z.string().uuid().optional(),
           tipo: z.enum(["cliente", "parceria"]),
@@ -221,7 +117,6 @@ export const linktreeRouter = createTRPCRouter({
         })
         .refine(
           (data) => {
-            // Se for parceria, a URL deve ser uma URL válida e não vazia
             if (data.tipo === "parceria") {
               return data.url && data.url.trim().length > 0 && z.string().url().safeParse(data.url).success
             }
@@ -234,19 +129,19 @@ export const linktreeRouter = createTRPCRouter({
         ),
     )
     .mutation(async ({ input }) => {
-      // Para clientes, a URL sempre será null
-      // Para parcerias, usa a URL fornecida
-      const urlFinal = input.tipo === "cliente" ? null : input.url ?? null
+      console.log("🆕 [LINKTREE] Criando link:", { titulo: input.titulo, tipo: input.tipo })
 
-      let imagemBuffer = null
+      const urlFinal = input.tipo === "cliente" ? null : (input.url ?? null)
+
+      // Processar imagem - extrair apenas o base64 sem o prefixo data:
+      let imagemFinal: string | null = null
       if (input.imagem) {
         try {
           // Remove o prefixo data:image/...;base64, se existir
-          const base64Data = input.imagem.replace(/^data:image\/[a-z]+;base64,/, "")
-          imagemBuffer = Buffer.from(base64Data, "base64")
-          console.log(`Salvando imagem para ${input.titulo}: ${imagemBuffer.length} bytes`)
+          imagemFinal = input.imagem.replace(/^data:image\/[a-z]+;base64,/, "")
+          console.log(`📷 [LINKTREE] Salvando imagem para ${input.titulo}: ${imagemFinal.length} caracteres base64`)
         } catch (error) {
-          console.error("Erro ao processar imagem:", error)
+          console.error("❌ [LINKTREE] Erro ao processar imagem:", error)
           throw new Error("Erro ao processar a imagem")
         }
       }
@@ -257,11 +152,12 @@ export const linktreeRouter = createTRPCRouter({
         descricao: input.descricao ?? "",
         clienteId: input.clienteId ?? null,
         tipo: input.tipo,
-        imagem: imagemBuffer,
+        imagem: imagemFinal,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
 
+      console.log("✅ [LINKTREE] Link criado com sucesso")
       return { success: true }
     }),
 
@@ -271,14 +167,13 @@ export const linktreeRouter = createTRPCRouter({
         .object({
           id: z.string().uuid(),
           titulo: z.string().min(1, "Título é obrigatório"),
-          url: z.string().optional(), // Removido .url() para aceitar string vazia
+          url: z.string().optional(),
           descricao: z.string().optional(),
           tipo: z.enum(["cliente", "parceria"]),
           imagem: z.string().optional(), // base64 data URL
         })
         .refine(
           (data) => {
-            // Se for parceria, a URL deve ser uma URL válida e não vazia
             if (data.tipo === "parceria") {
               return data.url && data.url.trim().length > 0 && z.string().url().safeParse(data.url).success
             }
@@ -291,30 +186,17 @@ export const linktreeRouter = createTRPCRouter({
         ),
     )
     .mutation(async ({ input }) => {
-      // Para clientes, a URL sempre será null
-      // Para parcerias, usa a URL fornecida
-      const urlFinal = input.tipo === "cliente" ? null : input.url ?? null
+      console.log("✏️ [LINKTREE] Editando link:", input.id)
 
-      let imagemBuffer = null
-      if (input.imagem) {
-        try {
-          // Remove o prefixo data:image/...;base64, se existir
-          const base64Data = input.imagem.replace(/^data:image\/[a-z]+;base64,/, "")
-          imagemBuffer = Buffer.from(base64Data, "base64")
-          console.log(`Editando imagem para ${input.titulo}: ${imagemBuffer.length} bytes`)
-        } catch (error) {
-          console.error("Erro ao processar imagem:", error)
-          throw new Error("Erro ao processar a imagem")
-        }
-      }
+      const urlFinal = input.tipo === "cliente" ? null : (input.url ?? null)
 
       const updateData: {
-        titulo: string;
-        url: string | null;
-        descricao: string;
-        tipo: "cliente" | "parceria";
-        updatedAt: Date;
-        imagem?: Buffer;
+        titulo: string
+        url: string | null
+        descricao: string
+        tipo: "cliente" | "parceria"
+        updatedAt: Date
+        imagem?: string | null
       } = {
         titulo: input.titulo,
         url: urlFinal,
@@ -324,17 +206,30 @@ export const linktreeRouter = createTRPCRouter({
       }
 
       // Só atualiza a imagem se foi fornecida
-      if (imagemBuffer !== null) {
-        updateData.imagem = imagemBuffer
+      if (input.imagem) {
+        try {
+          updateData.imagem = input.imagem.replace(/^data:image\/[a-z]+;base64,/, "")
+          console.log(
+            `📷 [LINKTREE] Editando imagem para ${input.titulo}: ${updateData.imagem.length} caracteres base64`,
+          )
+        } catch (error) {
+          console.error("❌ [LINKTREE] Erro ao processar imagem:", error)
+          throw new Error("Erro ao processar a imagem")
+        }
       }
 
       await db.update(links).set(updateData).where(eq(links.id, input.id))
 
+      console.log("✅ [LINKTREE] Link editado com sucesso")
       return { success: true }
     }),
 
   deletar: publicProcedure.input(z.string().uuid()).mutation(async ({ input }) => {
+    console.log("🗑️ [LINKTREE] Deletando link:", input)
+
     await db.delete(links).where(eq(links.id, input))
+
+    console.log("✅ [LINKTREE] Link deletado com sucesso")
     return { success: true }
   }),
 
@@ -349,47 +244,20 @@ export const linktreeRouter = createTRPCRouter({
     })
 
     return result.map((link) => {
-      let imagemBase64 = null
-      let mimeType = "image/png"
-
-      if (link.imagem) {
-        try {
-          const buffer = Buffer.from(link.imagem)
-          imagemBase64 = buffer.toString("base64")
-
-          // Detecta o tipo de imagem
-          if (buffer.length > 0) {
-            const firstBytes = buffer.subarray(0, 4)
-            if (firstBytes[0] === 0xff && firstBytes[1] === 0xd8) {
-              mimeType = "image/jpeg"
-            } else if (
-              firstBytes[0] === 0x89 &&
-              firstBytes[1] === 0x50 &&
-              firstBytes[2] === 0x4e &&
-              firstBytes[3] === 0x47
-            ) {
-              mimeType = "image/png"
-            } else if (firstBytes[0] === 0x47 && firstBytes[1] === 0x49 && firstBytes[2] === 0x46) {
-              mimeType = "image/gif"
-            } else if (
-              firstBytes[0] === 0x52 &&
-              firstBytes[1] === 0x49 &&
-              firstBytes[2] === 0x46 &&
-              firstBytes[3] === 0x46
-            ) {
-              mimeType = "image/webp"
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao processar imagem ${link.titulo}:`, error)
+      if (typeof link.imagem === "string" && link.imagem) {
+        return {
+          id: link.id,
+          titulo: link.titulo,
+          imagem: link.imagem,
+          mimeType: "image/png",
         }
       }
 
       return {
         id: link.id,
         titulo: link.titulo,
-        imagem: imagemBase64,
-        mimeType,
+        imagem: null,
+        mimeType: null,
       }
     })
   }),

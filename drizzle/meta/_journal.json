@@ -22,6 +22,41 @@
       "when": 1749394643912,
       "tag": "0002_wealthy_chronomancer",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1749514221156,
+      "tag": "0003_marvelous_lord_tyger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1749514815411,
+      "tag": "0004_hard_betty_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1749515401917,
+      "tag": "0005_burly_dagger",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1749517445444,
+      "tag": "0006_tough_odin",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1749605437029,
+      "tag": "0007_cheerful_kulan_gath",
+      "breakpoints": true
     }
   ]
 }

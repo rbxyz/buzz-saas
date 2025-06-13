@@ -144,12 +144,17 @@ function getDiaSemana(date: Date): string {
   return dias[date.getDay()]
 }
 
+// Modificar a função verificarSeEstaEmIntervalo para usar os nomes corretos das colunas
 function verificarSeEstaEmIntervalo(horarioEmMinutos: number, intervalos: IntervaloTrabalho[]): boolean {
   // Verificar se o horário está em um intervalo de pausa
   for (const intervalo of intervalos) {
     if (intervalo.tipo === "intervalo") {
       const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
       const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+
+      if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
+        continue
+      }
 
       const inicioIntervalo = horaInicio * 60 + minutoInicio
       const fimIntervalo = horaFim * 60 + minutoFim
@@ -171,6 +176,10 @@ function verificarSeEstaEmIntervalo(horarioEmMinutos: number, intervalos: Interv
     if (intervalo.tipo === "trabalho") {
       const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
       const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
+
+      if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
+        continue
+      }
 
       const inicioTrabalho = horaInicio * 60 + minutoInicio
       const fimTrabalho = horaFim * 60 + minutoFim

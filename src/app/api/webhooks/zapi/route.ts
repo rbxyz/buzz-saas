@@ -49,12 +49,14 @@ interface WebhookBody {
 type MessageTipo = "texto" | "imagem" | "audio" | "documento"
 
 interface Conversation {
-  id: string
-  clienteId: string | null
+  id: number
+  userId: number
+  clienteId: number | null
   telefone: string
-  status: "ativa" | "encerrada" | "pausada"
-  ultimaMensagem: Date | null
-  metadata: unknown
+  nomeContato: string | null
+  ultimaMensagem: string | null
+  ultimaInteracao: Date
+  ativa: boolean
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -62,10 +64,10 @@ interface Conversation {
 interface DbMessage {
   id: string
   conversationId: string
-  remetente: "cliente" | "bot" | "atendente"
-  conteudo: string
-  tipo: MessageTipo
-  metadata?: unknown
+  content: string
+  role: "user" | "assistant" | "system" | "bot"
+  timestamp: Date
+  messageId?: string
   createdAt: Date | null
 }
 
@@ -101,11 +103,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Extrair informações da mensagem do formato Z-API
-    const phone = body.phone || ""
-    const messageText = body.text?.message || body.body || ""
-    const messageId = body.messageId || ""
-    const timestamp = body.momment || Date.now()
-    const senderName = body.senderName || ""
+    const phone = body.phone ?? ""
+    const messageText = body.text?.message ?? body.body ?? ""
+    const messageId = body.messageId ?? ""
+    const timestamp = body.momment ?? Date.now()
+    const senderName = body.senderName ?? ""
 
     // Verificar se temos os dados mínimos necessários
     if (!phone || !messageText) {
@@ -154,6 +156,11 @@ async function processIncomingMessage(data: {
 
     console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message)
 
+    // Adicionar no início da função processIncomingMessage, após os logs
+    // Por enquanto, usar userId = 1 (primeiro usuário).
+    // TODO: Implementar lógica para identificar o usuário correto baseado na instância Z-API
+    const userId = 1 // Temporário - usar o primeiro usuário
+
     // Limpar telefone (remover caracteres especiais)
     const telefoneClean = phone.replace(/\D/g, "")
 
@@ -170,9 +177,10 @@ async function processIncomingMessage(data: {
       conversation = await db
         .insert(conversations)
         .values({
+          userId: userId,
           telefone: telefoneClean,
-          status: "ativa",
-          ultimaMensagem: null, // Deixar null inicialmente
+          ativa: true,
+          ultimaMensagem: null,
         })
         .returning()
         .then((rows) => rows[0] ?? null)
@@ -196,6 +204,7 @@ async function processIncomingMessage(data: {
       cliente = await db
         .insert(clientes)
         .values({
+          userId: userId,
           nome: senderName,
           telefone: telefoneClean,
         })
@@ -210,14 +219,16 @@ async function processIncomingMessage(data: {
       }
     }
 
-    // Salvar mensagem do cliente
+    // Salvar mensagem do cliente - CORRIGIDO para usar os nomes corretos dos campos
     await db.insert(messages).values({
       conversationId: conversation.id,
-      remetente: "cliente",
-      conteudo: message,
-      tipo: "texto",
-      metadata: { messageId, timestamp },
+      content: message,
+      role: "user", // Usar "user" em vez de "cliente"
+      timestamp: new Date(timestamp),
+      messageId: messageId,
     })
+
+    console.log(`💾 [WEBHOOK] Mensagem do cliente salva no banco de dados`)
 
     // Buscar histórico da conversa
     const conversationHistory: DbMessage[] = await db
@@ -234,19 +245,19 @@ async function processIncomingMessage(data: {
       message,
       telefoneClean,
       conversationHistory.map((msg) => ({
-        role: msg.remetente === "cliente" ? "user" : "assistant",
-        content: msg.conteudo,
+        role: msg.role === "user" ? "user" : "assistant",
+        content: msg.content,
       })),
     )
 
     console.log(`💾 [WEBHOOK] Salvando resposta da IA: ${aiResponse.message.substring(0, 50)}...`)
 
-    // Salvar resposta da IA
+    // Salvar resposta da IA - CORRIGIDO para usar os nomes corretos dos campos
     await db.insert(messages).values({
       conversationId: conversation.id,
-      remetente: "bot",
-      conteudo: aiResponse.message,
-      tipo: "texto",
+      content: aiResponse.message,
+      role: "assistant", // Usar "assistant" em vez de "bot"
+      timestamp: new Date(),
     })
 
     console.log(`📤 [WEBHOOK] Enviando resposta via WhatsApp para ${telefoneClean}`)
@@ -284,7 +295,7 @@ async function processIncomingMessage(data: {
 async function handleAIAction(
   action: string,
   data: unknown,
-  conversationId: string,
+  conversationId: number, // Alterado para number
   phone: string,
   userMessage: string,
 ): Promise<void> {
@@ -324,7 +335,7 @@ async function handleAIAction(
   }
 }
 
-async function processCancelamento(data: unknown, conversationId: string, phone: string): Promise<void> {
+async function processCancelamento(data: unknown, conversationId: number, phone: string): Promise<void> {
   console.log("🔄 [WEBHOOK-CANCELAMENTO] Processando cancelamento:", data)
 
   await enviarMensagemWhatsApp(
@@ -333,7 +344,7 @@ async function processCancelamento(data: unknown, conversationId: string, phone:
   )
 }
 
-async function processReagendamento(data: unknown, conversationId: string, phone: string): Promise<void> {
+async function processReagendamento(data: unknown, conversationId: number, phone: string): Promise<void> {
   console.log("🔄 [WEBHOOK-REAGENDAMENTO] Processando reagendamento:", data)
 
   await enviarMensagemWhatsApp(

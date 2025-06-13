@@ -111,13 +111,19 @@ export function IntervalosCard() {
 
   const carregarIntervalos = useCallback(
     (dia: DiaSemana) => {
+      console.log("🔍 Carregando intervalos para:", dia);
+      console.log("📊 Intervalos existentes:", intervalosExistentes);
+
       const intervalosDay =
         intervalosExistentes?.filter((i) => i.diaSemana === dia) ?? [];
+
+      console.log("📋 Intervalos filtrados:", intervalosDay);
+
       setIntervalos(
         intervalosDay.map((i) => ({
           horaInicio: i.horaInicio,
           horaFim: i.horaFim,
-          turno: i.turno,
+          turno: i.turno || "manha",
         })),
       );
     },
@@ -275,6 +281,8 @@ export function IntervalosCard() {
                 intervalosExistentes?.filter(
                   (i) => i.diaSemana === dia.value,
                 ) ?? [];
+
+              console.log(`📅 ${dia.label}:`, intervalosDay);
 
               return (
                 <div key={dia.value} className="rounded-lg border p-3">

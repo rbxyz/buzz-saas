@@ -23,38 +23,30 @@ import { toast } from "sonner";
 import dayjs from "dayjs";
 import { Search, X } from "lucide-react";
 
-// Definindo tipos baseados no retorno real da API
+// Definindo tipos baseados na estrutura real da tabela
 interface Cliente {
-  id: string;
+  id: number;
+  userId: number;
   nome: string;
   telefone: string;
   email: string | null;
-  dataNascimento: string | null;
-  comprasRecentes: unknown;
-  createdAt: Date | null;
-  updatedAt: Date | null;
-}
-
-interface HistoricoAgendamento {
-  id: string;
-  dataHora: Date;
-  servico: string;
-  status: string;
-  clienteId: string;
+  endereco: string | null;
+  observacoes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface FormData {
   nome: string;
   telefone: string;
   email: string;
-  dataNascimento: string;
 }
 
 export default function ClientesPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
   const [clienteSelecionadoId, setClienteSelecionadoId] = useState<
-    string | null
+    number | null
   >(null);
   const [modalEditarAberto, setModalEditarAberto] = useState(false);
   const [modalConfirmarDeleteAberto, setModalConfirmarDeleteAberto] =
@@ -63,64 +55,201 @@ export default function ClientesPage() {
 
   const utils = api.useContext();
 
-  // Queries tipadas corretamente
+  // Queries
   const { data: clientes, isLoading } = api.cliente.listar.useQuery();
 
   const { data: clienteSelecionado } = api.cliente.buscarPorId.useQuery(
-    { id: clienteSelecionadoId ?? "" },
+    { id: clienteSelecionadoId ?? 0 },
     {
       enabled: !!clienteSelecionadoId,
     },
   );
 
-  const { data: historico } = api.agendamento.getHistoricoPorCliente.useQuery(
-    { clienteId: clienteSelecionadoId ?? "" },
-    {
-      enabled: !!clienteSelecionadoId,
-    },
-  );
-
-  // Mutations tipadas corretamente
+  // Mutations
   const criarCliente = api.cliente.criar.useMutation({
     onSuccess: async () => {
       setModalCriarAberto(false);
-      toast.success("Cliente criado com sucesso!");
+      toast.success("Cliente criado com sucesso!", {
+        description: `${formData.nome} foi adicionado à sua lista de clientes.`,
+        duration: 4000,
+        action: {
+          label: "Ver cliente",
+          onClick: () => {
+            // Buscar o cliente recém-criado e abrir seus detalhes
+            const novoCliente = clientes?.find((c) => c.nome === formData.nome);
+            if (novoCliente) {
+              abrirModal(novoCliente.id);
+            }
+          },
+        },
+      });
       await utils.cliente.listar.invalidate();
       limparFormData();
     },
     onError: (error) => {
       console.error("Erro ao criar cliente:", error);
-      toast.error(
-        "Erro ao criar cliente. Verifique os dados e tente novamente.",
-      );
+
+      // Tratamento específico para erro de telefone duplicado
+      if (error.message === "TELEFONE_DUPLICADO") {
+        toast.error("📱 Telefone já cadastrado!", {
+          description: `O número ${formData.telefone} já está sendo usado por outro cliente.`,
+          duration: 6000,
+          action: {
+            label: "🔍 Buscar cliente",
+            onClick: async () => {
+              try {
+                const clienteExistente =
+                  await utils.cliente.buscarPorTelefone.fetch({
+                    telefone: formData.telefone,
+                  });
+                if (clienteExistente) {
+                  setModalCriarAberto(false);
+                  abrirModal(clienteExistente.id);
+                  toast.info("Cliente encontrado!", {
+                    description: `Mostrando detalhes de ${clienteExistente.nome}`,
+                    duration: 3000,
+                  });
+                }
+              } catch (err) {
+                console.error("Erro ao buscar cliente:", err);
+                toast.error("Erro ao buscar cliente existente");
+              }
+            },
+          },
+        });
+      } else if (error.message.includes("email")) {
+        toast.error("📧 Email inválido", {
+          description:
+            "Por favor, verifique o formato do email e tente novamente.",
+          duration: 4000,
+        });
+      } else if (error.message.includes("nome")) {
+        toast.error("👤 Nome inválido", {
+          description: "O nome deve ter pelo menos 2 caracteres.",
+          duration: 4000,
+        });
+      } else {
+        toast.error("❌ Erro ao criar cliente", {
+          description:
+            "Ocorreu um problema inesperado. Tente novamente em alguns instantes.",
+          duration: 5000,
+          action: {
+            label: "🔄 Tentar novamente",
+            onClick: () => handleCriarCliente(),
+          },
+        });
+      }
     },
   });
 
   const editarCliente = api.cliente.atualizar.useMutation({
     onSuccess: async () => {
       setModalEditarAberto(false);
-      toast.success("Cliente atualizado com sucesso!");
+      toast.success("✅ Cliente atualizado!", {
+        description: `As informações de ${formData.nome} foram salvas com sucesso.`,
+        duration: 4000,
+        action: {
+          label: "👁️ Ver detalhes",
+          onClick: () => {
+            if (clienteSelecionadoId) {
+              abrirModal(clienteSelecionadoId);
+            }
+          },
+        },
+      });
       await utils.cliente.listar.invalidate();
       limparFormData();
     },
     onError: (error) => {
       console.error("Erro ao editar cliente:", error);
-      toast.error(
-        "Erro ao editar cliente. Verifique os dados e tente novamente.",
-      );
+
+      if (error.message === "TELEFONE_DUPLICADO") {
+        toast.error("📱 Telefone já em uso!", {
+          description: `O número ${formData.telefone} já está cadastrado para outro cliente.`,
+          duration: 6000,
+          action: {
+            label: "↩️ Manter atual",
+            onClick: () => {
+              if (clienteSelecionado) {
+                setFormData((prev) => ({
+                  ...prev,
+                  telefone: clienteSelecionado.telefone,
+                }));
+                toast.info("Telefone restaurado", {
+                  description:
+                    "O telefone foi restaurado para o valor anterior.",
+                  duration: 2000,
+                });
+              }
+            },
+          },
+        });
+      } else {
+        toast.error("❌ Erro ao atualizar", {
+          description:
+            "Não foi possível salvar as alterações. Verifique os dados e tente novamente.",
+          duration: 4000,
+          action: {
+            label: "🔄 Tentar novamente",
+            onClick: () => handleEditarCliente(),
+          },
+        });
+      }
     },
   });
 
   const deletarCliente = api.cliente.excluir.useMutation({
     onSuccess: async () => {
+      const nomeCliente = clienteSelecionado?.nome ?? "Cliente";
       setModalConfirmarDeleteAberto(false);
       setClienteSelecionadoId(null);
-      toast.success("Cliente excluído com sucesso!");
+
+      toast.success("🗑️ Cliente excluído", {
+        description: `${nomeCliente} foi removido da sua lista de clientes.`,
+        duration: 5000,
+        action: {
+          label: "↩️ Desfazer",
+          onClick: () => {
+            toast.info("🚧 Funcionalidade em desenvolvimento", {
+              description:
+                "A opção de desfazer exclusão estará disponível em breve.",
+              duration: 3000,
+            });
+          },
+        },
+      });
       await utils.cliente.listar.invalidate();
     },
     onError: (error) => {
       console.error("Erro ao deletar cliente:", error);
-      toast.error("Erro ao excluir cliente. Tente novamente.");
+
+      if (error.message === "CLIENTE_COM_AGENDAMENTOS") {
+        toast.error("⚠️ Não é possível excluir", {
+          description:
+            "Este cliente possui agendamentos vinculados. Cancele os agendamentos primeiro.",
+          duration: 6000,
+          action: {
+            label: "📅 Ver agendamentos",
+            onClick: () => {
+              // Navegar para página de agendamentos filtrada por este cliente
+              window.location.href = `/dashboard/agendamentos?cliente=${clienteSelecionadoId}`;
+            },
+          },
+        });
+      } else {
+        toast.error("❌ Erro ao excluir", {
+          description: "Não foi possível excluir o cliente. Tente novamente.",
+          duration: 4000,
+          action: {
+            label: "🔄 Tentar novamente",
+            onClick: () => {
+              if (clienteSelecionadoId) {
+                deletarCliente.mutate({ id: clienteSelecionadoId });
+              }
+            },
+          },
+        });
+      }
     },
   });
 
@@ -128,7 +257,6 @@ export default function ClientesPage() {
     nome: "",
     telefone: "",
     email: "",
-    dataNascimento: "",
   });
 
   function limparFormData() {
@@ -136,11 +264,10 @@ export default function ClientesPage() {
       nome: "",
       telefone: "",
       email: "",
-      dataNascimento: "",
     });
   }
 
-  // Função para filtrar clientes com tipos corretos
+  // Função para filtrar clientes
   const filtrarClientes = (
     termo: string,
     clientesLista: Cliente[],
@@ -150,11 +277,8 @@ export default function ClientesPage() {
     const termoLimpo = termo.toLowerCase().trim();
 
     return clientesLista.filter((cliente: Cliente) => {
-      // Buscar por nome - garantindo que é string
       const nomeMatch =
         cliente.nome?.toLowerCase().includes(termoLimpo) ?? false;
-
-      // Buscar por telefone (remover formatação para comparar)
       const telefoneNumeros = cliente.telefone?.replace(/\D/g, "") ?? "";
       const termoNumeros = termo.replace(/\D/g, "");
       const telefoneMatch =
@@ -164,11 +288,10 @@ export default function ClientesPage() {
     });
   };
 
-  // Determinar quais clientes mostrar com tipos corretos - usando conversão segura
   const clientesParaMostrar: Cliente[] =
     termoBusca.trim() && clientes
-      ? filtrarClientes(termoBusca, clientes as unknown as Cliente[])
-      : ((clientes as unknown as Cliente[]) ?? []);
+      ? filtrarClientes(termoBusca, clientes as Cliente[])
+      : ((clientes as Cliente[]) ?? []);
 
   function mascararTelefone(valor: string): string {
     const numeros = valor.replace(/\D/g, "");
@@ -184,18 +307,17 @@ export default function ClientesPage() {
     return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7, 11)}`;
   }
 
-  function abrirModal(id: string) {
+  function abrirModal(id: number) {
     setClienteSelecionadoId(id);
     setModalAberto(true);
   }
 
   function handleCriarCliente() {
+    console.log("🚀 Tentando criar cliente com dados:", formData);
     criarCliente.mutate({
       nome: formData.nome,
       telefone: formData.telefone,
       email: formData.email.trim() === "" ? null : formData.email,
-      dataNascimento:
-        formData.dataNascimento.trim() === "" ? null : formData.dataNascimento,
     });
   }
 
@@ -206,13 +328,56 @@ export default function ClientesPage() {
       nome: formData.nome,
       telefone: formData.telefone,
       email: formData.email.trim() === "" ? null : formData.email,
-      dataNascimento:
-        formData.dataNascimento.trim() === "" ? null : formData.dataNascimento,
     });
   }
 
   function limparBusca() {
     setTermoBusca("");
+  }
+
+  // Função melhorada para validar e criar cliente
+  function validarECriarCliente() {
+    // Validações básicas
+    if (!formData.nome.trim()) {
+      toast.error("👤 Nome obrigatório", {
+        description: "Por favor, informe o nome completo do cliente.",
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (!formData.telefone.trim()) {
+      toast.error("📱 Telefone obrigatório", {
+        description: "Por favor, informe o número de telefone do cliente.",
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (formData.telefone.replace(/\D/g, "").length < 10) {
+      toast.error("📱 Telefone inválido", {
+        description: "O telefone deve ter pelo menos 10 dígitos.",
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Validação de email se fornecido
+    if (formData.email.trim() && !formData.email.includes("@")) {
+      toast.error("📧 Email inválido", {
+        description: "Por favor, informe um email válido ou deixe em branco.",
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Toast informativo durante a criação
+    toast.loading("⏳ Criando cliente...", {
+      description: `Adicionando ${formData.nome} à sua lista de clientes.`,
+      duration: 2000,
+    });
+
+    handleCriarCliente();
   }
 
   useEffect(() => {
@@ -221,9 +386,6 @@ export default function ClientesPage() {
         nome: clienteSelecionado.nome ?? "",
         telefone: clienteSelecionado.telefone ?? "",
         email: clienteSelecionado.email ?? "",
-        dataNascimento: clienteSelecionado.dataNascimento
-          ? dayjs(clienteSelecionado.dataNascimento).format("YYYY-MM-DD")
-          : "",
       });
     }
   }, [clienteSelecionado, modalEditarAberto]);
@@ -406,37 +568,17 @@ export default function ClientesPage() {
                 />
               </div>
               <div>
-                <Label>Data de nascimento</Label>
+                <Label>Data de cadastro</Label>
                 <Input
                   value={
-                    clienteSelecionado.dataNascimento
-                      ? dayjs(clienteSelecionado.dataNascimento).format(
-                          "DD/MM/YYYY",
+                    clienteSelecionado.createdAt
+                      ? dayjs(clienteSelecionado.createdAt).format(
+                          "DD/MM/YYYY HH:mm",
                         )
-                      : "Não informado"
+                      : ""
                   }
                   readOnly
                 />
-              </div>
-
-              <div className="col-span-2 mt-2">
-                <Label>Histórico de Agendamentos</Label>
-                {!historico || historico.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    Nenhum serviço registrado ainda.
-                  </p>
-                ) : (
-                  <ul className="text-muted-foreground list-disc pl-5 text-sm">
-                    {(historico as unknown as HistoricoAgendamento[]).map(
-                      (h: HistoricoAgendamento) => (
-                        <li key={h.id}>
-                          {dayjs(h.dataHora).format("DD/MM/YYYY HH:mm")} –{" "}
-                          {h.servico} ({h.status})
-                        </li>
-                      ),
-                    )}
-                  </ul>
-                )}
               </div>
             </div>
           ) : (
@@ -466,7 +608,7 @@ export default function ClientesPage() {
           <DialogHeader>
             <DialogTitle>Novo Cliente</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <Label>Nome completo *</Label>
               <Input
@@ -497,19 +639,6 @@ export default function ClientesPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 placeholder="exemplo@email.com"
-              />
-            </div>
-            <div>
-              <Label>Data de nascimento (opcional)</Label>
-              <Input
-                type="date"
-                value={formData.dataNascimento}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    dataNascimento: e.target.value,
-                  })
-                }
               />
             </div>
           </div>
@@ -521,7 +650,7 @@ export default function ClientesPage() {
             </DialogClose>
             <Button
               className="cursor-pointer"
-              onClick={handleCriarCliente}
+              onClick={validarECriarCliente}
               disabled={
                 !formData.nome || !formData.telefone || criarCliente.isPending
               }
@@ -532,12 +661,13 @@ export default function ClientesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Edição */}
       <Dialog open={modalEditarAberto} onOpenChange={setModalEditarAberto}>
         <DialogContent className="border-border bg-card text-card-foreground max-w-lg border backdrop-blur-sm">
           <DialogHeader>
             <DialogTitle>Editar Cliente</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <Label>Nome completo *</Label>
               <Input
@@ -568,19 +698,6 @@ export default function ClientesPage() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 placeholder="exemplo@email.com"
-              />
-            </div>
-            <div>
-              <Label>Data de nascimento (opcional)</Label>
-              <Input
-                type="date"
-                value={formData.dataNascimento}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    dataNascimento: e.target.value,
-                  })
-                }
               />
             </div>
           </div>
@@ -604,6 +721,7 @@ export default function ClientesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Confirmação de Exclusão */}
       <Dialog
         open={modalConfirmarDeleteAberto}
         onOpenChange={setModalConfirmarDeleteAberto}

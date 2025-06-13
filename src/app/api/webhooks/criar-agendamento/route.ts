@@ -1,14 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { configuracoes, clientes, agendamentos } from "@/server/db/schema"
+import { configuracoes, clientes, agendamentos, servicos } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 import dayjs from "dayjs"
-
-interface ServicoConfigurado {
-  nome: string
-  preco: number
-  duracaoMinutos: number
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,6 +37,7 @@ export async function POST(request: NextRequest) {
         .values({
           nome,
           telefone: telefoneClean,
+          userId: 1, // Usar userId padrão
         })
         .returning()
 
@@ -63,19 +58,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
     }
 
+    // CORREÇÃO: Buscar serviços da tabela servicos, não do JSON
+    console.log(`🔍 [WEBHOOK-CRIAR-AGENDAMENTO] Buscando serviços da tabela servicos`)
+    const servicosDisponiveis = await db.select().from(servicos).where(eq(servicos.ativo, true))
+
+    console.log(
+      `📋 [WEBHOOK-CRIAR-AGENDAMENTO] Serviços encontrados:`,
+      servicosDisponiveis.map((s) => s.nome),
+    )
+
     // Encontrar serviço
-    const servicos = (config.servicos as ServicoConfigurado[]) || []
-    const servicoSelecionado = servicos.find((s) => s.nome.toLowerCase() === servico.toLowerCase())
+    const servicoSelecionado = servicosDisponiveis.find((s) => s.nome.toLowerCase() === servico.toLowerCase())
 
     if (!servicoSelecionado) {
+      console.log(`❌ [WEBHOOK-CRIAR-AGENDAMENTO] Serviço "${servico}" não encontrado`)
       return NextResponse.json(
         {
           success: false,
-          error: `Serviço "${servico}" não encontrado. Serviços disponíveis: ${servicos.map((s) => s.nome).join(", ")}`,
+          error: `Serviço "${servico}" não encontrado. Serviços disponíveis: ${servicosDisponiveis.map((s) => s.nome).join(", ")}`,
         },
         { status: 400 },
       )
     }
+
+    console.log(`✅ [WEBHOOK-CRIAR-AGENDAMENTO] Serviço encontrado: ${servicoSelecionado.nome}`)
 
     // Criar data completa
     const dataHora = dayjs(`${data}T${horario}`).toDate()
@@ -84,12 +90,12 @@ export async function POST(request: NextRequest) {
     const novoAgendamento = await db
       .insert(agendamentos)
       .values({
+        userId: cliente.userId,
         clienteId: cliente.id,
+        servicoId: servicoSelecionado.id,
         dataHora,
-        servico: servicoSelecionado.nome,
         status: "agendado",
-        valorCobrado: servicoSelecionado.preco,
-        duracaoMinutos: servicoSelecionado.duracaoMinutos ?? 30,
+        observacoes: `Agendamento criado via WhatsApp - Valor: R$ ${Number(servicoSelecionado.preco).toFixed(2)}`,
       })
       .returning()
 
@@ -104,7 +110,7 @@ export async function POST(request: NextRequest) {
 • Serviço: ${servicoSelecionado.nome}
 • Data: ${dayjs(data).format("DD/MM/YYYY")}
 • Horário: ${horario}
-• Valor: R$ ${servicoSelecionado.preco.toFixed(2)}
+• Valor: R$ ${Number(servicoSelecionado.preco).toFixed(2)}
 
 📍 ${config.endereco || "Endereço na bio"}
 

@@ -22,11 +22,10 @@ export const messagesRouter = createTRPCRouter({
           SELECT 
             id,
             conversation_id as "conversationId",
-            conteudo,
-            remetente,
-            tipo,
-            created_at as "createdAt",
-            metadata
+            content,
+            role,
+            timestamp,
+            created_at as "createdAt"
           FROM messages
           WHERE conversation_id = ${input.conversationId}
           ORDER BY created_at ASC
@@ -37,12 +36,11 @@ export const messagesRouter = createTRPCRouter({
         const mensagensFormatadas = result.map((msg: any) => ({
           id: String(msg.id),
           conversationId: String(msg.conversationId),
-          conteudo: String(msg.conteudo || ""),
-          tipo: msg.remetente === "cliente" ? "recebida" : msg.remetente === "bot" ? "enviada" : "sistema",
+          conteudo: String(msg.content || ""),
+          tipo: msg.role === "user" ? "recebida" : msg.role === "assistant" ? "enviada" : "sistema",
           // GARANTIR que timestamp seja string ISO
           timestamp: new Date(msg.createdAt).toISOString(),
-          lida: true, // Por enquanto, marcar todas como lidas
-          metadata: msg.metadata || {},
+          lida: true,
         }))
 
         console.log(`✅ [MESSAGES] Encontradas ${mensagensFormatadas.length} mensagens`)
@@ -74,7 +72,7 @@ export const messagesRouter = createTRPCRouter({
 
         // Inserir mensagem
         const insertResult = await sql`
-          INSERT INTO messages (conversation_id, conteudo, remetente, tipo)
+          INSERT INTO messages (conversation_id, content, role, timestamp)
           VALUES (${input.conversationId}, ${input.conteudo}, ${remetente}, 'texto')
           RETURNING id, created_at
         `
@@ -136,8 +134,8 @@ export const messagesRouter = createTRPCRouter({
           SELECT 
             id,
             conversation_id as "conversationId",
-            conteudo,
-            remetente,
+            content,
+            role,
             created_at as "createdAt"
           FROM messages
           ORDER BY created_at DESC
@@ -148,7 +146,7 @@ export const messagesRouter = createTRPCRouter({
         const mensagensFormatadas = result.map((msg: any) => ({
           id: String(msg.id),
           conversationId: String(msg.conversationId),
-          conteudo: String(msg.conteudo),
+          conteudo: String(msg.content),
           remetente: String(msg.remetente),
           createdAt: new Date(msg.createdAt).toISOString(),
         }))

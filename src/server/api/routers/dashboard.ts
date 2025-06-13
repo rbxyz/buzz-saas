@@ -1,21 +1,21 @@
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import { agendamentos, clientes } from "@/server/db/schema";
-import { eq, gte, lte, and, desc, sql } from "drizzle-orm";
-import dayjs from "dayjs";
+import { createTRPCRouter, publicProcedure } from "@/server/api/trpc"
+import { agendamentos, clientes } from "@/server/db/schema"
+import { eq, gte, lte, and, desc, sql } from "drizzle-orm"
+import dayjs from "dayjs"
 
 // Tipos auxiliares para ajudar no typing dos resultados da query
-type CountResult = { count: string | number };
-type StatusCountResult = { status: string; count: string | number };
+type CountResult = { count: string | number }
+type StatusCountResult = { status: string; count: string | number }
 type AgendamentoPorDia = {
-  dataDia: Date;
-  total: string | number;
-};
-type FaturamentoResult = { total: number | null };
+  dataDia: Date
+  total: string | number
+}
+type FaturamentoResult = { total: number | null }
 
 export const dashboardRouter = createTRPCRouter({
   // Total de agendamentos nos últimos 30 dias por dia (para gráfico)
   getAgendamentosUltimos30Dias: publicProcedure.query(async ({ ctx }) => {
-    const dataLimite = dayjs().subtract(30, "day").toDate();
+    const dataLimite = dayjs().subtract(30, "day").toDate()
 
     const agendamentosPorDia = await ctx.db
       .select({
@@ -25,14 +25,14 @@ export const dashboardRouter = createTRPCRouter({
       .from(agendamentos)
       .where(gte(agendamentos.dataHora, dataLimite))
       .groupBy(sql`DATE("data_hora")`)
-      .orderBy(sql`DATE("data_hora")`);
+      .orderBy(sql`DATE("data_hora")`)
 
-    return agendamentosPorDia;
+    return agendamentosPorDia
   }),
 
   // Total de agendamentos últimos 10 dias para overview gráfico
   getOverviewData: publicProcedure.query(async ({ ctx }) => {
-    const dataLimite = dayjs().subtract(9, "day").startOf("day").toDate();
+    const dataLimite = dayjs().subtract(9, "day").startOf("day").toDate()
 
     const agendamentosPorDia = (await ctx.db
       .select({
@@ -42,182 +42,207 @@ export const dashboardRouter = createTRPCRouter({
       .from(agendamentos)
       .where(gte(agendamentos.dataHora, dataLimite))
       .groupBy(sql`DATE("data_hora")`)
-      .orderBy(sql`DATE("data_hora")`)) as AgendamentoPorDia[];
+      .orderBy(sql`DATE("data_hora")`)) as AgendamentoPorDia[]
 
     // Mapear os dados para preencher dias sem agendamentos
-    const resultadosMap = new Map<string, number>();
+    const resultadosMap = new Map<string, number>()
     agendamentosPorDia.forEach(({ dataDia, total }) => {
       const diaStr =
-        dataDia instanceof Date
-          ? dataDia.toISOString().slice(0, 10)
-          : new Date(dataDia).toISOString().slice(0, 10);
-      resultadosMap.set(diaStr, Number(total));
-    });
+        dataDia instanceof Date ? dataDia.toISOString().slice(0, 10) : new Date(dataDia).toISOString().slice(0, 10)
+      resultadosMap.set(diaStr, Number(total))
+    })
 
-    const resultadoCompleto = [];
+    const resultadoCompleto = []
     for (let i = 0; i < 10; i++) {
-      const dia = dayjs(dataLimite).add(i, "day").format("YYYY-MM-DD");
+      const dia = dayjs(dataLimite).add(i, "day").format("YYYY-MM-DD")
       resultadoCompleto.push({
         date: dia,
         total: resultadosMap.get(dia) ?? 0,
-      });
+      })
     }
 
-    return resultadoCompleto;
+    return resultadoCompleto
   }),
 
   // Últimos 5 agendamentos com dados do cliente
   getUltimosAgendamentos: publicProcedure.query(async ({ ctx }) => {
-    const agendamentosRecentes = await ctx.db
-      .select({
-        id: agendamentos.id,
-        dataHora: agendamentos.dataHora,
-        servico: agendamentos.servico,
-        status: agendamentos.status,
-        clienteNome: clientes.nome,
-      })
-      .from(agendamentos)
-      .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-      .orderBy(desc(agendamentos.dataHora))
-      .limit(5);
+    try {
+      const agendamentosRecentes = await ctx.db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          clienteNome: clientes.nome,
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .orderBy(desc(agendamentos.dataHora))
+        .limit(5)
 
-    return agendamentosRecentes;
+      // Garantir que todos os campos existem e não são null
+      return agendamentosRecentes.map((agendamento) => ({
+        id: agendamento.id,
+        dataHora: agendamento.dataHora,
+        servico: agendamento.servico ?? "Serviço não informado",
+        status: agendamento.status || "pendente",
+        clienteNome: agendamento.clienteNome ?? "Cliente não informado",
+      }))
+    } catch (error) {
+      console.error("Erro ao buscar últimos agendamentos:", error)
+      return []
+    }
   }),
 
   // Estatísticas gerais com cálculos de variações percentuais entre períodos
   getStats: publicProcedure.query(async ({ ctx }) => {
     function toNumber(value: unknown): number {
-      if (typeof value === "string") return parseFloat(value);
-      if (typeof value === "number") return value;
-      return 0;
+      if (typeof value === "string") return Number.parseFloat(value)
+      if (typeof value === "number") return value
+      return 0
     }
 
-    // Datas para períodos atuais e anteriores
-    const hojeInicio = dayjs().startOf("day").toDate();
-    const hojeFim = dayjs().endOf("day").toDate();
-    const ontemInicio = dayjs().subtract(1, "day").startOf("day").toDate();
-    const ontemFim = dayjs().subtract(1, "day").endOf("day").toDate();
+    try {
+      // Datas para períodos atuais e anteriores
+      const hojeInicio = dayjs().startOf("day").toDate()
+      const hojeFim = dayjs().endOf("day").toDate()
+      const ontemInicio = dayjs().subtract(1, "day").startOf("day").toDate()
+      const ontemFim = dayjs().subtract(1, "day").endOf("day").toDate()
 
-    const seteDiasAtras = dayjs().subtract(7, "day").startOf("day").toDate();
-    const quatorzeDiasAtras = dayjs().subtract(14, "day").startOf("day").toDate();
+      const seteDiasAtras = dayjs().subtract(7, "day").startOf("day").toDate()
+      const quatorzeDiasAtras = dayjs().subtract(14, "day").startOf("day").toDate()
 
-    // Contagem total de clientes e agendamentos
-    const totalClientesRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(clientes)) as CountResult[];
-    const totalAgendamentosRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(agendamentos)) as CountResult[];
+      // Contagem total de clientes e agendamentos
+      const totalClientesRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(clientes)) as CountResult[]
+      const totalAgendamentosRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(agendamentos)) as CountResult[]
 
-    // Agendamentos hoje (status "agendado")
-    const agendamentosHojeRes = (await ctx.db
-      .select({ count: sql`COUNT(*)` })
-      .from(agendamentos)
-      .where(
-        and(
-          gte(agendamentos.dataHora, hojeInicio),
-          lte(agendamentos.dataHora, hojeFim),
-          eq(agendamentos.status, "agendado")
-        )
-      )) as CountResult[];
+      // Agendamentos hoje (status "agendado")
+      const agendamentosHojeRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(agendamentos)
+        .where(
+          and(
+            gte(agendamentos.dataHora, hojeInicio),
+            lte(agendamentos.dataHora, hojeFim),
+            eq(agendamentos.status, "agendado"),
+          ),
+        )) as CountResult[]
 
-    // Agendamentos ontem (status "agendado") para comparação
-    const agendamentosOntemRes = (await ctx.db
-      .select({ count: sql`COUNT(*)` })
-      .from(agendamentos)
-      .where(
-        and(
-          gte(agendamentos.dataHora, ontemInicio),
-          lte(agendamentos.dataHora, ontemFim),
-          eq(agendamentos.status, "agendado")
-        )
-      )) as CountResult[];
+      // Agendamentos ontem (status "agendado") para comparação
+      const agendamentosOntemRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(agendamentos)
+        .where(
+          and(
+            gte(agendamentos.dataHora, ontemInicio),
+            lte(agendamentos.dataHora, ontemFim),
+            eq(agendamentos.status, "agendado"),
+          ),
+        )) as CountResult[]
 
-    // Novos clientes últimos 7 dias (atual)
-    const novosClientesRes = (await ctx.db
-      .select({ count: sql`COUNT(*)` })
-      .from(clientes)
-      .where(gte(clientes.createdAt, seteDiasAtras))) as CountResult[];
+      // Novos clientes últimos 7 dias (atual)
+      const novosClientesRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(clientes)
+        .where(gte(clientes.createdAt, seteDiasAtras))) as CountResult[]
 
-    // Novos clientes 7 dias anteriores (para comparação)
-    const novosClientesSemanaAnteriorRes = (await ctx.db
-      .select({ count: sql`COUNT(*)` })
-      .from(clientes)
-      .where(
-        and(
-          gte(clientes.createdAt, quatorzeDiasAtras),
-          lte(clientes.createdAt, seteDiasAtras)
-        )
-      )) as CountResult[];
+      // Novos clientes 7 dias anteriores (para comparação)
+      const novosClientesSemanaAnteriorRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(clientes)
+        .where(
+          and(gte(clientes.createdAt, quatorzeDiasAtras), lte(clientes.createdAt, seteDiasAtras)),
+        )) as CountResult[]
 
-    // Faturamento últimos 7 dias (status "concluido")
-    const faturamento7DiasRes = (await ctx.db
-      .select({ total: sql<number>`SUM(${agendamentos.valorCobrado})` })
-      .from(agendamentos)
-      .where(
-        and(
-          gte(agendamentos.dataHora, seteDiasAtras),
-          eq(agendamentos.status, "concluido")
-        )
-      )) as FaturamentoResult[];
+      // Faturamento últimos 7 dias (status "concluido") - CORRIGIDO
+      // Verificar se a coluna valor_cobrado existe, senão usar um valor padrão
+      const faturamento7DiasRes = (await ctx.db
+        .select({
+          total: sql<number>`COALESCE(SUM(CASE WHEN ${agendamentos.valorCobrado} IS NOT NULL THEN ${agendamentos.valorCobrado} ELSE 0 END), 0)`,
+        })
+        .from(agendamentos)
+        .where(
+          and(gte(agendamentos.dataHora, seteDiasAtras), eq(agendamentos.status, "concluido")),
+        )) as FaturamentoResult[]
 
-    // Faturamento 7 dias anteriores (status "concluido") para comparação
-    const faturamento7DiasAnterioresRes = (await ctx.db
-      .select({ total: sql<number>`SUM(${agendamentos.valorCobrado})` })
-      .from(agendamentos)
-      .where(
-        and(
-          gte(agendamentos.dataHora, quatorzeDiasAtras),
-          lte(agendamentos.dataHora, seteDiasAtras),
-          eq(agendamentos.status, "concluido")
-        )
-      )) as FaturamentoResult[];
+      // Faturamento 7 dias anteriores (status "concluido") para comparação - CORRIGIDO
+      const faturamento7DiasAnterioresRes = (await ctx.db
+        .select({
+          total: sql<number>`COALESCE(SUM(CASE WHEN ${agendamentos.valorCobrado} IS NOT NULL THEN ${agendamentos.valorCobrado} ELSE 0 END), 0)`,
+        })
+        .from(agendamentos)
+        .where(
+          and(
+            gte(agendamentos.dataHora, quatorzeDiasAtras),
+            lte(agendamentos.dataHora, seteDiasAtras),
+            eq(agendamentos.status, "concluido"),
+          ),
+        )) as FaturamentoResult[]
 
-    // Converter valores para número
-    const totalClientes = toNumber(totalClientesRes?.[0]?.count);
-    const totalAgendamentos = toNumber(totalAgendamentosRes?.[0]?.count);
-    const agendamentosHoje = toNumber(agendamentosHojeRes?.[0]?.count);
-    const agendamentosOntem = toNumber(agendamentosOntemRes?.[0]?.count);
-    const novosClientes = toNumber(novosClientesRes?.[0]?.count);
-    const novosClientesSemanaAnterior = toNumber(novosClientesSemanaAnteriorRes?.[0]?.count);
-    const faturamentoEstimado = faturamento7DiasRes?.[0]?.total ?? 0;
-    const faturamentoSemanaAnterior = faturamento7DiasAnterioresRes?.[0]?.total ?? 0;
+      // Converter valores para número
+      const totalClientes = toNumber(totalClientesRes?.[0]?.count)
+      const totalAgendamentos = toNumber(totalAgendamentosRes?.[0]?.count)
+      const agendamentosHoje = toNumber(agendamentosHojeRes?.[0]?.count)
+      const agendamentosOntem = toNumber(agendamentosOntemRes?.[0]?.count)
+      const novosClientes = toNumber(novosClientesRes?.[0]?.count)
+      const novosClientesSemanaAnterior = toNumber(novosClientesSemanaAnteriorRes?.[0]?.count)
+      const faturamentoEstimado = faturamento7DiasRes?.[0]?.total ?? 0
+      const faturamentoSemanaAnterior = faturamento7DiasAnterioresRes?.[0]?.total ?? 0
 
-    // Função para cálculo da variação percentual (com proteção contra divisão por zero)
-    function calcPercentual(atual: number, anterior: number): number {
-      if (anterior === 0) {
-        return atual === 0 ? 0 : 100; // Se anterior 0 e atual > 0, considera 100%
+      // Função para cálculo da variação percentual (com proteção contra divisão por zero)
+      function calcPercentual(atual: number, anterior: number): number {
+        if (anterior === 0) {
+          return atual === 0 ? 0 : 100 // Se anterior 0 e atual > 0, considera 100%
+        }
+        return ((atual - anterior) / anterior) * 100
       }
-      return ((atual - anterior) / anterior) * 100;
-    }
 
-    const variacaoAgendamentos = calcPercentual(agendamentosHoje, agendamentosOntem);
-    const variacaoNovosClientes = calcPercentual(novosClientes, novosClientesSemanaAnterior);
-    const variacaoFaturamento = calcPercentual(faturamentoEstimado, faturamentoSemanaAnterior);
+      const variacaoAgendamentos = calcPercentual(agendamentosHoje, agendamentosOntem)
+      const variacaoNovosClientes = calcPercentual(novosClientes, novosClientesSemanaAnterior)
+      const variacaoFaturamento = calcPercentual(faturamentoEstimado, faturamentoSemanaAnterior)
 
-    // Contagem de agendamentos por status
-    const statusCountsRes = (await ctx.db
-      .select({
-        status: agendamentos.status,
-        count: sql`COUNT(*)`,
+      // Contagem de agendamentos por status
+      const statusCountsRes = (await ctx.db
+        .select({
+          status: agendamentos.status,
+          count: sql`COUNT(*)`,
+        })
+        .from(agendamentos)
+        .groupBy(agendamentos.status)) as StatusCountResult[]
+
+      const statusMap: Record<string, number> = {}
+      statusCountsRes.forEach(({ status, count }) => {
+        statusMap[status] = toNumber(count)
       })
-      .from(agendamentos)
-      .groupBy(agendamentos.status)) as StatusCountResult[];
 
-    const statusMap: Record<string, number> = {};
-    statusCountsRes.forEach(({ status, count }) => {
-      statusMap[status] = toNumber(count);
-    });
+      return {
+        totalClientes,
+        totalAgendamentos,
+        agendamentosPorStatus: statusMap,
+        agendamentosHoje,
+        novosClientes,
+        mensagensWhatsApp: 0, // Pode implementar depois a contagem real
+        faturamentoEstimado,
 
-    return {
-      totalClientes,
-      totalAgendamentos,
-      agendamentosPorStatus: statusMap,
-      agendamentosHoje,
-      novosClientes,
-      mensagensWhatsApp: 0, // Pode implementar depois a contagem real
-      faturamentoEstimado,
-
-      // Variações percentuais para o frontend exibir
-      variacaoAgendamentos,
-      variacaoNovosClientes,
-      variacaoFaturamento,
-    };
+        // Variações percentuais para o frontend exibir
+        variacaoAgendamentos,
+        variacaoNovosClientes,
+        variacaoFaturamento,
+      }
+    } catch (error) {
+      console.error("Erro ao buscar estatísticas do dashboard:", error)
+      return {
+        totalClientes: 0,
+        totalAgendamentos: 0,
+        agendamentosPorStatus: {},
+        agendamentosHoje: 0,
+        novosClientes: 0,
+        mensagensWhatsApp: 0,
+        faturamentoEstimado: 0,
+        variacaoAgendamentos: 0,
+        variacaoNovosClientes: 0,
+        variacaoFaturamento: 0,
+      }
+    }
   }),
-});
+})

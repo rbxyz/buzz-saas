@@ -29,33 +29,22 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      console.log("🔐 Tentativa de login para:", input.email)
 
       const user = await db.query.users.findFirst({
         where: eq(users.email, input.email),
       })
 
       if (!user) {
-        console.log("❌ Usuário não encontrado:", input.email)
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Credenciais inválidas",
         })
       }
 
-      console.log("👤 Usuário encontrado:", user.email)
-      console.log("🔑 Senha fornecida:", input.password)
-      console.log("🔒 Hash armazenado:", user.password)
 
       const validPassword = await bcrypt.compare(input.password, user.password)
-      console.log("✅ Senha válida?", validPassword)
 
       if (!validPassword) {
-        console.log("❌ Senha inválida para usuário:", input.email)
-
-        // Gerar hash para debug e mostrar no console
-        const debugHash = await bcrypt.hash(input.password, 12)
-        console.log("🔧 Hash que seria gerado agora:", debugHash)
 
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -64,7 +53,6 @@ export const authRouter = createTRPCRouter({
       }
 
       if (!user.active) {
-        console.log("❌ Usuário inativo:", input.email)
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Conta de usuário está inativa",
@@ -83,7 +71,6 @@ export const authRouter = createTRPCRouter({
         { expiresIn: "24h" },
       )
 
-      console.log("🎉 Login bem-sucedido para:", user.email)
 
       return {
         token,
@@ -99,7 +86,6 @@ export const authRouter = createTRPCRouter({
   // Procedimento para gerar hash correto
   generateHash: publicProcedure.input(z.object({ password: z.string() })).mutation(async ({ input }) => {
     const hash = await bcrypt.hash(input.password, 12)
-    console.log(`🔐 Hash gerado para "${input.password}":`, hash)
 
     return {
       password: input.password,
@@ -129,7 +115,6 @@ export const authRouter = createTRPCRouter({
       }
 
       const newHash = await bcrypt.hash(input.newPassword, 12)
-      console.log(`🔐 Novo hash para ${input.email}:`, newHash)
 
       await db
         .update(users)
@@ -172,10 +157,7 @@ export const authRouter = createTRPCRouter({
       const { username, password } = generateDefaultCredentials()
       const rawPassword = input.password ?? password
 
-      console.log("🔐 Criando usuário com senha:", rawPassword)
-
       const hashedPassword = await bcrypt.hash(rawPassword, 12)
-      console.log("🔒 Hash gerado:", hashedPassword)
 
       const newUser = await db
         .insert(users)
@@ -245,7 +227,6 @@ export const authRouter = createTRPCRouter({
       }
 
       if (input.password) {
-        console.log("🔐 Atualizando senha para usuário:", input.email)
         updateData.password = await bcrypt.hash(input.password, 12)
       }
 
@@ -319,7 +300,6 @@ export const authRouter = createTRPCRouter({
         },
       }
     } catch (error) {
-      console.log("❌ Token inválido:", error)
       return { valid: false, user: null }
     }
   }),

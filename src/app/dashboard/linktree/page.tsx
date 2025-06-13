@@ -230,13 +230,17 @@ export default function LinktreePage() {
             className="group border-border bg-card text-card-foreground hover:bg-accent/15 relative flex w-full max-w-full flex-row items-center gap-3 overflow-hidden border p-3 transition-colors"
           >
             <div className="flex-shrink-0">
-              {link.imagem && link.mimeType ? (
+              {link.imagem ? (
                 <Image
-                  src={`data:${link.mimeType};base64,${link.imagem}`}
+                  src={`data:image/png;base64,${link.imagem}`}
                   alt={`Imagem de ${link.titulo}`}
                   width={48}
                   height={48}
                   className="border-muted h-12 w-12 rounded border-2 object-cover"
+                  onError={(e) => {
+                    console.error("Erro ao carregar imagem:", e);
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
                 />
               ) : (
                 <div className="bg-muted text-muted-foreground flex h-12 w-12 flex-shrink-0 items-center justify-center rounded text-xs">

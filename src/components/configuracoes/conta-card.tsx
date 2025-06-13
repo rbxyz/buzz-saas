@@ -18,7 +18,7 @@ import { toast } from "@/hooks/use-toast";
 import { Building2, Phone, MapPin } from "lucide-react";
 
 export function ContaCard() {
-  const [nome, setNome] = useState("");
+  const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [telefone, setTelefone] = useState("");
   const [endereco, setEndereco] = useState("");
 
@@ -34,31 +34,24 @@ export function ContaCard() {
       });
       await refetch();
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Erro!",
-        description: "Erro ao atualizar a configuração.",
+        description: error.message || "Erro ao atualizar a configuração.",
         variant: "destructive",
       });
     },
   });
 
   function handleSalvar() {
-    if (!configs?.id) {
-      toast({
-        title: "Configuração inicial não carregada.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const payload = {
-      nome,
+      id: configs?.id ?? null,
+      nomeEmpresa,
       telefone,
       endereco,
     };
 
-    mutation.mutate({ ...payload, id: configs.id });
+    mutation.mutate(payload);
   }
 
   function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -77,9 +70,9 @@ export function ContaCard() {
   // Carregar dados do backend ao montar componente
   useEffect(() => {
     if (!configs) return;
-    setNome(configs.nome || "");
-    setTelefone(configs.telefone || "");
-    setEndereco(configs.endereco || "");
+    setNomeEmpresa(configs.nomeEmpresa ?? "");
+    setTelefone(configs.telefone ?? "");
+    setEndereco(configs.endereco ?? "");
   }, [configs]);
 
   return (
@@ -100,17 +93,17 @@ export function ContaCard() {
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
             <Label
-              htmlFor="nome"
+              htmlFor="nomeEmpresa"
               className="flex items-center gap-2 text-sm font-medium"
             >
               <Building2 className="h-4 w-4 text-gray-500" />
               Nome da Empresa
             </Label>
             <Input
-              id="nome"
+              id="nomeEmpresa"
               placeholder="Ex: Barbearia do João"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              value={nomeEmpresa}
+              onChange={(e) => setNomeEmpresa(e.target.value)}
               className="transition-all duration-200"
             />
           </div>

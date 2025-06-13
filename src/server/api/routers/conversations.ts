@@ -47,7 +47,7 @@ export const conversationsRouter = createTRPCRouter({
             SELECT 
               c.id,
               c.telefone,
-              c.status,
+              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
               c.created_at,
               c.updated_at,
               c.cliente_id,
@@ -61,7 +61,7 @@ export const conversationsRouter = createTRPCRouter({
                 (SELECT COUNT(*) 
                  FROM messages 
                  WHERE conversation_id = c.id 
-                 AND remetente = 'cliente'),
+                 AND role = 'user'),
                 0
               ) as mensagens_nao_lidas,
               COALESCE(
@@ -74,7 +74,7 @@ export const conversationsRouter = createTRPCRouter({
               ) as ultima_interacao
             FROM conversations c
             LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            WHERE c.status = ${input.status}::conversation_status
+            WHERE c.ativa = ${input.status === "ativa"}
             AND (c.telefone ILIKE ${`%${input.busca}%`} OR COALESCE(cl.nome, '') ILIKE ${`%${input.busca.toLowerCase()}%`})
             ORDER BY c.updated_at DESC
             LIMIT ${input.limite}
@@ -85,7 +85,7 @@ export const conversationsRouter = createTRPCRouter({
             SELECT 
               c.id,
               c.telefone,
-              c.status,
+              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
               c.created_at,
               c.updated_at,
               c.cliente_id,
@@ -99,7 +99,7 @@ export const conversationsRouter = createTRPCRouter({
                 (SELECT COUNT(*) 
                  FROM messages 
                  WHERE conversation_id = c.id 
-                 AND remetente = 'cliente'),
+                 AND role = 'user'),
                 0
               ) as mensagens_nao_lidas,
               COALESCE(
@@ -112,7 +112,7 @@ export const conversationsRouter = createTRPCRouter({
               ) as ultima_interacao
             FROM conversations c
             LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            WHERE c.status = ${input.status}::conversation_status
+            WHERE c.ativa = ${input.status === "ativa"}
             ORDER BY c.updated_at DESC
             LIMIT ${input.limite}
           `
@@ -122,7 +122,7 @@ export const conversationsRouter = createTRPCRouter({
             SELECT 
               c.id,
               c.telefone,
-              c.status,
+              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
               c.created_at,
               c.updated_at,
               c.cliente_id,
@@ -136,7 +136,7 @@ export const conversationsRouter = createTRPCRouter({
                 (SELECT COUNT(*) 
                  FROM messages 
                  WHERE conversation_id = c.id 
-                 AND remetente = 'cliente'),
+                 AND role = 'user'),
                 0
               ) as mensagens_nao_lidas,
               COALESCE(
@@ -159,7 +159,7 @@ export const conversationsRouter = createTRPCRouter({
             SELECT 
               c.id,
               c.telefone,
-              c.status,
+              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
               c.created_at,
               c.updated_at,
               c.cliente_id,
@@ -173,7 +173,7 @@ export const conversationsRouter = createTRPCRouter({
                 (SELECT COUNT(*) 
                  FROM messages 
                  WHERE conversation_id = c.id 
-                 AND remetente = 'cliente'),
+                 AND role = 'user'),
                 0
               ) as mensagens_nao_lidas,
               COALESCE(
@@ -265,7 +265,7 @@ export const conversationsRouter = createTRPCRouter({
           SELECT 
             c.id,
             c.telefone,
-            c.status,
+            CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
             c.cliente_id,
             c.created_at,
             c.updated_at,
@@ -333,8 +333,8 @@ export const conversationsRouter = createTRPCRouter({
 
         // Criar nova
         const criarResult = await sql`
-          INSERT INTO conversations (telefone, cliente_id, status)
-          VALUES (${telefoneClean}, ${input.clienteId || null}, 'ativa')
+          INSERT INTO conversations (telefone, cliente_id, ativa)
+          VALUES (${telefoneClean}, ${input.clienteId || null}, TRUE)
           RETURNING id, created_at, updated_at
         `
 
@@ -372,9 +372,9 @@ export const conversationsRouter = createTRPCRouter({
       try {
         const result = await sql`
           UPDATE conversations 
-          SET status = ${input.status}::conversation_status, updated_at = NOW()
+          SET ativa = ${input.status === "ativa"}, updated_at = NOW()
           WHERE id = ${input.conversationId}
-          RETURNING id, status, updated_at
+          RETURNING id, ativa, updated_at
         `
 
         const conversa = result[0]
@@ -386,7 +386,7 @@ export const conversationsRouter = createTRPCRouter({
         console.log(`✅ [CONVERSATIONS] Status atualizado para:`, input.status)
         return {
           id: String(conversa.id),
-          status: String(conversa.status),
+          status: input.status,
           updatedAt: new Date(conversa.updated_at).toISOString(),
         }
       } catch (error) {

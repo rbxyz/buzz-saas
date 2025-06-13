@@ -44,15 +44,21 @@ export function ServicosCard() {
   });
 
   useEffect(() => {
+    console.log("🔍 Configuração recebida:", configuracao);
+
     if (configuracao?.servicos) {
+      console.log("📋 Serviços encontrados:", configuracao.servicos);
       const servicosExistentes = configuracao.servicos as Servico[];
       setServicos(
         servicosExistentes.map((s) => ({
-          nome: s.nome,
-          preco: s.preco,
+          nome: s.nome || "",
+          preco: s.preco || 0,
           duracaoMinutos: s.duracaoMinutos || 30,
         })),
       );
+    } else {
+      console.log("⚠️ Nenhum serviço encontrado na configuração");
+      setServicos([]);
     }
   }, [configuracao]);
 
@@ -72,19 +78,20 @@ export function ServicosCard() {
     const novosServicos = [...servicos];
     const servicoAtual = novosServicos[index];
 
+    if (!servicoAtual) return;
+
     const novoValor =
       campo === "preco" || campo === "duracaoMinutos"
         ? Number(valor)
-        : String(valor); // Garante que seja string
+        : String(valor);
+
     const servicoAtualizado: Servico = {
-      nome:
-        campo === "nome" ? (novoValor as string) : (servicoAtual?.nome ?? ""),
-      preco:
-        campo === "preco" ? (novoValor as number) : (servicoAtual?.preco ?? 0),
+      nome: campo === "nome" ? (novoValor as string) : servicoAtual.nome,
+      preco: campo === "preco" ? (novoValor as number) : servicoAtual.preco,
       duracaoMinutos:
         campo === "duracaoMinutos"
           ? (novoValor as number)
-          : (servicoAtual?.duracaoMinutos ?? 30),
+          : servicoAtual.duracaoMinutos,
     };
 
     novosServicos[index] = servicoAtualizado;
@@ -105,14 +112,7 @@ export function ServicosCard() {
       (s) => s.nome.trim() && s.preco > 0,
     );
 
-    if (servicosValidos.length === 0) {
-      toast({
-        title: "Erro!",
-        description: "Adicione pelo menos um serviço válido",
-        variant: "destructive",
-      });
-      return;
-    }
+    console.log("💾 Salvando serviços:", servicosValidos);
 
     atualizarServicos.mutate({
       id: configuracao.id,
