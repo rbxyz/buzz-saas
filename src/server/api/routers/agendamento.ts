@@ -56,8 +56,8 @@ function gerarHorarios(
 async function obterColunasReais(nomeTabela: string): Promise<string[]> {
   try {
     const result = await db.execute(sql`
-      SELECT column_name
-      FROM information_schema.columns
+      SELECT column_name 
+      FROM information_schema.columns 
       WHERE table_name = ${nomeTabela}
     `);
 

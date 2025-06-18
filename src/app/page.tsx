@@ -1078,11 +1078,11 @@ export default function LandingPage() {
                                               Horário {horarioManual} não
                                               disponível
                                             </p>
-                                                                                        <div className="mt-2">
-                                              <p className="text-warning/80 text-sm">
+                                              <div className="mt-2">
+                                                <p className="text-warning/80 text-sm">
                                                 {conflito.motivo}
-                                              </p>
-                                            </div>
+                                                </p>
+                                              </div>
                                           </div>
                                         </div>
                                       </div>

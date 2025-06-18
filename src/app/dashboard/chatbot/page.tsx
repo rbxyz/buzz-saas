@@ -82,8 +82,8 @@ export default function ChatbotPage() {
     onSuccess: () => {
       void refetchMensagens();
       void refetchConversas();
-    },
-  });
+      },
+    });
 
   // Efeitos
   useEffect(() => {
