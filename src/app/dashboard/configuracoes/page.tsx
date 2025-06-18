@@ -4,8 +4,6 @@ import { Separator } from "@/components/ui/separator";
 import { ServicosCard } from "@/components/configuracoes/servicos-card";
 import { IntervalosCard } from "@/components/configuracoes/intervalos-card";
 import { ContaCard } from "@/components/configuracoes/conta-card";
-import { WhatsappCard } from "@/components/configuracoes/whatsapp-card";
-import { IACard } from "@/components/configuracoes/ia-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
 
 export default function Configuracoes() {
@@ -39,12 +37,6 @@ export default function Configuracoes() {
               <IntervalosCard />
             </div>
 
-            {/* Terceira linha - Integrações 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <WhatsappCard />
-              <IACard />
-            </div>
-            */}
             {/* Quarta linha - Gerenciamento de Usuários */}
             <div className="w-full">
               <UsuariosCard />

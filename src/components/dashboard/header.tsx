@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { User, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,16 +10,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 export function DashboardHeader() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, setTheme } = useTheme();
-  const isMobile = useIsMobile();
-
-  function toggleSidebar() {
-    setSidebarOpen(!sidebarOpen);
-  }
 
   return (
     <header className="bg-background sticky top-0 z-10 flex h-16 items-center justify-between border-b px-4 py-3 md:pl-64">

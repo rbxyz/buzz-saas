@@ -1,118 +1,112 @@
-import { z } from "zod"
-import { createTRPCRouter, publicProcedure } from "../trpc"
-import { db } from "@/server/db"
-import { agendamentos, clientes, intervalosTrabalho, servicos } from "@/server/db/schema"
-import { eq, and, gte, lte } from "drizzle-orm"
-import dayjs from "dayjs"
-import { sql, desc } from "drizzle-orm"
+import { z } from "zod";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { db } from "@/server/db";
+import {
+  agendamentos,
+  clientes,
+  intervalosTrabalho,
+  servicos,
+} from "@/server/db/schema";
+import { eq, and, gte, lte } from "drizzle-orm";
+import dayjs from "dayjs";
+import { sql, desc } from "drizzle-orm";
+import { enviarMensagemWhatsApp } from "@/lib/zapi-service";
+import { TRPCError } from "@trpc/server";
 
-// Importe o serviço de WhatsApp no topo do arquivo
-import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
-
-// Tipos específicos
-type DiaSemana = "domingo" | "segunda" | "terca" | "quarta" | "quinta" | "sexta" | "sabado"
-
-type ServicoConfigurado = {
-  nome: string
-  preco: number
-  duracaoMinutos?: number
-}
-
-// Função helper para converter dia da semana para número (conforme schema)
 function getDiaSemanaNumero(date: Date): number {
-  return date.getDay() // 0=Domingo, 1=Segunda, etc.
+  return date.getDay(); // 0=Domingo, 1=Segunda, etc.
 }
 
-// Função helper para validar se uma string é um dia da semana válido
-function isValidDiaSemana(dia: string): dia is DiaSemana {
-  const diasValidos: DiaSemana[] = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
-  return diasValidos.includes(dia as DiaSemana)
-}
+function gerarHorarios(
+  inicio: string,
+  fim: string,
+  duracaoServico: number,
+): string[] {
+  const horarios: string[] = [];
+  const [horaInicio, minutoInicio] = inicio.split(":").map(Number);
+  const [horaFim, minutoFim] = fim.split(":").map(Number);
 
-// Função helper para gerar horários disponíveis
-function gerarHorarios(inicio: string, fim: string, duracaoServico: number): string[] {
-  const horarios: string[] = []
-  const [horaInicio, minutoInicio] = inicio.split(":").map(Number)
-  const [horaFim, minutoFim] = fim.split(":").map(Number)
-
-  if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
-    return []
+  if (
+    horaInicio === undefined ||
+    minutoInicio === undefined ||
+    horaFim === undefined ||
+    minutoFim === undefined
+  ) {
+    return [];
   }
 
-  const inicioMinutos = horaInicio * 60 + minutoInicio
-  const fimMinutos = horaFim * 60 + minutoFim
+  const inicioMinutos = horaInicio * 60 + minutoInicio;
+  const fimMinutos = horaFim * 60 + minutoFim;
 
-  for (let minutos = inicioMinutos; minutos + duracaoServico <= fimMinutos; minutos += 30) {
-    const hora = Math.floor(minutos / 60)
-    const minuto = minutos % 60
-    horarios.push(`${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`)
+  for (
+    let minutos = inicioMinutos;
+    minutos + duracaoServico <= fimMinutos;
+    minutos += 30
+  ) {
+    const hora = Math.floor(minutos / 60);
+    const minuto = minutos % 60;
+    horarios.push(
+      `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`,
+    );
   }
 
-  return horarios
+  return horarios;
 }
 
-// Função para formatar telefone
-function formatarTelefone(telefone: string): string {
-  // Remover caracteres não numéricos
-  const numeroLimpo = telefone.replace(/\D/g, "")
-
-  // Verificar se já tem o código do país (55)
-  if (numeroLimpo.startsWith("55")) {
-    return numeroLimpo
-  }
-
-  // Adicionar código do país
-  return `55${numeroLimpo}`
-}
-
-// Função para verificar colunas que realmente existem no banco
 async function obterColunasReais(nomeTabela: string): Promise<string[]> {
   try {
     const result = await db.execute(sql`
-      SELECT column_name 
-      FROM information_schema.columns 
+      SELECT column_name
+      FROM information_schema.columns
       WHERE table_name = ${nomeTabela}
-    `)
+    `);
 
-    const colunas = result.rows.map((row: any) => row.column_name as string)
-    console.log(`🔍 [SCHEMA] Colunas reais da tabela ${nomeTabela}:`, colunas)
-    return colunas
-  } catch (error) {
-    console.error(`❌ [SCHEMA] Erro ao verificar colunas da tabela ${nomeTabela}:`, error)
-    return []
+    const colunas = (result.rows as { column_name: string }[]).map(
+      (row) => row.column_name,
+    );
+    return colunas;
+  } catch {
+    return [];
   }
 }
 
 export const agendamentoRouter = createTRPCRouter({
-  getByData: publicProcedure.input(z.object({ date: z.string() })).query(async ({ input }) => {
-    const start = dayjs(input.date).startOf("day").toDate()
-    const end = dayjs(input.date).endOf("day").toDate()
+  getByData: publicProcedure
+    .input(z.object({ date: z.string() }))
+    .query(async ({ input }) => {
+      const start = dayjs(input.date).startOf("day").toDate();
+      const end = dayjs(input.date).endOf("day").toDate();
 
-    const agendamentosDoDia = await db
-      .select({
-        id: agendamentos.id,
-        dataHora: agendamentos.dataHora,
-        servico: agendamentos.servico,
-        status: agendamentos.status,
-        duracaoMinutos: agendamentos.duracaoMinutos,
-        cliente: {
-          nome: clientes.nome,
-        },
-      })
-      .from(agendamentos)
-      .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-      .where(and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end)))
-      .orderBy(agendamentos.dataHora)
+      const agendamentosDoDia = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          duracaoMinutos: agendamentos.duracaoMinutos,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+          ),
+        )
+        .orderBy(agendamentos.dataHora);
 
-    return agendamentosDoDia
-  }),
+      return agendamentosDoDia;
+    }),
 
   getByDateRange: publicProcedure
     .input(
       z.object({
         startDate: z.string(),
         endDate: z.string(),
-      })
+      }),
     )
     .query(async ({ input }) => {
       const start = dayjs(input.startDate).startOf("day").toDate();
@@ -131,51 +125,58 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-        .where(and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end)))
+        .where(
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+          ),
+        )
         .orderBy(agendamentos.dataHora);
 
       return agendamentosDoPeriodo;
     }),
 
-
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
-        clienteId: z.string(), // Aceitar string para IDs numéricos
+        clienteId: z.number(),
         data: z.string(),
         horario: z.string(),
         servico: z.string(),
         status: z.enum(["agendado", "cancelado", "concluido"]),
+        observacoes: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
-      console.log("🚀 [AGENDAMENTO] Iniciando criação de agendamento:", input)
+    .mutation(async ({ ctx, input }) => {
+      const userId = parseInt(ctx.user.id, 10);
+      if (isNaN(userId)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "ID de usuário inválido.",
+        });
+      }
+      const dataHora = dayjs(`${input.data}T${input.horario}`).toDate();
 
-      const dataHora = dayjs(`${input.data}T${input.horario}`).toDate()
-
-      const configuracao = await db.query.configuracoes.findFirst()
-      if (!configuracao) throw new Error("Configuração não encontrada")
-
-      // Buscar serviços da tabela servicos
-      const servicosUsuario = await db.query.servicos.findMany({
-        where: eq(servicos.userId, configuracao.userId),
-      })
-
-      const servicoSelecionado = servicosUsuario.find((s) => s.nome.toLowerCase() === input.servico.toLowerCase())
+      const servicoSelecionado = await db.query.servicos.findFirst({
+        where: and(
+          eq(servicos.userId, userId),
+          eq(servicos.nome, input.servico),
+          eq(servicos.ativo, true),
+        ),
+      });
 
       if (!servicoSelecionado) {
-        throw new Error(`Serviço "${input.servico}" não encontrado`)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Serviço "${input.servico}" não encontrado ou inativo`,
+        });
       }
 
-      const valorCobrado = Number.parseFloat(servicoSelecionado.preco?.toString() ?? "0")
-      const duracaoMinutos = servicoSelecionado.duracao ?? 30
+      const valorCobrado = servicoSelecionado.preco;
+      const duracaoMinutos = servicoSelecionado.duracao;
 
-      // Verificar conflitos de horário
-      const dataInicio = dayjs(`${input.data}T${input.horario}`)
-      const dataFim = dataInicio.add(duracaoMinutos, "minute")
-
-      const start = dataInicio.startOf("day").toDate()
-      const end = dataInicio.endOf("day").toDate()
+      const dataInicio = dayjs(dataHora);
+      const dataFim = dataInicio.add(duracaoMinutos, "minute");
 
       const agendamentosExistentes = await db
         .select({
@@ -184,113 +185,115 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
-        )
+          and(
+            eq(agendamentos.userId, userId),
+            gte(agendamentos.dataHora, dataInicio.startOf("day").toDate()),
+            lte(agendamentos.dataHora, dataInicio.endOf("day").toDate()),
+            eq(agendamentos.status, "agendado"),
+          ),
+        );
 
-      // Verificar se há conflito
       const temConflito = agendamentosExistentes.some((agendamento) => {
-        const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos || 30, "minute")
-
-        // Verifica se há sobreposição
-        return dataInicio.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
-      })
+        const inicioExistente = dayjs(agendamento.dataHora);
+        const fimExistente = inicioExistente.add(
+          agendamento.duracaoMinutos,
+          "minute",
+        );
+        return dataInicio.isBefore(fimExistente) && dataFim.isAfter(inicioExistente);
+      });
 
       if (temConflito) {
-        throw new Error("Horário não disponível - conflita com outro agendamento")
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Horário não disponível - conflita com outro agendamento",
+        });
       }
 
-      // Verificar quais colunas realmente existem no banco
-      const colunasReais = await obterColunasReais("agendamentos")
-      console.log("📋 [AGENDAMENTO] Colunas disponíveis:", colunasReais)
+      const diaSemanaNumero = dataInicio.day();
+      const intervalos = await db.query.intervalosTrabalho.findMany({
+        where: and(
+          eq(intervalosTrabalho.userId, userId),
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true),
+        ),
+      });
 
-      // Converter clienteId para número se for string numérica
-      const clienteIdNumerico = Number.parseInt(input.clienteId, 10)
-
-      if (isNaN(clienteIdNumerico)) {
-        throw new Error("ID do cliente inválido")
+      if (intervalos.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Fora do horário de funcionamento (dia fechado).",
+        });
       }
 
-      // Preparar objeto de valores base com apenas campos obrigatórios
-      const valoresBase: any = {
-        clienteId: clienteIdNumerico,
-        dataHora,
-        servico: input.servico,
-        status: input.status,
+      const inicioAgendamentoMinutos =
+        dataInicio.hour() * 60 + dataInicio.minute();
+      const fimAgendamentoMinutos = dataFim.hour() * 60 + dataFim.minute();
+
+      const estaDentroDoHorario = intervalos.some((intervalo) => {
+        const [horaInicio, minutoInicio] = intervalo.horaInicio
+          .split(":")
+          .map(Number);
+        if (horaInicio === undefined || minutoInicio === undefined) return false;
+        const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number);
+        if (horaFim === undefined || minutoFim === undefined) return false;
+
+        const inicioIntervaloMinutos = horaInicio * 60 + minutoInicio;
+        const fimIntervaloMinutos = horaFim * 60 + minutoFim;
+
+        return (
+          inicioAgendamentoMinutos >= inicioIntervaloMinutos &&
+          fimAgendamentoMinutos <= fimIntervaloMinutos
+        );
+      });
+
+      if (!estaDentroDoHorario) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Fora do horário de funcionamento.",
+        });
       }
 
-      // Adicionar campos condicionalmente baseado nas colunas reais
-      if (colunasReais.includes("user_id")) {
-        valoresBase.userId = 1
-      }
-
-      if (colunasReais.includes("servico_id")) {
-        valoresBase.servicoId = servicoSelecionado.id
-      }
-
-      if (colunasReais.includes("duracao_minutos")) {
-        valoresBase.duracaoMinutos = duracaoMinutos
-      }
-
-      if (colunasReais.includes("valor_cobrado") && valorCobrado > 0) {
-        valoresBase.valorCobrado = valorCobrado
-      }
-
-      console.log("📝 [AGENDAMENTO] Valores finais para inserção:", valoresBase)
-
-      try {
-        const result = await db.insert(agendamentos).values(valoresBase).returning({
-          id: agendamentos.id,
+      const novoAgendamento = await db
+        .insert(agendamentos)
+        .values({
+          userId,
+          clienteId: input.clienteId,
+          servicoId: servicoSelecionado.id,
+          dataHora,
+          servico: input.servico,
+          status: input.status,
+          duracaoMinutos,
+          valorCobrado,
+          observacoes: input.observacoes,
         })
+        .returning();
 
-        console.log("✅ [AGENDAMENTO] Agendamento criado com sucesso:", result[0])
-        return result[0]
-      } catch (error) {
-        console.error("💥 [AGENDAMENTO] Erro na inserção:", error)
-        throw new Error(`Erro ao criar agendamento: ${error instanceof Error ? error.message : "Erro desconhecido"}`)
-      }
+      return novoAgendamento[0]!;
     }),
 
   getServicos: publicProcedure.query(async () => {
-    console.log("🔍 [AGENDAMENTO] Iniciando busca de serviços...")
-
     try {
-      // Buscar configuração para obter o userId
-      const configuracao = await db.query.configuracoes.findFirst()
-      console.log("📋 [AGENDAMENTO] Configuração encontrada:", {
-        existe: !!configuracao,
-        id: configuracao?.id,
-        userId: configuracao?.userId,
-      })
-
+      const configuracao = await db.query.configuracoes.findFirst();
       if (!configuracao) {
-        console.log("❌ [AGENDAMENTO] Nenhuma configuração encontrada")
-        return []
+        return [];
       }
 
-      // Buscar serviços da tabela servicos usando o userId da configuração
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.userId, configuracao.userId),
         orderBy: (servicos, { asc }) => [asc(servicos.nome)],
-      })
+      });
 
-      console.log("🎯 [AGENDAMENTO] Serviços encontrados na tabela servicos:", servicosUsuario)
-
-      // Converter serviços para o formato esperado pelo componente
       const servicosFormatados = servicosUsuario.map((servico) => {
-        console.log("🔄 [AGENDAMENTO] Processando serviço:", servico)
         return {
           nome: servico.nome,
           preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
           duracaoMinutos: servico.duracao,
-        }
-      })
+        };
+      });
 
-      console.log("✅ [AGENDAMENTO] Serviços formatados:", servicosFormatados)
-      return servicosFormatados
-    } catch (error) {
-      console.error("💥 [AGENDAMENTO] Erro ao buscar serviços:", error)
-      return []
+      return servicosFormatados;
+    } catch {
+      return [];
     }
   }),
 
@@ -303,92 +306,55 @@ export const agendamentoRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       if (!input.data || !input.servico) {
-        return { horarios: [], erro: null }
+        return { horarios: [], erro: null };
       }
 
-      const data = dayjs(input.data)
-      const diaSemanaNumero = getDiaSemanaNumero(data.toDate())
+      const data = dayjs(input.data);
+      const diaSemanaNumero = getDiaSemanaNumero(data.toDate());
 
-      // Verificar se a data não é no passado
       if (data.isBefore(dayjs(), "day")) {
-        return { horarios: [], erro: "Não é possível agendar para datas passadas" }
+        return {
+          horarios: [],
+          erro: "Não é possível agendar para datas passadas",
+        };
       }
 
-      // Buscar configuração
-      const configuracao = await db.query.configuracoes.findFirst()
+      const configuracao = await db.query.configuracoes.findFirst();
       if (!configuracao) {
-        return { horarios: [], erro: "Configuração não encontrada" }
+        return { horarios: [], erro: "Configuração não encontrada" };
       }
 
-      // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
+        where: and(
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true),
+        ),
         orderBy: [intervalosTrabalho.horaInicio],
-      })
+      });
 
-      // Verificar se existem intervalos configurados no sistema
-      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
-        where: eq(intervalosTrabalho.ativo, true),
-      })
-
-      let horariosDisponiveis: string[] = []
-      let intervalosInfo: { inicio: string; fim: string }[] = []
-
-      if (existemIntervalos) {
-        // Se existem intervalos configurados no sistema, usar apenas eles
-        if (intervalos.length > 0) {
-          // Há intervalos para este dia específico
-          intervalosInfo = intervalos.map((intervalo) => ({
-            inicio: intervalo.horaInicio,
-            fim: intervalo.horaFim,
-          }))
-        } else {
-          // Não há intervalos para este dia específico = estabelecimento fechado
-          return { horarios: [], erro: "Estabelecimento fechado neste dia" }
-        }
-      } else {
-        // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = (configuracao.dias as string[]) ?? []
-        const diaSemana = getDiaSemanaNumero(data.toDate())
-
-        if (!configuracao.dias?.includes(diaSemana)) {
-          return { horarios: [], erro: "Estabelecimento fechado neste dia" }
-        }
-
-        // Usar horário padrão da configuração
-        intervalosInfo = [
-          {
-            inicio: configuracao.horaInicio,
-            fim: configuracao.horaFim,
-          },
-        ]
+      if (intervalos.length === 0) {
+        return { horarios: [], erro: "Estabelecimento fechado neste dia" };
       }
 
-      if (intervalosInfo.length === 0) {
-        return { horarios: [], erro: "Estabelecimento fechado neste dia" }
-      }
-
-      // Buscar serviços da tabela servicos
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.userId, configuracao.userId),
-      })
+      });
 
-      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
+      const servicoSelecionado = servicosUsuario.find(
+        (s) => s.nome === input.servico,
+      );
       if (!servicoSelecionado) {
-        return { horarios: [], erro: "Serviço não encontrado" }
+        return { horarios: [], erro: "Serviço não encontrado" };
       }
 
-      const duracaoServico = servicoSelecionado.duracao ?? 30
+      const duracaoServico = servicoSelecionado.duracao ?? 30;
 
-      // Gerar todos os horários possíveis dos intervalos
-      for (const intervalo of intervalosInfo) {
-        const horariosIntervalo = gerarHorarios(intervalo.inicio, intervalo.fim, duracaoServico)
-        horariosDisponiveis = [...horariosDisponiveis, ...horariosIntervalo]
-      }
+      const horariosDisponiveis = intervalos.flatMap((intervalo) =>
+        gerarHorarios(intervalo.horaInicio, intervalo.horaFim, duracaoServico),
+      );
 
-      // Buscar agendamentos existentes para este dia
-      const start = data.startOf("day").toDate()
-      const end = data.endOf("day").toDate()
+      const start = data.startOf("day").toDate();
+      const end = data.endOf("day").toDate();
 
       const agendamentosExistentes = await db
         .select({
@@ -397,35 +363,40 @@ export const agendamentoRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
-        )
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+            eq(agendamentos.status, "agendado"),
+          ),
+        );
 
-      // Filtrar horários ocupados
       const horariosLivres = horariosDisponiveis.filter((horario) => {
-        const dataHorario = dayjs(`${input.data}T${horario}`)
-        const fimNovoAgendamento = dataHorario.add(duracaoServico, "minute")
+        const dataHorario = dayjs(`${input.data}T${horario}`);
+        const fimNovoAgendamento = dataHorario.add(duracaoServico, "minute");
 
-        // Verificar se não há conflito com agendamentos existentes
         return !agendamentosExistentes.some((agendamento) => {
-          const inicioAgendamento = dayjs(agendamento.dataHora)
-          const fimAgendamento = inicioAgendamento.add(agendamento.duracaoMinutos, "minute")
+          const inicioAgendamento = dayjs(agendamento.dataHora);
+          const fimAgendamento = inicioAgendamento.add(
+            agendamento.duracaoMinutos ?? 30,
+            "minute",
+          );
+          return (
+            dataHorario.isBefore(fimAgendamento) &&
+            fimNovoAgendamento.isAfter(inicioAgendamento)
+          );
+        });
+      });
 
-          // Verifica se há sobreposição
-          return dataHorario.isBefore(fimAgendamento) && fimNovoAgendamento.isAfter(inicioAgendamento)
-        })
-      })
-
-      // Se for hoje, filtrar horários que já passaram
       if (data.isSame(dayjs(), "day")) {
-        const agora = dayjs()
+        const agora = dayjs();
         const horariosValidos = horariosLivres.filter((horario) => {
-          const dataHorario = dayjs(`${input.data}T${horario}`)
-          return dataHorario.isAfter(agora.add(30, "minute")) // 30 minutos de antecedência mínima
-        })
-        return { horarios: horariosValidos, erro: null }
+          const dataHorario = dayjs(`${input.data}T${horario}`);
+          return dataHorario.isAfter(agora.add(30, "minute"));
+        });
+        return { horarios: horariosValidos, erro: null };
       }
 
-      return { horarios: horariosLivres, erro: null }
+      return { horarios: horariosLivres, erro: null };
     }),
 
   criarAgendamentoPublico: publicProcedure
@@ -440,19 +411,14 @@ export const agendamentoRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      console.log("🔍 [AGENDAMENTO] Dados recebidos:", input)
-
-      // Validação adicional de horário
       if (!input.horario || input.horario.trim() === "") {
-        throw new Error("Horário não pode estar vazio")
+        throw new Error("Horário não pode estar vazio");
       }
 
-      // Verificar se já existe cliente com este telefone
       let cliente = await db.query.clientes.findFirst({
         where: eq(clientes.telefone, input.telefone),
-      })
+      });
 
-      // Se não existe, criar novo cliente
       if (!cliente) {
         const novoCliente = await db
           .insert(clientes)
@@ -461,109 +427,120 @@ export const agendamentoRouter = createTRPCRouter({
             telefone: input.telefone,
             email: input.email,
           })
-          .returning()
-        cliente = novoCliente[0]!
+          .returning();
+        cliente = novoCliente[0]!;
       }
 
-      // Verificar disponibilidade do horário
-      const dataHora = dayjs(`${input.data}T${input.horario}`)
-      const configuracao = await db.query.configuracoes.findFirst()
+      const dataHora = dayjs(`${input.data}T${input.horario}`);
+      const configuracao = await db.query.configuracoes.findFirst();
 
       if (!configuracao) {
-        throw new Error("Configuração não encontrada")
+        throw new Error("Configuração não encontrada");
       }
 
-      // Buscar serviços da tabela servicos
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.userId, configuracao.userId),
-      })
+      });
 
-      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
+      const servicoSelecionado = servicosUsuario.find(
+        (s) => s.nome === input.servico,
+      );
 
       if (!servicoSelecionado) {
-        throw new Error("Serviço não encontrado")
+        throw new Error("Serviço não encontrado");
       }
 
-      const duracaoMinutos = servicoSelecionado.duracao ?? 30
-      const valorCobrado = Number.parseFloat(servicoSelecionado.preco?.toString() ?? "0")
-      const fimAgendamento = dataHora.add(duracaoMinutos, "minute")
+      const duracaoMinutos = servicoSelecionado.duracao ?? 30;
+      const valorCobrado = Number.parseFloat(
+        servicoSelecionado.preco?.toString() ?? "0",
+      );
+      const fimAgendamento = dataHora.add(duracaoMinutos, "minute");
 
-      // Verificar conflitos
-      const start = dataHora.startOf("day").toDate()
-      const end = dataHora.endOf("day").toDate()
+      const start = dataHora.startOf("day").toDate();
+      const end = dataHora.endOf("day").toDate();
 
       const conflitos = await db
         .select()
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
-        )
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+            eq(agendamentos.status, "agendado"),
+          ),
+        );
 
       const temConflito = conflitos.some((agendamento) => {
-        const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos || 30, "minute")
+        const inicioExistente = dayjs(agendamento.dataHora);
+        const fimExistente = inicioExistente.add(
+          agendamento.duracaoMinutos || 30,
+          "minute",
+        );
 
-        return dataHora.isBefore(fimExistente) && fimAgendamento.isAfter(inicioExistente)
-      })
+        return (
+          dataHora.isBefore(fimExistente) &&
+          fimAgendamento.isAfter(inicioExistente)
+        );
+      });
 
       if (temConflito) {
-        throw new Error("Horário não disponível")
+        throw new Error("Horário não disponível");
       }
 
-      // Verificar quais colunas realmente existem no banco
-      const colunasReais = await obterColunasReais("agendamentos")
+      const colunasReais = await obterColunasReais("agendamentos");
 
-      // Preparar objeto de valores base
-      const valoresBase: any = {
+      // Interface tipada para os valores do agendamento
+      interface AgendamentoValues {
+        clienteId: number;
+        dataHora: Date;
+        servico: string;
+        status: string;
+        userId?: number;
+        servicoId?: number;
+        duracaoMinutos?: number;
+        valorCobrado?: string;
+      }
+
+      const valoresBase: AgendamentoValues = {
         clienteId: cliente.id,
         dataHora: dataHora.toDate(),
         servico: input.servico,
         status: "agendado",
-      }
+      };
 
-      // Adicionar campos condicionalmente baseado nas colunas reais
-      if (colunasReais.includes("user_id")) {
-        valoresBase.userId = 1
+      if (colunasReais.includes("user_id") && configuracao.userId) {
+        valoresBase.userId = configuracao.userId;
       }
 
       if (colunasReais.includes("servico_id")) {
-        valoresBase.servicoId = servicoSelecionado.id
+        valoresBase.servicoId = servicoSelecionado.id;
       }
 
       if (colunasReais.includes("duracao_minutos")) {
-        valoresBase.duracaoMinutos = duracaoMinutos
+        valoresBase.duracaoMinutos = duracaoMinutos;
       }
 
       if (colunasReais.includes("valor_cobrado") && valorCobrado > 0) {
-        valoresBase.valorCobrado = valorCobrado
+        valoresBase.valorCobrado = valorCobrado.toString();
       }
 
-      // Criar agendamento
-      const result = await db.insert(agendamentos).values(valoresBase).returning()
+      const result = await db
+        .insert(agendamentos)
+        .values(valoresBase)
+        .returning();
 
-      const agendamento = result[0]!
+      const agendamento = result[0]!;
 
-      // Enviar mensagem de confirmação via WhatsApp
-      let whatsappEnviado = false
-      let whatsappError = null
+      let whatsappEnviado = false;
+      let whatsappError = null;
 
       try {
-        console.log("🚀 [WHATSAPP] Iniciando processo de envio...")
-
-        // Verificar se as configurações do Z-API estão disponíveis
-        const whatsappAtivo = configuracao.whatsappAtivo
-
-        console.log("🔍 [WHATSAPP] Verificando configurações:", {
-          whatsappAtivo,
-        })
+        const whatsappAtivo = configuracao.whatsappAgentEnabled;
 
         if (!whatsappAtivo) {
-          console.log("❌ [WHATSAPP] WhatsApp inativo nas configurações")
-          whatsappError = "WhatsApp inativo nas configurações"
+          whatsappError = "WhatsApp inativo nas configurações";
         } else {
-          console.log("✅ [WHATSAPP] Configurações OK, preparando mensagem...")
-
-          const dataFormatada = dataHora.format("DD/MM/YYYY")
+          const dataFormatada = dataHora.format("DD/MM/YYYY");
           const mensagemConfirmacao = `🎉 *Agendamento Confirmado!*
 
 Olá, ${input.nome}! Seu agendamento foi realizado com sucesso.
@@ -574,73 +551,62 @@ Olá, ${input.nome}! Seu agendamento foi realizado com sucesso.
 • *Horário:* ${input.horario}
 • *Valor:* R$ ${valorCobrado.toFixed(2)}
 
-📍 *Local:* ${configuracao.endereco || "Endereço não informado"}
-📞 *Contato:* ${configuracao.telefone || "Telefone não informado"}
+📍 *Local:* ${configuracao.endereco ?? "Endereço não informado"}
+📞 *Contato:* ${configuracao.telefone ?? "Telefone não informado"}
 
 ⏰ *Importante:* Chegue com 10 minutos de antecedência.
 
 Se precisar reagendar ou cancelar, responda esta mensagem que nosso assistente virtual te ajudará!
 
-Obrigado pela preferência! 💈✨`
+Obrigado pela preferência! 💈✨`;
 
-          console.log("📱 [WHATSAPP] Preparando envio para:", {
-            telefone: input.telefone,
-            mensagemLength: mensagemConfirmacao.length,
-          })
-
-          console.log("📝 [WHATSAPP] Mensagem a ser enviada:")
-          console.log(mensagemConfirmacao)
-
-          // Enviar mensagem usando o serviço dedicado
-          const resultado = await enviarMensagemWhatsApp(input.telefone, mensagemConfirmacao)
-
-          console.log("📊 [WHATSAPP] Resultado do envio:", resultado)
+          const resultado = await enviarMensagemWhatsApp(
+            input.telefone,
+            mensagemConfirmacao,
+          );
 
           if (resultado.success) {
-            whatsappEnviado = true
-            console.log("✅ [WHATSAPP] Mensagem enviada com sucesso!")
+            whatsappEnviado = true;
           } else {
-            whatsappError = resultado.error ?? "Erro desconhecido no envio"
-            console.error("❌ [WHATSAPP] Falha no envio:", whatsappError)
+            whatsappError = resultado.error ?? "Erro desconhecido no envio";
           }
         }
       } catch (error) {
-        console.error("💥 [WHATSAPP] Erro crítico no processo:", {
-          errorMessage: error instanceof Error ? error.message : "Erro desconhecido",
-          errorStack: error instanceof Error ? error.stack : undefined,
-        })
-        whatsappError = error instanceof Error ? error.message : "Erro crítico desconhecido"
+        console.error("Erro detalhado no envio do WhatsApp:", error);
+        return {
+          ...agendamento,
+          whatsappEnviado: false,
+          whatsappError:
+            error instanceof Error
+              ? error.message
+              : "Erro desconhecido no envio do WhatsApp",
+        };
       }
-
-      console.log("🏁 [WHATSAPP] Processo finalizado:", {
-        whatsappEnviado,
-        whatsappError,
-      })
 
       return {
         ...agendamento,
         whatsappEnviado,
         whatsappError,
-      }
+      };
     }),
 
   criarSolicitacaoAgendamento: publicProcedure
     .input(
       z.object({
         nome: z.string().min(1, "Nome é obrigatório"),
-        telefone: z.string().min(10, "Telefone deve ter pelo menos 10 dígitos"),
+        telefone: z
+          .string()
+          .min(10, "Telefone deve ter pelo menos 10 dígitos"),
         dataDesejada: z.string(),
       }),
     )
     .mutation(async ({ input }) => {
-      // Verificar se já existe cliente com este telefone
       let cliente = await db.query.clientes.findFirst({
         where: eq(clientes.telefone, input.telefone),
-      })
+      });
 
-      let isClienteExistente = false
+      let isClienteExistente = false;
 
-      // Se não existe, criar novo cliente
       if (!cliente) {
         const novoCliente = await db
           .insert(clientes)
@@ -649,13 +615,15 @@ Obrigado pela preferência! 💈✨`
             telefone: input.telefone,
             email: null,
           })
-          .returning()
-        cliente = novoCliente[0]!
+          .returning();
+        cliente = novoCliente[0]!;
       } else {
-        isClienteExistente = true
-        // Se existe, atualizar o nome caso seja diferente
+        isClienteExistente = true;
         if (cliente.nome !== input.nome) {
-          await db.update(clientes).set({ nome: input.nome, updatedAt: new Date() }).where(eq(clientes.id, cliente.id))
+          await db
+            .update(clientes)
+            .set({ nome: input.nome, updatedAt: new Date() })
+            .where(eq(clientes.id, cliente.id));
         }
       }
 
@@ -666,46 +634,293 @@ Obrigado pela preferência! 💈✨`
         message: isClienteExistente
           ? "Solicitação registrada para cliente existente"
           : "Solicitação de agendamento recebida com sucesso",
-      }
+      };
     }),
 
-  atualizarStatus: publicProcedure
+  updateStatus: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.string(),
         status: z.enum(["agendado", "cancelado", "concluido"]),
       }),
     )
-    .mutation(async ({ input }) => {
-      const result = await db
-        .update(agendamentos)
-        .set({ status: input.status })
-        .where(eq(agendamentos.id, input.id))
-        .returning()
+    .mutation(async ({ ctx, input }) => {
+      const userId = parseInt(ctx.user.id, 10);
+      if (isNaN(userId)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "ID de usuário inválido.",
+        });
+      }
+      const { id, status } = input;
 
-      return result[0]
+      const agendamento = await db.query.agendamentos.findFirst({
+        where: and(
+          eq(agendamentos.id, id),
+          eq(agendamentos.userId, userId),
+        ),
+      });
+
+      if (!agendamento) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agendamento não encontrado",
+        });
+      }
+
+      const agendamentoAtualizado = await db
+        .update(agendamentos)
+        .set({ status })
+        .where(eq(agendamentos.id, id))
+        .returning();
+
+      return agendamentoAtualizado[0];
     }),
 
-  getByClientCode: publicProcedure.input(z.object({ query: z.string() })).query(async ({ input }) => {
-    const searchTerm = `%${input.query.toLowerCase()}%`
+  delete: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = parseInt(ctx.user.id, 10);
+      if (isNaN(userId)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "ID de usuário inválido.",
+        });
+      }
+      const { id } = input;
 
-    const clientesEncontrados = await db
-      .select({
-        id: clientes.id,
-        nome: clientes.nome,
-      })
-      .from(clientes)
-      .where(sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`)
-      .limit(10)
+      const agendamento = await db.query.agendamentos.findFirst({
+        where: and(
+          eq(agendamentos.id, id),
+          eq(agendamentos.userId, userId),
+        ),
+      });
 
-    return clientesEncontrados
-  }),
+      if (!agendamento) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agendamento não encontrado",
+        });
+      }
 
-  getCortesDoMes: publicProcedure.input(z.object({ month: z.number(), year: z.number() })).query(async ({ input }) => {
-    const startDate = new Date(input.year, input.month - 1, 1)
-    const endDate = new Date(input.year, input.month, 0, 23, 59, 59)
+      await db
+        .delete(agendamentos)
+        .where(eq(agendamentos.id, id));
 
-    const cortes = await db
+      return { success: true };
+    }),
+
+  cancelar: protectedProcedure
+    .input(
+      z.object({
+        agendamentoId: z.string(),
+        motivo: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = parseInt(ctx.user.id, 10);
+      if (isNaN(userId)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "ID de usuário inválido.",
+        });
+      }
+      const { agendamentoId, motivo } = input;
+
+      const agendamentoAtual = await db.query.agendamentos.findFirst({
+        where: and(
+          eq(agendamentos.id, agendamentoId),
+          eq(agendamentos.userId, userId),
+        ),
+        with: {
+          cliente: true,
+        },
+      });
+
+      if (!agendamentoAtual) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agendamento não encontrado",
+        });
+      }
+
+      if (agendamentoAtual.status === "cancelado") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Este agendamento já está cancelado.",
+        });
+      }
+
+      await db
+        .update(agendamentos)
+        .set({
+          status: "cancelado",
+          observacoes: `Cancelado pelo usuário. Motivo: ${motivo ?? "Não especificado."
+            }`,
+        })
+        .where(eq(agendamentos.id, agendamentoId));
+
+      if (agendamentoAtual.cliente?.telefone) {
+        const mensagem = `Olá ${agendamentoAtual.cliente.nome
+          }, seu agendamento para ${agendamentoAtual.servico
+          } no dia ${dayjs(agendamentoAtual.dataHora).format(
+            "DD/MM/YYYY HH:mm",
+          )} foi cancelado. `;
+        try {
+          await enviarMensagemWhatsApp(
+            agendamentoAtual.cliente.telefone,
+            mensagem,
+          );
+        } catch (e) {
+          console.error(
+            "Falha ao enviar notificação de cancelamento via WhatsApp",
+            e,
+          );
+        }
+      }
+
+      return { success: true, message: "Agendamento cancelado com sucesso." };
+    }),
+
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        clienteId: z.number(),
+        data: z.string(),
+        horario: z.string(),
+        servico: z.string(),
+        status: z.enum(["agendado", "cancelado", "concluido"]),
+        observacoes: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = parseInt(ctx.user.id, 10);
+      if (isNaN(userId)) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "ID de usuário inválido.",
+        });
+      }
+      const dataHora = dayjs(`${input.data}T${input.horario}`).toDate();
+
+      const agendamentoOriginal = await db.query.agendamentos.findFirst({
+        where: and(
+          eq(agendamentos.id, input.id),
+          eq(agendamentos.userId, userId),
+        ),
+      });
+      if (!agendamentoOriginal) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agendamento a ser atualizado não foi encontrado",
+        });
+      }
+
+      const servicoSelecionado = await db.query.servicos.findFirst({
+        where: and(
+          eq(servicos.userId, userId),
+          eq(servicos.nome, input.servico),
+          eq(servicos.ativo, true),
+        ),
+      });
+      if (!servicoSelecionado) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Serviço "${input.servico}" não encontrado ou inativo`,
+        });
+      }
+
+      const agendamentoAtualizado = await db
+        .update(agendamentos)
+        .set({
+          clienteId: input.clienteId,
+          servicoId: servicoSelecionado.id,
+          dataHora,
+          servico: input.servico,
+          status: input.status,
+          duracaoMinutos: servicoSelecionado.duracao,
+          valorCobrado: servicoSelecionado.preco,
+          observacoes: input.observacoes,
+        })
+        .where(eq(agendamentos.id, input.id))
+        .returning();
+
+      return agendamentoAtualizado[0];
+    }),
+
+  getCortesDoMes: publicProcedure
+    .input(z.object({ month: z.number(), year: z.number() }))
+    .query(async ({ input }) => {
+      const startDate = new Date(input.year, input.month - 1, 1);
+      const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+
+      const cortes = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(
+          and(
+            gte(agendamentos.dataHora, startDate),
+            lte(agendamentos.dataHora, endDate),
+            sql`${agendamentos.servico} ILIKE '%corte%'`,
+            eq(agendamentos.status, "concluido"),
+          ),
+        )
+        .orderBy(desc(agendamentos.dataHora));
+      console.log("TRPC INPUT:", input);
+      console.log("Start:", startDate.toISOString());
+      console.log("End:", endDate.toISOString());
+
+      return cortes;
+    }),
+
+  getAgendamentosDoMes: publicProcedure
+    .input(z.object({ month: z.number(), year: z.number() }))
+    .query(async ({ input }) => {
+      const startDate = new Date(input.year, input.month - 1, 1);
+      const endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+
+      const agendamentosDoMes = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+          cliente: {
+            nome: clientes.nome,
+          },
+        })
+        .from(agendamentos)
+        .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(
+          and(
+            gte(agendamentos.dataHora, startDate),
+            lte(agendamentos.dataHora, endDate),
+          ),
+        )
+        .orderBy(agendamentos.dataHora);
+
+      return agendamentosDoMes;
+    }),
+
+  getAgendamentosRecentes: publicProcedure.query(async () => {
+    const agora = new Date();
+    const proximosSeteDias = dayjs().add(7, "days").toDate();
+
+    const agendamentosRecentes = await db
       .select({
         id: agendamentos.id,
         dataHora: agendamentos.dataHora,
@@ -719,33 +934,37 @@ Obrigado pela preferência! 💈✨`
       .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
       .where(
         and(
-          gte(agendamentos.dataHora, startDate),
-          lte(agendamentos.dataHora, endDate),
-          sql`${agendamentos.servico} ILIKE '%corte%'`,
+          gte(agendamentos.dataHora, agora),
+          lte(agendamentos.dataHora, proximosSeteDias),
+          eq(agendamentos.status, "agendado"),
         ),
       )
-      .orderBy(desc(agendamentos.dataHora))
-console.log("TRPC INPUT:", input);
-console.log("Start:", startDate.toISOString());
-console.log("End:", endDate.toISOString());
+      .orderBy(agendamentos.dataHora)
+      .limit(5);
 
-    return cortes
+    return agendamentosRecentes;
   }),
 
-  getHistoricoPorCliente: publicProcedure.input(z.object({ clienteId: z.string().uuid() })).query(async ({ input }) => {
-    const historico = await db
-      .select({
-        id: agendamentos.id,
-        dataHora: agendamentos.dataHora,
-        servico: agendamentos.servico,
-        status: agendamentos.status,
-      })
-      .from(agendamentos)
-      .where(eq(agendamentos.clienteId, input.clienteId))
-      .orderBy(desc(agendamentos.dataHora))
+  getHistoricoPorCliente: publicProcedure
+    .input(z.object({ clienteId: z.string() }))
+    .query(async ({ input }) => {
+      const clienteIdNum = parseInt(input.clienteId, 10);
+      if (isNaN(clienteIdNum)) {
+        throw new Error("ID de cliente inválido");
+      }
+      const historico = await db
+        .select({
+          id: agendamentos.id,
+          dataHora: agendamentos.dataHora,
+          servico: agendamentos.servico,
+          status: agendamentos.status,
+        })
+        .from(agendamentos)
+        .where(eq(agendamentos.clienteId, clienteIdNum))
+        .orderBy(desc(agendamentos.dataHora));
 
-    return historico
-  }),
+      return historico;
+    }),
 
   getFaturamentoPorCliente: publicProcedure.query(async () => {
     const resultado = await db
@@ -759,9 +978,9 @@ console.log("End:", endDate.toISOString());
       .innerJoin(clientes, eq(agendamentos.clienteId, clientes.id))
       .where(eq(agendamentos.status, "concluido"))
       .groupBy(agendamentos.clienteId, clientes.nome)
-      .orderBy(desc(sql<number>`SUM(${agendamentos.valorCobrado})`))
+      .orderBy(desc(sql<number>`SUM(${agendamentos.valorCobrado})`));
 
-    return resultado
+    return resultado;
   }),
 
   getHorariosDisponiveisPorData: publicProcedure
@@ -772,116 +991,84 @@ console.log("End:", endDate.toISOString());
       }),
     )
     .query(async ({ input }) => {
-      const data = dayjs(input.data)
-      const diaSemanaNumero = getDiaSemanaNumero(data.toDate())
+      const data = dayjs(input.data);
+      const diaSemanaNumero = getDiaSemanaNumero(data.toDate());
 
-      // Buscar configuração
-      const configuracao = await db.query.configuracoes.findFirst()
+      const configuracao = await db.query.configuracoes.findFirst();
       if (!configuracao) {
-        return { horarios: [], intervalos: [], erro: "Configuração não encontrada" }
+        return {
+          horarios: [],
+          intervalos: [],
+          erro: "Configuração não encontrada",
+        };
       }
 
-      // Buscar intervalos de trabalho para este dia
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
+        where: and(
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true),
+        ),
         orderBy: [intervalosTrabalho.horaInicio],
-      })
+      });
 
-      // Verificar se existem intervalos configurados no sistema
-      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
-        where: eq(intervalosTrabalho.ativo, true),
-      })
-
-      let intervalosInfo: { inicio: string; fim: string }[] = []
-
-      if (existemIntervalos) {
-        // Se existem intervalos configurados no sistema, usar apenas eles
-        if (intervalos.length > 0) {
-          // Há intervalos para este dia específico
-          intervalosInfo = intervalos.map((intervalo) => ({
-            inicio: intervalo.horaInicio,
-            fim: intervalo.horaFim,
-          }))
-        } else {
-          // Não há intervalos para este dia específico = estabelecimento fechado
-          return {
-            horarios: [],
-            intervalos: [],
-            erro: "Estabelecimento fechado neste dia",
-          }
-        }
-      } else {
-        // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = (configuracao.dias as string[]) ?? []
-
-        if (!diasPadrao.includes(diaSemanaNumero)) {
-          return {
-            horarios: [],
-            intervalos: [],
-            erro: "Estabelecimento fechado neste dia",
-          }
-        }
-
-        // Usar horário padrão da configuração
-        intervalosInfo = [
-          {
-            inicio: configuracao.horaInicio,
-            fim: configuracao.horaFim,
-          },
-        ]
-      }
-
-      if (intervalosInfo.length === 0) {
+      if (intervalos.length === 0) {
         return {
           horarios: [],
           intervalos: [],
           erro: "Estabelecimento fechado neste dia",
-        }
+        };
       }
+      const intervalosInfo = intervalos.map((i) => ({
+        inicio: i.horaInicio,
+        fim: i.horaFim,
+      }));
 
-      // Buscar duração do serviço
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.userId, configuracao.userId),
-      })
+      });
 
-      const servicoSelecionado = servicosUsuario.find((s) => s.nome === input.servico)
+      const servicoSelecionado = servicosUsuario.find(
+        (s) => s.nome === input.servico,
+      );
       if (!servicoSelecionado) {
-        return { horarios: [], intervalos: [], erro: "Serviço não encontrado" }
+        return { horarios: [], intervalos: [], erro: "Serviço não encontrado" };
       }
+      const duracaoServico = servicoSelecionado.duracao ?? 30;
 
-      const duracaoServico = servicoSelecionado.duracao ?? 30
-
-      // Gerar todos os horários possíveis dos intervalos (de 10 em 10 minutos)
-      const horariosDisponiveis: string[] = []
-
+      const horariosDisponiveis: string[] = [];
       for (const intervalo of intervalosInfo) {
-        const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
-        const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
-
+        const [horaInicio, minutoInicio] = intervalo.inicio
+          .split(":")
+          .map(Number);
+        const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number);
         if (
           horaInicio === undefined ||
           minutoInicio === undefined ||
           horaFim === undefined ||
           minutoFim === undefined
         ) {
-          continue
+          continue;
         }
+        const inicioMinutos = horaInicio * 60 + minutoInicio;
+        const fimMinutos = horaFim * 60 + minutoFim;
 
-        const inicioMinutos = horaInicio * 60 + minutoInicio
-        const fimMinutos = horaFim * 60 + minutoFim
-
-        // Gerar horários de 10 em 10 minutos
-        for (let minutos = inicioMinutos; minutos + duracaoServico <= fimMinutos; minutos += 10) {
-          const hora = Math.floor(minutos / 60)
-          const minuto = minutos % 60
-          horariosDisponiveis.push(`${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`)
+        for (
+          let minutos = inicioMinutos;
+          minutos + duracaoServico <= fimMinutos;
+          minutos += 10
+        ) {
+          const hora = Math.floor(minutos / 60);
+          const minuto = minutos % 60;
+          horariosDisponiveis.push(
+            `${hora.toString().padStart(2, "0")}:${minuto
+              .toString()
+              .padStart(2, "0")}`,
+          );
         }
       }
 
-      // Buscar agendamentos existentes para este dia
-      const start = data.startOf("day").toDate()
-      const end = data.endOf("day").toDate()
-
+      const start = data.startOf("day").toDate();
+      const end = data.endOf("day").toDate();
       const agendamentosExistentes = await db
         .select({
           dataHora: agendamentos.dataHora,
@@ -889,58 +1076,38 @@ console.log("End:", endDate.toISOString());
         })
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
-        )
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+            eq(agendamentos.status, "agendado"),
+          ),
+        );
 
-      // Filtrar horários ocupados e encontrar próximo disponível para cada horário
       const horariosComStatus = horariosDisponiveis.map((horario) => {
-        const dataHorario = dayjs(`${input.data}T${horario}`)
-        const fimNovoAgendamento = dataHorario.add(duracaoServico, "minute")
-
-        // Verificar se há conflito com agendamentos existentes
+        const dataHorario = dayjs(`${input.data}T${horario}`);
+        const fimNovoAgendamento = dataHorario.add(duracaoServico, "minute");
         const temConflito = agendamentosExistentes.some((agendamento) => {
-          const inicioAgendamento = dayjs(agendamento.dataHora)
-          const fimAgendamento = inicioAgendamento.add(agendamento.duracaoMinutos, "minute")
-
-          // Verifica se há sobreposição
-          return dataHorario.isBefore(fimAgendamento) && fimNovoAgendamento.isAfter(inicioAgendamento)
-        })
-
-        let proximoDisponivel = null
-        if (temConflito) {
-          // Encontrar próximo horário disponível
-          const horarioAtualIndex = horariosDisponiveis.indexOf(horario)
-          for (let i = horarioAtualIndex + 1; i < horariosDisponiveis.length; i++) {
-            const proximoHorario = horariosDisponiveis[i]!
-            const proximaDataHorario = dayjs(`${input.data}T${proximoHorario}`)
-            const proximoFim = proximaDataHorario.add(duracaoServico, "minute")
-
-            const proximoTemConflito = agendamentosExistentes.some((agendamento) => {
-              const inicioAgendamento = dayjs(agendamento.dataHora)
-              const fimAgendamento = inicioAgendamento.add(agendamento.duracaoMinutos, "minute")
-
-              return proximaDataHorario.isBefore(fimAgendamento) && proximoFim.isAfter(inicioAgendamento)
-            })
-
-            if (!proximoTemConflito) {
-              proximoDisponivel = proximoHorario
-              break
-            }
-          }
-        }
-
+          const inicioAgendamento = dayjs(agendamento.dataHora);
+          const fimAgendamento = inicioAgendamento.add(
+            agendamento.duracaoMinutos ?? 30,
+            "minute",
+          );
+          return (
+            dataHorario.isBefore(fimAgendamento) &&
+            fimNovoAgendamento.isAfter(inicioAgendamento)
+          );
+        });
         return {
           horario,
           disponivel: !temConflito,
-          proximoDisponivel,
-        }
-      })
+        };
+      });
 
       return {
         horarios: horariosComStatus,
         intervalos: intervalosInfo,
         erro: null,
-      }
+      };
     }),
 
   verificarConflito: publicProcedure
@@ -952,170 +1119,80 @@ console.log("End:", endDate.toISOString());
       }),
     )
     .query(async ({ input }) => {
-      const { data, horario, servico } = input
+      const { data, horario, servico } = input;
 
-      // Validar formato do horário
-      const horarioRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
+      const horarioRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!horarioRegex.test(horario)) {
-        return {
-          temConflito: true,
-          motivo: "Formato de horário inválido",
-          proximoDisponivel: null,
-        }
+        return { temConflito: true, motivo: "Formato de horário inválido" };
       }
 
-      // Buscar configurações da barbearia
-      const config = await db.query.configuracoes.findFirst()
+      const config = await db.query.configuracoes.findFirst();
       if (!config) {
         return {
           temConflito: true,
           motivo: "Configurações não encontradas",
-          proximoDisponivel: null,
-        }
+        };
       }
 
-      // Buscar duração do serviço no array de serviços da configuração
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.userId, config.userId),
-      })
+      });
+      const servicoInfo = servicosUsuario.find((s) => s.nome === servico);
+      const duracaoMinutos = servicoInfo?.duracao ?? 30;
 
-      const servicoInfo = servicosUsuario.find((s) => s.nome === servico)
-      const duracaoMinutos = servicoInfo?.duracao ?? 30
+      const dataObj = dayjs(data);
+      const diaSemanaNumero = getDiaSemanaNumero(dataObj.toDate());
 
-      // Converter horário para minutos para facilitar cálculos
-      const [horas, minutos] = horario.split(":").map(Number)
+      const [horas, minutos] = horario.split(":").map(Number);
       if (horas === undefined || minutos === undefined) {
-        return {
-          temConflito: true,
-          motivo: "Formato de horário inválido",
-          proximoDisponivel: null,
-        }
+        return { temConflito: true, motivo: "Formato de horário inválido" };
       }
-
-      const horarioMinutos = horas * 60 + minutos
-      const horarioFimMinutos = horarioMinutos + duracaoMinutos
-
-      // Buscar intervalos de trabalho para este dia
-      const dataObj = dayjs(data)
-      const diaSemanaNumero = getDiaSemanaNumero(dataObj.toDate())
+      const horarioMinutos = horas * 60 + minutos;
+      const horarioFimMinutos = horarioMinutos + duracaoMinutos;
 
       const intervalos = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
-        orderBy: [intervalosTrabalho.horaInicio],
-      })
+        where: and(
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true),
+        ),
+      });
 
-      // Verificar se existem intervalos configurados no sistema
-      const existemIntervalos = await db.query.intervalosTrabalho.findFirst({
-        where: eq(intervalosTrabalho.ativo, true),
-      })
-
-      let intervalosInfo: { inicio: string; fim: string }[] = []
-
-      if (existemIntervalos) {
-        // Se existem intervalos configurados no sistema, usar apenas eles
-        if (intervalos.length > 0) {
-          // Há intervalos para este dia específico
-          intervalosInfo = intervalos.map((intervalo) => ({
-            inicio: intervalo.horaInicio,
-            fim: intervalo.horaFim,
-          }))
-        } else {
-          // Não há intervalos para este dia específico = estabelecimento fechado
-          return {
-            temConflito: true,
-            motivo: "Estabelecimento fechado neste dia",
-            proximoDisponivel: null,
-          }
-        }
-      } else {
-        // Se não existem intervalos configurados, usar horário padrão
-        const diasPadrao = (config.dias as string[]) ?? []
-
-        if (!diasPadrao.includes(diaSemanaNumero)) {
-          return {
-            temConflito: true,
-            motivo: "Estabelecimento fechado neste dia",
-            proximoDisponivel: null,
-          }
-        }
-
-        // Usar horário padrão da configuração
-        intervalosInfo = [
-          {
-            inicio: config.horaInicio,
-            fim: config.horaFim,
-          },
-        ]
+      if (intervalos.length === 0) {
+        return {
+          temConflito: true,
+          motivo: "Estabelecimento fechado neste dia",
+        };
       }
 
-      // Verificar se está dentro de algum intervalo de trabalho
-      let dentroIntervalo = false
-      for (const intervalo of intervalosInfo) {
-        const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
-        const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
-
+      const estaDentroDoHorario = intervalos.some((intervalo) => {
+        const [horaInicio, minutoInicio] = intervalo.horaInicio
+          .split(":")
+          .map(Number);
+        const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number);
         if (
           horaInicio === undefined ||
           minutoInicio === undefined ||
           horaFim === undefined ||
           minutoFim === undefined
         ) {
-          continue
+          return false;
         }
+        const inicioMinutos = horaInicio * 60 + minutoInicio;
+        const fimMinutos = horaFim * 60 + minutoFim;
+        return (
+          horarioMinutos >= inicioMinutos && horarioFimMinutos <= fimMinutos
+        );
+      });
 
-        const inicioMinutos = horaInicio * 60 + minutoInicio
-        const fimMinutos = horaFim * 60 + minutoFim
-
-        if (horarioMinutos >= inicioMinutos && horarioFimMinutos <= fimMinutos) {
-          dentroIntervalo = true
-          break
-        }
+      if (!estaDentroDoHorario) {
+        return {
+          temConflito: true,
+          motivo: "Horário fora do período de funcionamento.",
+        };
       }
 
-      // Se não está dentro de nenhum intervalo, encontrar próximo início
-      if (!dentroIntervalo) {
-        let proximoInicioMinutos = null
-
-        // Buscar próximo início de intervalo após o horário atual
-        for (const intervalo of intervalosInfo) {
-          const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
-          if (horaInicio === undefined || minutoInicio === undefined) continue
-
-          const inicioMinutos = horaInicio * 60 + minutoInicio
-
-          if (inicioMinutos > horarioMinutos) {
-            proximoInicioMinutos = inicioMinutos
-            break
-          }
-        }
-
-        // Se não encontrou, pegar o primeiro intervalo do dia
-        if (proximoInicioMinutos === null && intervalosInfo.length > 0) {
-          const primeiroIntervalo = intervalosInfo[0]!
-          const [horaInicio, minutoInicio] = primeiroIntervalo.inicio.split(":").map(Number)
-          if (horaInicio !== undefined && minutoInicio !== undefined) {
-            proximoInicioMinutos = horaInicio * 60 + minutoInicio
-          }
-        }
-
-        // Converter de volta para formato HH:MM
-        if (proximoInicioMinutos !== null) {
-          const proximaHora = Math.floor(proximoInicioMinutos / 60)
-          const proximoMinuto = proximoInicioMinutos % 60
-          const proximoDisponivel = `${proximaHora.toString().padStart(2, "0")}:${proximoMinuto.toString().padStart(2, "0")}`
-
-          return {
-            temConflito: true,
-            motivo: "Horário fora do período de trabalho",
-            proximoDisponivel,
-          }
-        }
-      }
-
-      // Verificar conflitos com agendamentos existentes
-      const start = dataObj.startOf("day").toDate()
-      const end = dataObj.endOf("day").toDate()
-
+      const start = dataObj.startOf("day").toDate();
+      const end = dataObj.endOf("day").toDate();
       const agendamentosExistentes = await db
         .select({
           dataHora: agendamentos.dataHora,
@@ -1123,87 +1200,38 @@ console.log("End:", endDate.toISOString());
         })
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, start), lte(agendamentos.dataHora, end), eq(agendamentos.status, "agendado")),
-        )
+          and(
+            gte(agendamentos.dataHora, start),
+            lte(agendamentos.dataHora, end),
+            eq(agendamentos.status, "agendado"),
+          ),
+        );
 
-      // Verificar sobreposição de horários
       for (const agendamento of agendamentosExistentes) {
-        const inicioAgendamento = dayjs(agendamento.dataHora)
-        const horasExistente = inicioAgendamento.hour()
-        const minutosExistente = inicioAgendamento.minute()
-        const horarioExistenteMinutos = horasExistente * 60 + minutosExistente
-        const horarioExistenteFimMinutos = horarioExistenteMinutos + agendamento.duracaoMinutos
+        const inicioAgendamento = dayjs(agendamento.dataHora);
+        const horasExistente = inicioAgendamento.hour();
+        const minutosExistente = inicioAgendamento.minute();
+        const horarioExistenteMinutos =
+          horasExistente * 60 + minutosExistente;
+        const horarioExistenteFimMinutos =
+          horarioExistenteMinutos + (agendamento.duracaoMinutos ?? 30);
 
-        // Verificar sobreposição
         const temSobreposicao =
-          (horarioMinutos >= horarioExistenteMinutos && horarioMinutos < horarioExistenteFimMinutos) ||
-          (horarioFimMinutos > horarioExistenteMinutos && horarioFimMinutos <= horarioExistenteFimMinutos) ||
-          (horarioMinutos <= horarioExistenteMinutos && horarioFimMinutos >= horarioExistenteFimMinutos)
+          (horarioMinutos >= horarioExistenteMinutos &&
+            horarioMinutos < horarioExistenteFimMinutos) ||
+          (horarioFimMinutos > horarioExistenteMinutos &&
+            horarioFimMinutos <= horarioExistenteFimMinutos) ||
+          (horarioMinutos <= horarioExistenteMinutos &&
+            horarioFimMinutos >= horarioExistenteFimMinutos);
 
         if (temSobreposicao) {
-          // Encontrar próximo horário disponível
-          let proximoDisponivel = null
-
-          // Gerar horários possíveis em intervalos de 30 minutos
-          for (const intervalo of intervalosInfo) {
-            const [horaInicio, minutoInicio] = intervalo.inicio.split(":").map(Number)
-            const [horaFim, minutoFim] = intervalo.fim.split(":").map(Number)
-
-            if (
-              horaInicio === undefined ||
-              minutoInicio === undefined ||
-              horaFim === undefined ||
-              minutoFim === undefined
-            ) {
-              continue
-            }
-
-            const inicioMinutos = horaInicio * 60 + minutoInicio
-            const fimMinutos = horaFim * 60 + minutoFim
-
-            for (let minuto = inicioMinutos; minuto <= fimMinutos - duracaoMinutos; minuto += 30) {
-              if (minuto <= horarioMinutos) continue // Só horários após o solicitado
-
-              // Verificar se este horário não conflita com nenhum agendamento
-              let temConflito = false
-              for (const agend of agendamentosExistentes) {
-                const inicioAgend = dayjs(agend.dataHora)
-                const agendMinutos = inicioAgend.hour() * 60 + inicioAgend.minute()
-                const agendFimMinutos = agendMinutos + agend.duracaoMinutos
-
-                if (
-                  (minuto >= agendMinutos && minuto < agendFimMinutos) ||
-                  (minuto + duracaoMinutos > agendMinutos && minuto + duracaoMinutos <= agendFimMinutos) ||
-                  (minuto <= agendMinutos && minuto + duracaoMinutos >= agendFimMinutos)
-                ) {
-                  temConflito = true
-                  break
-                }
-              }
-
-              if (!temConflito) {
-                const hora = Math.floor(minuto / 60)
-                const min = minuto % 60
-                proximoDisponivel = `${hora.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`
-                break
-              }
-            }
-            if (proximoDisponivel) break
-          }
-
           return {
             temConflito: true,
             motivo: "Horário já ocupado por outro agendamento",
-            proximoDisponivel,
-          }
+          };
         }
       }
 
-      // Se chegou até aqui, não há conflito
-      return {
-        temConflito: false,
-        motivo: null,
-        proximoDisponivel: null,
-      }
+      return { temConflito: false };
     }),
-})
+});

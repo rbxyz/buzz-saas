@@ -96,12 +96,10 @@ export default function ClientesPage() {
           duration: 6000,
           action: {
             label: "🔍 Buscar cliente",
-            onClick: async () => {
-              try {
-                const clienteExistente =
-                  await utils.cliente.buscarPorTelefone.fetch({
+            onClick: () => {
+              utils.cliente.buscarPorTelefone.fetch({
                     telefone: formData.telefone,
-                  });
+                  }).then(clienteExistente => {
                 if (clienteExistente) {
                   setModalCriarAberto(false);
                   abrirModal(clienteExistente.id);
@@ -110,10 +108,10 @@ export default function ClientesPage() {
                     duration: 3000,
                   });
                 }
-              } catch (err) {
+              }).catch(err => {
                 console.error("Erro ao buscar cliente:", err);
                 toast.error("Erro ao buscar cliente existente");
-              }
+              })
             },
           },
         });

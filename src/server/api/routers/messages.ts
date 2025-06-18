@@ -6,6 +6,21 @@ import { env } from "@/env"
 // Criar conexão SQL direta para este router
 const sql = neon(env.DATABASE_URL)
 
+// Tipos para os dados retornados do banco
+interface MessageRow {
+  id: string | number
+  conversationId: string
+  content: string
+  role: string
+  timestamp?: string
+  createdAt: string | Date
+}
+
+interface InsertMessageResult {
+  id: string | number
+  created_at: string | Date
+}
+
 export const messagesRouter = createTRPCRouter({
   listarPorConversa: publicProcedure
     .input(
@@ -33,10 +48,10 @@ export const messagesRouter = createTRPCRouter({
         `
 
         // Processar mensagens garantindo que tudo seja string
-        const mensagensFormatadas = result.map((msg: any) => ({
+        const mensagensFormatadas = (result as MessageRow[]).map((msg) => ({
           id: String(msg.id),
           conversationId: String(msg.conversationId),
-          conteudo: String(msg.content || ""),
+          conteudo: String(msg.content ?? ""),
           tipo: msg.role === "user" ? "recebida" : msg.role === "assistant" ? "enviada" : "sistema",
           // GARANTIR que timestamp seja string ISO
           timestamp: new Date(msg.createdAt).toISOString(),
@@ -47,7 +62,8 @@ export const messagesRouter = createTRPCRouter({
         return mensagensFormatadas
       } catch (error) {
         console.error("💥 [MESSAGES] Erro ao listar mensagens:", error)
-        throw new Error(`Erro ao carregar mensagens: ${error.message}`)
+        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+        throw new Error(`Erro ao carregar mensagens: ${errorMessage}`)
       }
     }),
 
@@ -77,7 +93,11 @@ export const messagesRouter = createTRPCRouter({
           RETURNING id, created_at
         `
 
-        const novaMensagem = insertResult[0]
+        const novaMensagem = (insertResult as InsertMessageResult[])[0]
+
+        if (!novaMensagem) {
+          throw new Error("Falha ao inserir mensagem no banco de dados")
+        }
 
         // Atualizar última mensagem da conversa
         await sql`
@@ -97,7 +117,8 @@ export const messagesRouter = createTRPCRouter({
         }
       } catch (error) {
         console.error("💥 [MESSAGES] Erro ao enviar mensagem:", error)
-        throw new Error(`Erro ao enviar mensagem: ${error.message}`)
+        const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
+        throw new Error(`Erro ao enviar mensagem: ${errorMessage}`)
       }
     }),
 
@@ -135,7 +156,7 @@ export const messagesRouter = createTRPCRouter({
             id,
             conversation_id as "conversationId",
             content,
-            role,
+            role as remetente,
             created_at as "createdAt"
           FROM messages
           ORDER BY created_at DESC
@@ -143,11 +164,11 @@ export const messagesRouter = createTRPCRouter({
         `
 
         // Processar mensagens garantindo que tudo seja string
-        const mensagensFormatadas = result.map((msg: any) => ({
+        const mensagensFormatadas = (result as MessageRow[]).map((msg) => ({
           id: String(msg.id),
           conversationId: String(msg.conversationId),
           conteudo: String(msg.content),
-          remetente: String(msg.remetente),
+          remetente: String(msg.role),
           createdAt: new Date(msg.createdAt).toISOString(),
         }))
 

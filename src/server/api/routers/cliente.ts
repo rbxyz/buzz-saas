@@ -20,8 +20,6 @@ export const clienteRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      console.log("🔍 Input recebido para criar cliente:", input)
-
       try {
         // Verificar se já existe um cliente com este telefone ANTES de tentar inserir
         const telefoneNumeros = input.telefone.replace(/\D/g, "")
@@ -35,7 +33,6 @@ export const clienteRouter = createTRPCRouter({
           .limit(1)
 
         if (clienteExistente.length > 0) {
-          console.log("❌ Cliente já existe com este telefone:", clienteExistente[0])
           throw new TRPCError({
             code: "CONFLICT",
             message: "TELEFONE_DUPLICADO",
@@ -55,10 +52,8 @@ export const clienteRouter = createTRPCRouter({
           })
           .returning()
 
-        console.log("✅ Cliente criado com sucesso:", novoCliente[0])
         return novoCliente[0]
       } catch (error) {
-        console.error("❌ Erro detalhado ao criar cliente:", error)
 
         // Se é um erro que já tratamos (TELEFONE_DUPLICADO), re-throw
         if (error instanceof TRPCError) {
@@ -108,7 +103,6 @@ export const clienteRouter = createTRPCRouter({
           .limit(1)
 
         if (clienteExistente.length > 0) {
-          console.log("❌ Outro cliente já existe com este telefone:", clienteExistente[0])
           throw new TRPCError({
             code: "CONFLICT",
             message: "TELEFONE_DUPLICADO",
@@ -132,8 +126,6 @@ export const clienteRouter = createTRPCRouter({
 
         return clienteAtualizado[0]
       } catch (error) {
-        console.error("❌ Erro ao atualizar cliente:", error)
-
         // Se é um erro que já tratamos (TELEFONE_DUPLICADO), re-throw
         if (error instanceof TRPCError) {
           throw error
@@ -163,7 +155,6 @@ export const clienteRouter = createTRPCRouter({
       await db.delete(clientes).where(eq(clientes.id, input.id))
       return { success: true }
     } catch (error) {
-      console.error("❌ Erro ao excluir cliente:", error)
 
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido"
       if (errorMessage.includes("foreign key") || errorMessage.includes("constraint")) {
@@ -188,7 +179,6 @@ export const clienteRouter = createTRPCRouter({
       const cliente = await db.select().from(clientes).where(eq(clientes.id, input.id)).limit(1)
       return cliente[0] ?? null
     } catch (error) {
-      console.error("❌ Erro ao buscar cliente por ID:", error)
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Erro ao buscar cliente",
@@ -224,14 +214,9 @@ export const clienteRouter = createTRPCRouter({
   }),
 
   buscarPorTelefone: publicProcedure.input(z.object({ telefone: z.string() })).query(async ({ input }) => {
-    console.log("🔍 Iniciando busca de cliente por telefone no backend:", input.telefone)
-
     const telefoneNumeros = input.telefone.replace(/\D/g, "")
 
-    console.log("📱 Telefone limpo para busca:", telefoneNumeros)
-
     if (!telefoneNumeros || telefoneNumeros.length < 10) {
-      console.log("❌ Telefone inválido - menos de 10 dígitos:", telefoneNumeros)
       return null
     }
 
@@ -245,19 +230,11 @@ export const clienteRouter = createTRPCRouter({
         .limit(1)
 
       if (cliente[0]) {
-        console.log("✅ Cliente encontrado no banco:", {
-          id: cliente[0].id,
-          nome: cliente[0].nome,
-          telefone: cliente[0].telefone,
-          email: cliente[0].email,
-        })
         return cliente[0]
       } else {
-        console.log("ℹ️ Nenhum cliente encontrado para telefone:", telefoneNumeros)
         return null
       }
     } catch (error) {
-      console.error("❌ Erro na consulta do banco de dados:", error)
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Erro ao buscar cliente por telefone",

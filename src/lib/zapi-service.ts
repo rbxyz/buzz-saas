@@ -2,13 +2,35 @@
  * Serviço para integração com a Z-API para envio de mensagens WhatsApp
  */
 
+// --- Interfaces para as respostas da Z-API ---
+interface ZApiMessageSuccessResponse {
+  zaapId?: string
+  messageId?: string
+  id?: string
+  status?: "success"
+}
+
+interface ZApiStatusResponse {
+  connected?: boolean
+  status?: "CONNECTED" | "ONLINE"
+  value?: {
+    status?: "CONNECTED"
+  }
+  error?: string
+  message?: string
+}
+
+interface ZApiErrorResponse {
+  message?: string
+  error?: string
+}
+
 // Função para enviar mensagem via Z-API
 export async function enviarMensagemWhatsApp(
   telefone: string,
   mensagem: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("🚀 [ZAPI] Iniciando envio de mensagem WhatsApp...")
 
     // Obter configurações da Z-API
     const instanceId = process.env.ZAPI_INSTANCE_ID
@@ -17,22 +39,11 @@ export async function enviarMensagemWhatsApp(
 
     // Validar configurações
     if (!instanceId || !token || !clientToken) {
-      console.error("❌ [ZAPI] Configurações incompletas:", {
-        hasInstanceId: !!instanceId,
-        hasToken: !!token,
-        hasClientToken: !!clientToken,
-      })
       return { success: false, error: "Configurações Z-API incompletas" }
     }
 
     // Formatar telefone (garantir que tenha o código do país)
     const telefoneFormatado = formatarTelefone(telefone)
-
-    console.log("📱 [ZAPI] Preparando envio:", {
-      telefoneOriginal: telefone,
-      telefoneFormatado,
-      mensagemLength: mensagem.length,
-    })
 
     // Construir URL conforme documentação
     const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`
@@ -42,10 +53,6 @@ export async function enviarMensagemWhatsApp(
       phone: telefoneFormatado,
       message: mensagem,
     }
-
-    console.log("🌐 [ZAPI] Enviando requisição para:", url.replace(token, "***"))
-    console.log("🔑 [ZAPI] Headers incluem Client-Token:", !!clientToken)
-
     // Enviar requisição
     const response = await fetch(url, {
       method: "POST",
@@ -56,31 +63,23 @@ export async function enviarMensagemWhatsApp(
       body: JSON.stringify(payload),
     })
 
-    console.log("📥 [ZAPI] Resposta recebida:", {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    })
-
     // Processar resposta
-    const data = await response.json()
-    console.log("📊 [ZAPI] Corpo da resposta:", data)
+    const data = (await response.json()) as ZApiMessageSuccessResponse | ZApiErrorResponse
 
     // Verificar se a mensagem foi enviada com sucesso
     // Z-API pode retornar diferentes formatos de resposta
-    if (data.zaapId || data.messageId || data.id || (data.status && data.status === "success")) {
-      console.log("✅ [ZAPI] Mensagem enviada com sucesso:", data)
+    const successResponse = data as ZApiMessageSuccessResponse
+    if (successResponse.zaapId ?? successResponse.messageId ?? successResponse.id ?? successResponse.status === "success") {
       return { success: true }
     }
 
     // Se chegou aqui, houve algum problema
-    console.error("❌ [ZAPI] Erro na resposta:", data)
+    const errorResponse = data as ZApiErrorResponse
     return {
       success: false,
-      error: data.message || data.error || `Erro na resposta da API`,
+      error: errorResponse.message ?? errorResponse.error ?? `Erro na resposta da API`,
     }
   } catch (error) {
-    console.error("💥 [ZAPI] Erro ao enviar mensagem:", error)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido ao enviar mensagem",
@@ -115,9 +114,6 @@ export async function verificarStatusZApi(): Promise<{ connected: boolean; error
 
     const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/status`
 
-    console.log("🔍 [ZAPI-STATUS] Verificando status em:", url.replace(token, "***"))
-    console.log("🔑 [ZAPI-STATUS] Headers incluem Client-Token:", !!clientToken)
-
     const response = await fetch(url, {
       method: "GET",
       headers: {
@@ -126,41 +122,26 @@ export async function verificarStatusZApi(): Promise<{ connected: boolean; error
       },
     })
 
-    console.log("📥 [ZAPI-STATUS] Resposta HTTP:", {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    })
-
-    const data = await response.json()
-    console.log("📊 [ZAPI-STATUS] Corpo da resposta:", data)
+    const data = (await response.json()) as ZApiStatusResponse
 
     // Caso especial: "You are already connected" significa que está conectado
     if (data.error === "You are already connected.") {
-      console.log("✅ [ZAPI-STATUS] Instância já está conectada")
       return { connected: true }
     }
 
     // Verificar outros formatos de resposta positiva
-    const connected =
-      data.connected === true ||
-      data.status === "CONNECTED" ||
-      data.status === "ONLINE" ||
-      (data.value && data.value.status === "CONNECTED")
+    const connected = data.connected === true || data.status === "CONNECTED" || data.status === "ONLINE" || data.value?.status === "CONNECTED"
 
     if (connected) {
-      console.log("✅ [ZAPI-STATUS] Instância está conectada")
       return { connected: true }
     }
 
     // Se chegou aqui, não está conectado
-    console.log("❌ [ZAPI-STATUS] Instância não está conectada:", data)
     return {
       connected: false,
-      error: data.message || data.error || "Status desconhecido",
+      error: data.message ?? data.error ?? "Status desconhecido",
     }
   } catch (error) {
-    console.error("💥 [ZAPI-STATUS] Erro ao verificar status:", error)
     return {
       connected: false,
       error: error instanceof Error ? error.message : "Erro ao verificar status",

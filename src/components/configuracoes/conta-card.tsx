@@ -27,17 +27,17 @@ export function ContaCard() {
 
   // Mutation para atualizar configuração geral
   const mutation = trpc.configuracao.atualizarConfiguracao.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       toast({
         title: "Sucesso!",
         description: "Configuração atualizada com sucesso!",
       });
-      await refetch();
+      void refetch();
     },
     onError: (error) => {
       toast({
         title: "Erro!",
-        description: error.message || "Erro ao atualizar a configuração.",
+        description: error.message ?? "Erro ao atualizar a configuração.",
         variant: "destructive",
       });
     },

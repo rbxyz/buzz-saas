@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ElementType } from "react";
 import { useTheme } from "next-themes";
 import {
   Calendar,
@@ -14,7 +14,6 @@ import {
   LogOut,
   X,
   Menu,
-  BarChart3,
 } from "lucide-react";
 
 import {
@@ -31,7 +30,27 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/auth-context";
-import { title } from "process";
+
+interface Route {
+  title: string;
+  href: string;
+  icon: ElementType;
+  blocked?: boolean;
+}
+
+const routes: Route[] = [
+  { title: "Dashboard", href: "/dashboard", icon: Home },
+  { title: "Agendamentos", href: "/dashboard/agendamentos", icon: Calendar },
+  { title: "Clientes", href: "/dashboard/clientes", icon: Users },
+  { title: "Linktree", href: "/dashboard/linktree", icon: LinkIcon },
+  { title: "Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
+  {
+    title: "Configurações",
+    href: "/dashboard/configuracoes",
+    icon: Settings,
+  },
+  { title: "Página Inicial", href: "/", icon: Home },
+];
 
 export function DashboardSidebar() {
   const pathname = usePathname();
@@ -56,21 +75,6 @@ export function DashboardSidebar() {
     const timeout = setTimeout(() => setLogoVisible(true), 150);
     return () => clearTimeout(timeout);
   }, [currentTheme]);
-
-  const routes = [
-    { title: "Dashboard", href: "/dashboard", icon: Home },
-    { title: "Agendamentos", href: "/dashboard/agendamentos", icon: Calendar },
-    { title: "Clientes", href: "/dashboard/clientes", icon: Users },
-    { title: "Linktree", href: "/dashboard/linktree", icon: LinkIcon },
-    { title: "Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
-    {
-      title: "Configurações",
-      href: "/dashboard/configuracoes",
-      icon: Settings,
-    },
-
-    { title: "Página Inicial", href: "/", icon: Home },
-  ];
 
   const handleNavigation = (href: string, blocked?: boolean) => {
     if (blocked) {
@@ -253,14 +257,6 @@ export function DashboardSidebar() {
                 </div>
                 <span className="text-lg font-semibold">Buzz</span>
               </div>
-              <Button
-                variant="ghost"
-                onClick={() => setIsOpen(false)}
-                aria-label="Fechar menu"
-                className="p-1"
-              >
-                <X className="h-5 w-5" />
-              </Button>
             </SidebarHeader>
 
             <SidebarContent className="flex-1 overflow-y-auto">

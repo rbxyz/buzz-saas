@@ -4,9 +4,15 @@ import { configuracoes, agendamentos, servicos } from "@/server/db/schema"
 import { and, gte, lte, eq } from "drizzle-orm"
 import dayjs from "dayjs"
 
+interface RequestBody {
+  data: string;
+  horario: string;
+  servico: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const body = (await request.json()) as RequestBody
     const { data, horario, servico } = body
 
     console.log(`🔍 [WEBHOOK-DISPONIBILIDADE] Verificando:`, body)

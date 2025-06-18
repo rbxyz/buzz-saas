@@ -1,6 +1,3 @@
-import { db } from "@/server/db";
-import { embeddings } from "@/server/db/schema";
-
 // Tipagem para o registro de embedding
 export interface EmbeddingRecord {
   id: string;
@@ -10,6 +7,9 @@ export interface EmbeddingRecord {
   createdAt?: Date;
 }
 
+// Mock de armazenamento em memória para embeddings (substituir por banco real quando necessário)
+const embeddingsStore: EmbeddingRecord[] = [];
+
 // Função para criar embeddings a partir do conteúdo
 export async function createEmbeddings(content: string, uploadId: number): Promise<EmbeddingRecord | null> {
   try {
@@ -17,36 +17,33 @@ export async function createEmbeddings(content: string, uploadId: number): Promi
       .fill(0)
       .map(() => Math.random() - 0.5);
 
-    const result = await db
-      .insert(embeddings)
-      .values({
-        uploadId,
-        content,
-        embedding: mockEmbedding,
-      })
-      .returning();
+    const newEmbedding: EmbeddingRecord = {
+      id: `emb_${Date.now()}_${Math.random().toString(36).substring(2)}`,
+      uploadId,
+      content,
+      embedding: mockEmbedding,
+      createdAt: new Date(),
+    };
 
-    if (Array.isArray(result) && result.length > 0) {
-      return result[0] as EmbeddingRecord;
-    }
-    return null;
+    // Armazenar em memória (substituir por inserção no banco quando tabela existir)
+    embeddingsStore.push(newEmbedding);
+
+    return newEmbedding;
   } catch (error) {
-    console.error("Erro ao criar embedding:", error instanceof Error ? error.message : error);
-    throw error;
+    console.error("Erro ao criar embeddings:", error instanceof Error ? error.message : "Erro desconhecido");
+    throw new Error(error instanceof Error ? error.message : "Erro desconhecido ao criar embeddings");
   }
 }
 
 // Função para buscar embeddings similares
 export async function searchSimilarEmbeddings(query: string, limit = 5): Promise<EmbeddingRecord[]> {
   try {
-    const randomEmbeddings = await db.select().from(embeddings).limit(limit);
-    if (Array.isArray(randomEmbeddings)) {
-      return randomEmbeddings as EmbeddingRecord[];
-    }
-    return [];
+    // Retornar os primeiros 'limit' embeddings do store (mock)
+    const results = embeddingsStore.slice(0, Math.min(limit, embeddingsStore.length));
+    return results;
   } catch (error) {
-    console.error("Erro ao buscar embeddings similares:", error instanceof Error ? error.message : error);
-    throw error;
+    console.error("Erro ao buscar embeddings similares:", error instanceof Error ? error.message : "Erro desconhecido");
+    throw new Error(error instanceof Error ? error.message : "Erro desconhecido ao buscar embeddings");
   }
 }
 
@@ -68,7 +65,7 @@ export async function prepareDataForAgents(uploadId: number): Promise<
       sampleContents.map((content) => createEmbeddings(content, uploadId)),
     );
 
-    const count = Array.isArray(results) ? results.length : 0;
+    const count = results.filter(Boolean).length;
 
     return {
       success: true,
@@ -76,7 +73,6 @@ export async function prepareDataForAgents(uploadId: number): Promise<
       message: `${count} embeddings criados com sucesso para o upload ${uploadId}`,
     };
   } catch (error) {
-    console.error("Erro ao preparar dados para agentes:", error instanceof Error ? error.message : error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",

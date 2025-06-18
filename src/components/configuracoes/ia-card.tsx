@@ -13,24 +13,24 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { toast } from "@/hooks/use-toast";
 import { Brain, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function IACard() {
-  const [modoTreinoAtivo, setModoTreinoAtivo] = useState(false);
+  const [modoTreinoAtivo] = useState(false);
   const [contextoIA, setContextoIA] = useState("");
   const [dadosIA, setDadosIA] = useState("");
 
-  const { data: configs, refetch } = trpc.configuracao.listar.useQuery();
+  const { data: configs } = trpc.configuracao.listar.useQuery();
 
+  /*
   const atualizarIAMutation = trpc.configuracao.atualizarIA.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       toast({
         title: "Sucesso!",
         description: "Configurações de IA atualizadas com sucesso!",
       });
-      await refetch();
+      void refetch();
     },
     onError: () => {
       toast({
@@ -43,12 +43,12 @@ export function IACard() {
 
   const atualizarModoTreinoMutation =
     trpc.configuracao.atualizarModoTreino.useMutation({
-      onSuccess: async () => {
+      onSuccess: () => {
         toast({
           title: "Sucesso!",
           description: "Modo treino atualizado com sucesso!",
         });
-        await refetch();
+        void refetch();
       },
       onError: () => {
         toast({
@@ -58,8 +58,10 @@ export function IACard() {
         });
       },
     });
+    */
 
   function handleSalvarIA() {
+    /*
     if (!configs?.id) {
       toast({
         title: "Erro!",
@@ -73,9 +75,11 @@ export function IACard() {
       contextoIA,
       dadosIA,
     });
+    */
   }
 
   function handleToggleModoTreino() {
+    /*
     if (!configs?.id) {
       toast({
         title: "Erro!",
@@ -90,13 +94,16 @@ export function IACard() {
       id: configs.id,
       modoTreinoAtivo: novoModo,
     });
+    */
   }
 
   useEffect(() => {
+    /*
     if (!configs) return;
-    setModoTreinoAtivo(configs.modoTreinoAtivo || false);
-    setContextoIA(configs.contextoIA || "");
-    setDadosIA(configs.dadosIA || "");
+    setModoTreinoAtivo(configs.modoTreinoAtivo ?? false);
+    setContextoIA(configs.contextoIA ?? "");
+    setDadosIA(configs.dadosIA ?? "");
+    */
   }, [configs]);
 
   return (
@@ -141,6 +148,7 @@ export function IACard() {
           <Switch
             checked={modoTreinoAtivo}
             onCheckedChange={handleToggleModoTreino}
+            disabled={true}
           />
         </div>
 
@@ -154,7 +162,7 @@ export function IACard() {
               value={contextoIA}
               onChange={(e) => setContextoIA(e.target.value)}
               placeholder="Ex: Você é um atendente virtual da Barbearia do João. Seja sempre educado e prestativo..."
-              disabled={!modoTreinoAtivo}
+              disabled={true || !modoTreinoAtivo}
               className="min-h-[100px] transition-all duration-200"
             />
           </div>
@@ -168,7 +176,7 @@ export function IACard() {
               value={dadosIA}
               onChange={(e) => setDadosIA(e.target.value)}
               placeholder='Ex: {"barbeiros": ["João", "Carlos"], "estilos": ["Degradê", "Navalhado"]}'
-              disabled={!modoTreinoAtivo}
+              disabled={true || !modoTreinoAtivo}
               className="min-h-[80px] font-mono text-sm transition-all duration-200"
             />
           </div>
@@ -177,12 +185,10 @@ export function IACard() {
         <div className="pt-2">
           <Button
             onClick={handleSalvarIA}
-            disabled={!modoTreinoAtivo || atualizarIAMutation.isPending}
+            disabled={true}
             className="w-full sm:w-auto"
           >
-            {atualizarIAMutation.isPending
-              ? "Salvando..."
-              : "Salvar Configurações de IA"}
+            Salvar Configurações de IA
           </Button>
         </div>
       </CardContent>

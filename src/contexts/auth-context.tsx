@@ -1,15 +1,15 @@
 "use client";
 
 import type React from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/trpc/react";
 
 interface User {
-  id: string;
+  id: number;
   nome: string;
   email: string;
-  funcao: string;
+  funcao: "superadmin" | "admin";
 }
 
 interface AuthContextType {
@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifyTokenMutation = api.auth.verifyToken.useMutation();
 
-  const checkAuth = async (): Promise<boolean> => {
+  const checkAuth = useCallback(async (): Promise<boolean> => {
     try {
       const token = localStorage.getItem("auth_token");
       if (!token) {
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return false;
     }
-  };
+  }, [verifyTokenMutation]);
 
   const login = (token: string, userData: User) => {
     localStorage.setItem("auth_token", token);
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   const value = {
     user,

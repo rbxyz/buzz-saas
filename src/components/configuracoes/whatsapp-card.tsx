@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { toast } from "@/hooks/use-toast";
 import { MessageCircle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,8 +21,9 @@ export function WhatsappCard() {
   const [token, setToken] = useState("");
   const [whatsappAtivo, setWhatsappAtivo] = useState(false);
 
-  const { data: configs, refetch } = trpc.configuracao.listar.useQuery();
+  const { data: configs } = trpc.configuracao.listar.useQuery();
 
+  /*
   const atualizarWhatsappMutation =
     trpc.configuracao.atualizarIntegracaoWhatsapp.useMutation({
       onSuccess: async () => {
@@ -41,8 +41,10 @@ export function WhatsappCard() {
         });
       },
     });
+    */
 
   function handleSalvarWhatsapp() {
+    /*
     if (!configs?.id) {
       toast({
         title: "Erro!",
@@ -57,13 +59,16 @@ export function WhatsappCard() {
       token,
       whatsappAtivo,
     });
+    */
   }
 
   useEffect(() => {
+    /*
     if (!configs) return;
     setInstanceId(configs.instanceId || "");
     setToken(configs.token || "");
     setWhatsappAtivo(configs.whatsappAtivo || false);
+    */
   }, [configs]);
 
   return (
@@ -105,7 +110,11 @@ export function WhatsappCard() {
               </p>
             </div>
           </div>
-          <Switch checked={whatsappAtivo} onCheckedChange={setWhatsappAtivo} />
+          <Switch
+            checked={whatsappAtivo}
+            onCheckedChange={setWhatsappAtivo}
+            disabled={true}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -118,7 +127,7 @@ export function WhatsappCard() {
               placeholder="Digite o Instance ID"
               value={instanceId}
               onChange={(e) => setInstanceId(e.target.value)}
-              disabled={!whatsappAtivo}
+              disabled={true}
               className="transition-all duration-200"
             />
           </div>
@@ -133,7 +142,7 @@ export function WhatsappCard() {
               placeholder="Digite o Token"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              disabled={!whatsappAtivo}
+              disabled={true}
               className="transition-all duration-200"
             />
           </div>
@@ -142,12 +151,10 @@ export function WhatsappCard() {
         <div className="pt-2">
           <Button
             onClick={handleSalvarWhatsapp}
-            disabled={!whatsappAtivo || atualizarWhatsappMutation.isPending}
+            disabled={true}
             className="w-full sm:w-auto"
           >
-            {atualizarWhatsappMutation.isPending
-              ? "Salvando..."
-              : "Salvar Integração WhatsApp"}
+            Salvar Integração WhatsApp
           </Button>
         </div>
       </CardContent>

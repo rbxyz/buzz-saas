@@ -15,13 +15,13 @@ export default function DashboardLoading() {
   const router = useRouter();
 
   // Pré-carrega dados do dashboard principal usando endpoints que existem
-  const { data: stats, isLoading: isLoadingStats } =
+  const { isLoading: isLoadingStats } =
     api.dashboard.getStats.useQuery(undefined, PRELOAD_CONFIG.stats);
 
-  const { data: overview, isLoading: isLoadingOverview } =
+  const { isLoading: isLoadingOverview } =
     api.dashboard.getOverviewData.useQuery(undefined, PRELOAD_CONFIG.overview);
 
-  const { data: recentAppointments, isLoading: isLoadingRecent } =
+  const { isLoading: isLoadingRecent } =
     api.dashboard.getUltimosAgendamentos.useQuery(
       undefined,
       PRELOAD_CONFIG.recent,

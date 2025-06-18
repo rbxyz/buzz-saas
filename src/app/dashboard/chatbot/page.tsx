@@ -28,43 +28,13 @@ import { ptBR } from "date-fns/locale";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-interface Conversation {
-  id: string;
-  telefone: string;
-  nomeCliente?: string | null;
-  status: "ativa" | "pausada" | "encerrada";
-  ultimaMensagem?: string;
-  ultimaInteracao: string;
-  totalMensagens: number;
-  mensagensNaoLidas: number;
-  tags?: string[];
-}
-
-interface Message {
-  id: string;
-  conversationId: string;
-  conteudo: string;
-  tipo: "recebida" | "enviada" | "sistema";
-  timestamp: string;
-  lida: boolean;
-  metadata?: {
-    nomeRemetente?: string;
-    tipoMensagem?: string;
-    erro?: string;
-  };
-}
-
 export default function ChatbotPage() {
   // Estados principais
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(
     null,
   );
   const [novaMensagem, setNovaMensagem] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<
-    "todas" | "ativa" | "pausada" | "encerrada"
-  >("todas");
-  const [termoBusca, setTermoBusca] = useState("");
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh] = useState(true);
 
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<
@@ -82,8 +52,8 @@ export default function ChatbotPage() {
     error,
     refetch: refetchConversas,
   } = api.conversations.listar.useQuery({
-    status: statusFiltro || undefined,
-    busca: busca || undefined,
+    status: statusFiltro ?? undefined,
+    busca: busca ?? undefined,
   });
 
   const {
@@ -100,8 +70,8 @@ export default function ChatbotPage() {
   const enviarMensagemMutation = api.messages.enviar.useMutation({
     onSuccess: () => {
       setNovaMensagem("");
-      refetchMensagens();
-      refetchConversas();
+      void refetchMensagens();
+      void refetchConversas();
     },
     onError: (error) => {
       console.error("Erro ao enviar mensagem:", error);
@@ -110,25 +80,18 @@ export default function ChatbotPage() {
 
   const marcarComoLidaMutation = api.messages.marcarComoLida.useMutation({
     onSuccess: () => {
-      refetchMensagens();
-      refetchConversas();
+      void refetchMensagens();
+      void refetchConversas();
     },
   });
-
-  const atualizarStatusConversaMutation =
-    api.conversations.atualizarStatus.useMutation({
-      onSuccess: () => {
-        refetchConversas();
-      },
-    });
 
   // Efeitos
   useEffect(() => {
     if (autoRefresh) {
       intervalRef.current = setInterval(() => {
-        refetchConversas();
+        void refetchConversas();
         if (conversaSelecionada) {
-          refetchMensagens();
+          void refetchMensagens();
         }
       }, 10000); // Atualiza a cada 10 segundos
 
@@ -156,7 +119,7 @@ export default function ChatbotPage() {
         });
       }
     }
-  }, [conversaSelecionada, mensagens]);
+  }, [conversaSelecionada, mensagens, marcarComoLidaMutation]);
 
   // Funções auxiliares
   const scrollToBottom = () => {
@@ -178,19 +141,6 @@ export default function ChatbotPage() {
       return `(${ddd}) ${parte1}-${parte2}`;
     }
     return telefone;
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "ativa":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "pausada":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "encerrada":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      default:
-        return "bg-blue-100 text-blue-800 border-blue-200";
-    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -223,20 +173,6 @@ export default function ChatbotPage() {
       handleEnviarMensagem();
     }
   };
-
-  const conversasFiltradas = conversas?.filter((conversa) => {
-    if (filtroStatus !== "todas" && conversa.status !== filtroStatus)
-      return false;
-    if (termoBusca) {
-      const termo = termoBusca.toLowerCase();
-      return (
-        conversa.telefone.includes(termo) ||
-        conversa.nomeCliente?.toLowerCase().includes(termo) ||
-        conversa.ultimaMensagem?.toLowerCase().includes(termo)
-      );
-    }
-    return true;
-  });
 
   const conversaSelecionadaData = conversas?.find(
     (c) => c.id === conversaSelecionada,
@@ -363,7 +299,7 @@ export default function ChatbotPage() {
                       <div className="flex-1 overflow-hidden">
                         <div className="flex items-center justify-between">
                           <p className="truncate font-medium">
-                            {conversa.nomeCliente ||
+                            {conversa.nomeCliente ??
                               formatarTelefone(conversa.telefone)}
                           </p>
                           <Badge
@@ -435,7 +371,7 @@ export default function ChatbotPage() {
                       </Avatar>
                       <div>
                         <h3 className="font-medium">
-                          {conversaSelecionadaData.nomeCliente ||
+                          {conversaSelecionadaData.nomeCliente ??
                             formatarTelefone(conversaSelecionadaData.telefone)}
                         </h3>
                         <div className="text-muted-foreground flex items-center gap-2 text-sm">

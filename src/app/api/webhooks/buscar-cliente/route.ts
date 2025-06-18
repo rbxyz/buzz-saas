@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
 import { clientes, agendamentos } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
+import { type InferSelectModel } from "drizzle-orm"
+
+type Agendamento = InferSelectModel<typeof agendamentos>;
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest) {
       .then((rows) => rows[0] ?? null)
 
     // Buscar agendamentos do cliente (se existir)
-    let agendamentosCliente: any[] = []
+    let agendamentosCliente: Agendamento[] = []
     if (cliente) {
       agendamentosCliente = await db
         .select()

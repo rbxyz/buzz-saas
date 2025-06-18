@@ -13,7 +13,7 @@ export default function LinktreeLoading() {
   const router = useRouter();
 
   // Pré-carrega todos os links
-  const { data: links, isLoading: isLoadingLinks } =
+  const { isLoading: isLoadingLinks } =
     api.linktree.listar.useQuery(undefined, PRELOAD_CONFIG.linktree);
 
   useEffect(() => {

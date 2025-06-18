@@ -4,9 +4,17 @@ import { configuracoes, clientes, agendamentos, servicos } from "@/server/db/sch
 import { eq } from "drizzle-orm"
 import dayjs from "dayjs"
 
+interface RequestBody {
+  telefone: string;
+  nome: string;
+  servico: string;
+  data: string;
+  horario: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const body = (await request.json()) as RequestBody
     const { telefone, nome, servico, data, horario } = body
 
     console.log(`🚀 [WEBHOOK-CRIAR-AGENDAMENTO] Criando agendamento:`, body)
@@ -28,7 +36,7 @@ export async function POST(request: NextRequest) {
       .from(clientes)
       .where(eq(clientes.telefone, telefoneClean))
       .limit(1)
-      .then((rows) => rows[0] || null)
+      .then((rows) => rows[0] ?? null)
 
     if (!cliente) {
       console.log(`🆕 [WEBHOOK-CRIAR-AGENDAMENTO] Criando novo cliente: ${nome} (${telefoneClean})`)
@@ -93,6 +101,9 @@ export async function POST(request: NextRequest) {
         userId: cliente.userId,
         clienteId: cliente.id,
         servicoId: servicoSelecionado.id,
+        servico: servicoSelecionado.nome,
+        duracaoMinutos: servicoSelecionado.duracao,
+        valorCobrado: servicoSelecionado.preco,
         dataHora,
         status: "agendado",
         observacoes: `Agendamento criado via WhatsApp - Valor: R$ ${Number(servicoSelecionado.preco).toFixed(2)}`,
@@ -112,7 +123,7 @@ export async function POST(request: NextRequest) {
 • Horário: ${horario}
 • Valor: R$ ${Number(servicoSelecionado.preco).toFixed(2)}
 
-📍 ${config.endereco || "Endereço na bio"}
+📍 ${config.endereco ?? "Endereço na bio"}
 
 Chegue 10 min antes! Até lá! 😊💈`
 

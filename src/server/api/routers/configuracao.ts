@@ -175,8 +175,6 @@ export const configuracaoRouter = createTRPCRouter({
 
         // Se tem ID, é uma atualização
         if (id) {
-          console.log("📝 Atualizando configuração existente ID:", id)
-
           const updated = await db
             .update(configuracoes)
             .set({
@@ -193,12 +191,8 @@ export const configuracaoRouter = createTRPCRouter({
             })
           }
 
-          console.log("✅ Configuração atualizada com sucesso!")
           return updated[0]
         } else {
-          // Se não tem ID, é uma criação
-          console.log("➕ Criando nova configuração")
-
           // Verificar se já existe configuração
           const existing = await db.query.configuracoes.findFirst()
 

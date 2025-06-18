@@ -9,7 +9,7 @@ export async function uploadToBlob(file: File, folder = "uploads") {
     const uniqueId = nanoid();
 
     // Extrair a extensão do arquivo
-//    const extension = file.name.split(".").pop();
+    //    const extension = file.name.split(".").pop();
 
     // Criar um nome de arquivo único
     const fileName = `${folder}/${uniqueId}-${file.name.replace(/\s+/g, "_")}`;
@@ -18,7 +18,7 @@ export async function uploadToBlob(file: File, folder = "uploads") {
     const blob = await put(fileName, file, {
       access: "public",
       addRandomSuffix: false,
-      token: env.BLOB_READ_WRITE_TOKEN as string,
+      token: env.BLOB_READ_WRITE_TOKEN,
     });
 
     return {
@@ -29,7 +29,6 @@ export async function uploadToBlob(file: File, folder = "uploads") {
       type: file.type,
     };
   } catch (error) {
-    console.error("Erro ao fazer upload para o Blob:", error);
     return {
       success: false,
       error:

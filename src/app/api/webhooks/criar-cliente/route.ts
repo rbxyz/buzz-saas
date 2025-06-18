@@ -3,9 +3,14 @@ import { db } from "@/server/db"
 import { clientes } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 
+interface RequestBody {
+  telefone: string;
+  nome: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const body = (await request.json()) as RequestBody
     const { telefone, nome } = body
 
     console.log(`🆕 [WEBHOOK-CRIAR-CLIENTE] Criando cliente: ${nome} - ${telefone}`)

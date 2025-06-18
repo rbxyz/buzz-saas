@@ -187,7 +187,7 @@ export const authRouter = createTRPCRouter({
   updateUser: publicProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.number(),
         name: z.string(),
         email: z.string().email(),
         password: z.string().min(6).optional(),
@@ -235,7 +235,7 @@ export const authRouter = createTRPCRouter({
       return { success: true }
     }),
 
-  deleteUser: publicProcedure.input(z.object({ id: z.string().uuid() })).mutation(async ({ input }) => {
+  deleteUser: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
     const existingUser = await db.query.users.findFirst({
       where: eq(users.id, input.id),
     })

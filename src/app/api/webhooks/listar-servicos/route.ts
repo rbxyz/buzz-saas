@@ -3,7 +3,7 @@ import { db } from "@/server/db"
 import { configuracoes, servicos } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log(`📋 [WEBHOOK-SERVICOS] Buscando serviços`)
 

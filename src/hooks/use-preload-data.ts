@@ -25,14 +25,10 @@ export function usePreloadData(config: PreloadConfig) {
     }
 
     if (config.agendamentos) {
-      void utils.agendamento.getCortesDoMes.prefetch({
-        month: today.getMonth() + 1,
-        year: today.getFullYear(),
-      })
       void utils.agendamento.getByData.prefetch({
         date: today.toISOString(),
       })
-      void utils.configuracao.getServicos.prefetch()
+      void utils.configuracao.listar.prefetch()
     }
 
     if (config.clientes) {
@@ -46,7 +42,6 @@ export function usePreloadData(config: PreloadConfig) {
     if (config.configuracoes) {
       void utils.configuracao.listar.prefetch()
       void utils.intervalosTrabalho.listar.prefetch()
-      void utils.configuracao.getServicos.prefetch()
     }
 
     if (config.chatbot) {

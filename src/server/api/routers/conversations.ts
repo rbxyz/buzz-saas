@@ -1,13 +1,10 @@
-import { z } from "zod"
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc"
-import { neon } from "@neondatabase/serverless"
-import { env } from "@/env"
-
-// Criar conexão SQL direta para este router
-const sql = neon(env.DATABASE_URL)
+import { z } from "zod";
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc";
+import { conversations, clientes, messages } from "@/server/db/schema";
+import { eq, and, or, desc, sql, ilike, type SQL } from "drizzle-orm";
 
 export const conversationsRouter = createTRPCRouter({
-  listar: publicProcedure
+  listar: protectedProcedure
     .input(
       z.object({
         status: z.enum(["ativa", "pausada", "encerrada"]).optional(),
@@ -15,406 +12,166 @@ export const conversationsRouter = createTRPCRouter({
         limite: z.number().default(50),
       }),
     )
-    .query(async ({ input }) => {
-      console.log(`🔍 [CONVERSATIONS] === INÍCIO DEBUG ===`)
-      console.log(`🔍 [CONVERSATIONS] Input recebido:`, JSON.stringify(input, null, 2))
+    .query(async ({ ctx, input }) => {
+      const { status, busca, limite } = input;
+      const userId = Number.parseInt(ctx.user.id);
 
-      try {
-        // Testar conexão primeiro
-        console.log(`🔍 [CONVERSATIONS] Testando conexão direta...`)
-        const testResult = await sql`SELECT NOW() as current_time, current_database() as db_name`
-        console.log(`🔍 [CONVERSATIONS] Conexão OK:`, testResult[0])
-
-        // Verificar se há conversas no banco
-        console.log(`🔍 [CONVERSATIONS] Contando conversas...`)
-        const countResult = await sql`SELECT COUNT(*) as total FROM conversations`
-        const totalConversas = Number(countResult[0]?.total || 0)
-        console.log(`📊 [CONVERSATIONS] Total de conversas no banco:`, totalConversas)
-
-        if (totalConversas === 0) {
-          console.log(`❌ [CONVERSATIONS] Nenhuma conversa encontrada no banco!`)
-          return []
-        }
-
-        // Query principal usando template literals do Neon (sem a coluna "lida" que não existe)
-        console.log(`🔍 [CONVERSATIONS] Executando query principal...`)
-
-        let result: any[]
-
-        if (input.status && input.busca) {
-          // Com status e busca
-          result = await sql`
-            SELECT 
-              c.id,
-              c.telefone,
-              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
-              c.created_at,
-              c.updated_at,
-              c.cliente_id,
-              cl.nome as nome_cliente,
-              c.ultima_mensagem as ultima_mensagem_real,
-              COALESCE(
-                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),
-                0
-              ) as total_mensagens,
-              COALESCE(
-                (SELECT COUNT(*) 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 AND role = 'user'),
-                0
-              ) as mensagens_nao_lidas,
-              COALESCE(
-                (SELECT created_at 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 ORDER BY created_at DESC 
-                 LIMIT 1),
-                c.updated_at
-              ) as ultima_interacao
-            FROM conversations c
-            LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            WHERE c.ativa = ${input.status === "ativa"}
-            AND (c.telefone ILIKE ${`%${input.busca}%`} OR COALESCE(cl.nome, '') ILIKE ${`%${input.busca.toLowerCase()}%`})
-            ORDER BY c.updated_at DESC
-            LIMIT ${input.limite}
-          `
-        } else if (input.status) {
-          // Só com status
-          result = await sql`
-            SELECT 
-              c.id,
-              c.telefone,
-              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
-              c.created_at,
-              c.updated_at,
-              c.cliente_id,
-              cl.nome as nome_cliente,
-              c.ultima_mensagem as ultima_mensagem_real,
-              COALESCE(
-                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),
-                0
-              ) as total_mensagens,
-              COALESCE(
-                (SELECT COUNT(*) 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 AND role = 'user'),
-                0
-              ) as mensagens_nao_lidas,
-              COALESCE(
-                (SELECT created_at 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 ORDER BY created_at DESC 
-                 LIMIT 1),
-                c.updated_at
-              ) as ultima_interacao
-            FROM conversations c
-            LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            WHERE c.ativa = ${input.status === "ativa"}
-            ORDER BY c.updated_at DESC
-            LIMIT ${input.limite}
-          `
-        } else if (input.busca) {
-          // Só com busca
-          result = await sql`
-            SELECT 
-              c.id,
-              c.telefone,
-              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
-              c.created_at,
-              c.updated_at,
-              c.cliente_id,
-              cl.nome as nome_cliente,
-              c.ultima_mensagem as ultima_mensagem_real,
-              COALESCE(
-                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),
-                0
-              ) as total_mensagens,
-              COALESCE(
-                (SELECT COUNT(*) 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 AND role = 'user'),
-                0
-              ) as mensagens_nao_lidas,
-              COALESCE(
-                (SELECT created_at 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 ORDER BY created_at DESC 
-                 LIMIT 1),
-                c.updated_at
-              ) as ultima_interacao
-            FROM conversations c
-            LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            WHERE (c.telefone ILIKE ${`%${input.busca}%`} OR COALESCE(cl.nome, '') ILIKE ${`%${input.busca.toLowerCase()}%`})
-            ORDER BY c.updated_at DESC
-            LIMIT ${input.limite}
-          `
-        } else {
-          // Sem filtros
-          result = await sql`
-            SELECT 
-              c.id,
-              c.telefone,
-              CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
-              c.created_at,
-              c.updated_at,
-              c.cliente_id,
-              cl.nome as nome_cliente,
-              c.ultima_mensagem as ultima_mensagem_real,
-              COALESCE(
-                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id),
-                0
-              ) as total_mensagens,
-              COALESCE(
-                (SELECT COUNT(*) 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 AND role = 'user'),
-                0
-              ) as mensagens_nao_lidas,
-              COALESCE(
-                (SELECT created_at 
-                 FROM messages 
-                 WHERE conversation_id = c.id 
-                 ORDER BY created_at DESC 
-                 LIMIT 1),
-                c.updated_at
-              ) as ultima_interacao
-            FROM conversations c
-            LEFT JOIN clientes cl ON c.cliente_id = cl.id
-            ORDER BY c.updated_at DESC
-            LIMIT ${input.limite}
-          `
-        }
-
-        console.log(`🔍 [CONVERSATIONS] Resultado bruto:`, {
-          hasResult: !!result,
-          isArray: Array.isArray(result),
-          length: result?.length || 0,
-          firstRow: result?.[0] || null,
-        })
-
-        if (!result || !Array.isArray(result) || result.length === 0) {
-          console.log(`❌ [CONVERSATIONS] Query retornou resultado vazio!`)
-          return []
-        }
-
-        console.log(`✅ [CONVERSATIONS] Encontradas ${result.length} conversas`)
-        console.log(`🔍 [CONVERSATIONS] Primeira conversa (bruta):`, JSON.stringify(result[0], null, 2))
-
-        // Processar conversas
-        console.log(`🔍 [CONVERSATIONS] Processando conversas...`)
-        const conversasProcessadas = result.map((conversa: any, index: number) => {
-          console.log(`🔍 [CONVERSATIONS] Processando conversa ${index + 1}:`, {
-            id: conversa.id,
-            telefone: conversa.telefone,
-            status: conversa.status,
-            nome_cliente: conversa.nome_cliente,
-          })
-
-          return {
-            id: String(conversa.id),
-            telefone: String(conversa.telefone || ""),
-            nomeCliente: conversa.nome_cliente ? String(conversa.nome_cliente) : null,
-            status: String(conversa.status || "ativa"),
-            ultimaMensagem: String(conversa.ultima_mensagem_real || "Sem mensagens"),
-            ultimaInteracao: conversa.ultima_interacao
-              ? new Date(conversa.ultima_interacao).toISOString()
-              : new Date().toISOString(),
-            totalMensagens: Number(conversa.total_mensagens || 0),
-            mensagensNaoLidas: Number(conversa.mensagens_nao_lidas || 0),
-            tags: [],
-          }
-        })
-
-        console.log(`📊 [CONVERSATIONS] Conversas processadas:`, conversasProcessadas.length)
-        console.log(
-          `🔍 [CONVERSATIONS] Primeira conversa processada:`,
-          JSON.stringify(conversasProcessadas[0], null, 2),
-        )
-        console.log(`🔍 [CONVERSATIONS] === FIM DEBUG ===`)
-
-        return conversasProcessadas
-      } catch (error) {
-        console.error("💥 [CONVERSATIONS] Erro detalhado:", {
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          error: error,
-        })
-        return []
+      const conditions: (SQL | undefined)[] = [eq(conversations.userId, userId)];
+      if (status) {
+        conditions.push(eq(conversations.ativa, status === "ativa"));
       }
+      if (busca) {
+        const buscaLike = `%${busca.toLowerCase()}%`;
+        conditions.push(
+          or(
+            ilike(conversations.telefone, buscaLike),
+            ilike(sql`coalesce(${clientes.nome}, '')`, buscaLike)
+          )
+        );
+      }
+
+      const result = await ctx.db
+        .select({
+          id: conversations.id,
+          telefone: conversations.telefone,
+          status: sql<"ativa" | "pausada" | "encerrada">`
+            CASE WHEN ${conversations.ativa} THEN 'ativa' ELSE 'pausada' END
+          `,
+          nomeCliente: clientes.nome,
+          ultimaMensagem: conversations.ultimaMensagem,
+          ultimaInteracao: conversations.ultimaInteracao,
+          totalMensagens: sql<number>`(SELECT COUNT(*) FROM ${messages} WHERE ${messages.conversationId} = ${conversations.id})`.mapWith(Number),
+          mensagensNaoLidas: sql<number>`(SELECT COUNT(*) FROM ${messages} WHERE ${messages.conversationId} = ${conversations.id} AND ${messages.role} = 'user')`.mapWith(Number),
+        })
+        .from(conversations)
+        .leftJoin(clientes, eq(conversations.clienteId, clientes.id))
+        .where(and(...conditions))
+        .orderBy(desc(conversations.ultimaInteracao))
+        .limit(limite);
+
+      return result.map((conversa) => ({
+        id: conversa.id.toString(),
+        telefone: conversa.telefone,
+        nomeCliente: conversa.nomeCliente ?? null,
+        status: conversa.status,
+        ultimaMensagem: conversa.ultimaMensagem ?? "Sem mensagens",
+        ultimaInteracao: conversa.ultimaInteracao.toISOString(),
+        totalMensagens: conversa.totalMensagens ?? 0,
+        mensagensNaoLidas: conversa.mensagensNaoLidas ?? 0,
+        tags: [],
+      }));
     }),
 
-  buscarPorTelefone: publicProcedure
+  buscarPorTelefone: protectedProcedure
     .input(
       z.object({
         telefone: z.string(),
-      }),
+      })
     )
-    .query(async ({ input }) => {
-      console.log(`🔍 [CONVERSATIONS] Buscando conversa por telefone: ${input.telefone}`)
+    .query(async ({ ctx, input }) => {
+      const telefoneClean = input.telefone.replace(/\D/g, "");
+      const userId = Number.parseInt(ctx.user.id);
 
-      try {
-        const telefoneClean = input.telefone.replace(/\D/g, "")
+      const conversa = await ctx.db.query.conversations.findFirst({
+        where: and(eq(conversations.telefone, telefoneClean), eq(conversations.userId, userId)),
+        with: {
+          cliente: {
+            columns: {
+              nome: true,
+            },
+          },
+        },
+      });
 
-        const result = await sql`
-          SELECT 
-            c.id,
-            c.telefone,
-            CASE WHEN c.ativa THEN 'ativa' ELSE 'pausada' END as status,
-            c.cliente_id,
-            c.created_at,
-            c.updated_at,
-            cl.nome as nome_cliente
-          FROM conversations c
-          LEFT JOIN clientes cl ON c.cliente_id = cl.id
-          WHERE c.telefone = ${telefoneClean}
-          LIMIT 1
-        `
-
-        const conversa = result[0]
-
-        if (conversa) {
-          return {
-            id: String(conversa.id),
-            telefone: String(conversa.telefone),
-            status: String(conversa.status),
-            clienteId: conversa.cliente_id ? String(conversa.cliente_id) : null,
-            nomeCliente: conversa.nome_cliente ? String(conversa.nome_cliente) : null,
-            createdAt: new Date(conversa.created_at).toISOString(),
-            updatedAt: new Date(conversa.updated_at).toISOString(),
-          }
-        }
-
-        return null
-      } catch (error) {
-        console.error("💥 [CONVERSATIONS] Erro ao buscar conversa:", error)
-        return null
+      if (conversa) {
+        return {
+          id: conversa.id.toString(),
+          telefone: conversa.telefone,
+          status: conversa.ativa ? "ativa" : "pausada",
+          clienteId: conversa.clienteId?.toString() ?? null,
+          nomeCliente: conversa.cliente?.nome ?? null,
+          createdAt: conversa.createdAt?.toISOString() ?? "",
+          updatedAt: conversa.updatedAt?.toISOString() ?? "",
+        };
       }
+
+      return null;
     }),
 
-  criar: publicProcedure
+  criar: protectedProcedure
     .input(
       z.object({
         telefone: z.string(),
         clienteId: z.string().optional(),
-      }),
+      })
     )
-    .mutation(async ({ input }) => {
-      console.log(`🆕 [CONVERSATIONS] Criando nova conversa:`, input)
+    .mutation(async ({ ctx, input }) => {
+      const { telefone, clienteId } = input;
+      const userId = Number.parseInt(ctx.user.id);
+      const telefoneClean = telefone.replace(/\D/g, "");
 
-      try {
-        const telefoneClean = input.telefone.replace(/\D/g, "")
+      const existingConversation = await ctx.db.query.conversations.findFirst({
+        where: and(eq(conversations.telefone, telefoneClean), eq(conversations.userId, userId)),
+      });
 
-        // Verificar se já existe
-        const existeResult = await sql`
-          SELECT id, created_at, updated_at 
-          FROM conversations 
-          WHERE telefone = ${telefoneClean}
-          LIMIT 1
-        `
-
-        if (existeResult.length > 0) {
-          const conversa = existeResult[0]
-          console.log(`ℹ️ [CONVERSATIONS] Conversa já existe:`, conversa.id)
-          return {
-            id: String(conversa.id),
-            telefone: telefoneClean,
-            status: "ativa",
-            clienteId: input.clienteId || null,
-            createdAt: new Date(conversa.created_at).toISOString(),
-            updatedAt: new Date(conversa.updated_at).toISOString(),
-          }
-        }
-
-        // Criar nova
-        const criarResult = await sql`
-          INSERT INTO conversations (telefone, cliente_id, ativa)
-          VALUES (${telefoneClean}, ${input.clienteId || null}, TRUE)
-          RETURNING id, created_at, updated_at
-        `
-
-        const novaConversa = criarResult[0]
-
-        if (!novaConversa) {
-          throw new Error("Falha ao criar conversa")
-        }
-
-        console.log(`✅ [CONVERSATIONS] Nova conversa criada:`, novaConversa.id)
-        return {
-          id: String(novaConversa.id),
-          telefone: telefoneClean,
-          status: "ativa",
-          clienteId: input.clienteId || null,
-          createdAt: new Date(novaConversa.created_at).toISOString(),
-          updatedAt: new Date(novaConversa.updated_at).toISOString(),
-        }
-      } catch (error) {
-        console.error("💥 [CONVERSATIONS] Erro ao criar conversa:", error)
-        throw new Error("Erro ao criar conversa")
+      if (existingConversation) {
+        return existingConversation;
       }
+
+      const [newConversation] = await ctx.db
+        .insert(conversations)
+        .values({
+          telefone: telefoneClean,
+          clienteId: clienteId ? Number.parseInt(clienteId) : null,
+          userId,
+          ativa: true,
+          ultimaInteracao: new Date(),
+        })
+        .returning();
+
+      return newConversation;
     }),
 
-  atualizarStatus: publicProcedure
+  atualizarStatus: protectedProcedure
     .input(
       z.object({
         conversationId: z.string(),
         status: z.enum(["ativa", "pausada", "encerrada"]),
-      }),
+      })
     )
-    .mutation(async ({ input }) => {
-      console.log(`🔄 [CONVERSATIONS] Atualizando status da conversa:`, input)
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await ctx.db
+        .update(conversations)
+        .set({
+          ativa: input.status === "ativa",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, Number.parseInt(input.conversationId)))
+        .returning();
 
-      try {
-        const result = await sql`
-          UPDATE conversations 
-          SET ativa = ${input.status === "ativa"}, updated_at = NOW()
-          WHERE id = ${input.conversationId}
-          RETURNING id, ativa, updated_at
-        `
-
-        const conversa = result[0]
-
-        if (!conversa) {
-          throw new Error("Conversa não encontrada")
-        }
-
-        console.log(`✅ [CONVERSATIONS] Status atualizado para:`, input.status)
-        return {
-          id: String(conversa.id),
-          status: input.status,
-          updatedAt: new Date(conversa.updated_at).toISOString(),
-        }
-      } catch (error) {
-        console.error("💥 [CONVERSATIONS] Erro ao atualizar status:", error)
-        throw new Error("Erro ao atualizar status da conversa")
+      if (!updated) {
+        throw new Error("Conversa não encontrada");
       }
+      return updated;
     }),
 
-  atualizarUltimaMensagem: publicProcedure
+  atualizarUltimaMensagem: protectedProcedure
     .input(
       z.object({
         conversationId: z.string(),
         ultimaMensagem: z.string(),
-      }),
+      })
     )
-    .mutation(async ({ input }) => {
-      try {
-        await sql`
-          UPDATE conversations 
-          SET ultima_mensagem = ${input.ultimaMensagem}, updated_at = NOW()
-          WHERE id = ${input.conversationId}
-        `
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(conversations)
+        .set({
+          ultimaMensagem: input.ultimaMensagem,
+          updatedAt: new Date(),
+          ultimaInteracao: new Date(),
+        })
+        .where(eq(conversations.id, Number.parseInt(input.conversationId)));
 
-        console.log(`✅ [CONVERSATIONS] Última mensagem atualizada`)
-        return { success: true }
-      } catch (error) {
-        console.error("💥 [CONVERSATIONS] Erro ao atualizar última mensagem:", error)
-        throw new Error("Erro ao atualizar última mensagem")
-      }
+      return { success: true };
     }),
-})
+});

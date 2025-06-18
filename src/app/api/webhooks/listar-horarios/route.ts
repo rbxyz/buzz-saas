@@ -1,22 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { configuracoes, agendamentos, intervalosTrabalho } from "@/server/db/schema"
+import { configuracoes, agendamentos, intervalosTrabalho, servicos } from "@/server/db/schema"
 import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
-
-interface ServicoConfigurado {
-  nome: string
-  preco: number
-  duracaoMinutos: number
-}
-
-interface IntervaloTrabalho {
-  id: string
-  diaSemana: string
-  horaInicio: string
-  horaFim: string
-  tipo: "trabalho" | "intervalo"
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,9 +27,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Configuração não encontrada" }, { status: 500 })
     }
 
-    const servicos = (config.servicos as ServicoConfigurado[]) || []
-    const servicoSelecionado = servicos.find((s) => s.nome.toLowerCase() === servico.toLowerCase())
-    const duracaoMinutos = servicoSelecionado?.duracaoMinutos ?? 30
+    const servicosDisponiveis = await db.select().from(servicos).where(eq(servicos.ativo, true));
+    const servicoSelecionado = servicosDisponiveis.find((s) => s.nome.toLowerCase() === servico.toLowerCase())
+    const duracaoMinutos = servicoSelecionado?.duracao ?? 30
 
     // Buscar agendamentos existentes no dia
     const dataObj = dayjs(data)
@@ -61,61 +47,56 @@ export async function GET(request: NextRequest) {
 
     // Buscar intervalos de trabalho para o dia da semana
     const diaSemana = getDiaSemana(dataObj.toDate())
-    const intervalos = await db.select().from(intervalosTrabalho).where(eq(intervalosTrabalho.diaSemana, diaSemana))
+    const intervalos = await db.select().from(intervalosTrabalho).where(and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)))
 
     console.log(`📅 [WEBHOOK-HORARIOS] ${intervalos.length} intervalos configurados para ${diaSemana}`)
 
-    // Gerar horários possíveis
-    const horaInicio = config.horaInicio || "09:00"
-    const horaFim = config.horaFim || "18:00"
-
-    const [horaInicioNum, minutoInicioNum] = horaInicio.split(":").map(Number)
-    const [horaFimNum, minutoFimNum] = horaFim.split(":").map(Number)
-
-    if (
-      horaInicioNum === undefined ||
-      minutoInicioNum === undefined ||
-      horaFimNum === undefined ||
-      minutoFimNum === undefined
-    ) {
-      return NextResponse.json({ success: false, error: "Horários de funcionamento inválidos" }, { status: 500 })
+    if (intervalos.length === 0) {
+      return NextResponse.json({ success: true, horariosDisponiveis: [], manha: [], tarde: [], error: "Fechado" });
     }
 
-    const inicioMinutos = horaInicioNum * 60 + minutoInicioNum
-    const fimMinutos = horaFimNum * 60 + minutoFimNum
-
+    // Gerar horários possíveis
     const horariosDisponiveis: string[] = []
     const horariosOcupados: string[] = []
 
-    for (let minutos = inicioMinutos; minutos + duracaoMinutos <= fimMinutos; minutos += 30) {
-      const hora = Math.floor(minutos / 60)
-      const minuto = minutos % 60
-      const horarioFormatado = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
+    for (const intervalo of intervalos) {
+      const { horaInicio, horaFim } = intervalo;
+      const [horaInicioNum, minutoInicioNum] = horaInicio.split(":").map(Number)
+      const [horaFimNum, minutoFimNum] = horaFim.split(":").map(Number)
 
-      // Verificar se está dentro de um intervalo de trabalho
-      const horarioEmMinutos = hora * 60 + minuto
-      const estaEmIntervalo = verificarSeEstaEmIntervalo(horarioEmMinutos, intervalos)
-
-      if (estaEmIntervalo) {
-        horariosOcupados.push(`${horarioFormatado} (intervalo)`)
-        continue
+      if (
+        horaInicioNum === undefined ||
+        minutoInicioNum === undefined ||
+        horaFimNum === undefined ||
+        minutoFimNum === undefined
+      ) {
+        continue;
       }
 
-      // Verificar conflito com agendamentos existentes
-      const dataHorario = dayjs(`${data}T${horarioFormatado}`)
-      const dataFim = dataHorario.add(duracaoMinutos, "minute")
+      const inicioMinutos = horaInicioNum * 60 + minutoInicioNum
+      const fimMinutos = horaFimNum * 60 + minutoFimNum
 
-      const temConflito = agendamentosExistentes.some((agendamento) => {
-        const inicioExistente = dayjs(agendamento.dataHora)
-        const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
+      for (let minutos = inicioMinutos; minutos + duracaoMinutos <= fimMinutos; minutos += 30) {
+        const hora = Math.floor(minutos / 60)
+        const minuto = minutos % 60
+        const horarioFormatado = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
 
-        return dataHorario.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
-      })
+        // Verificar conflito com agendamentos existentes
+        const dataHorario = dayjs(`${data}T${horarioFormatado}`)
+        const dataFim = dataHorario.add(duracaoMinutos, "minute")
 
-      if (temConflito) {
-        horariosOcupados.push(`${horarioFormatado} (ocupado)`)
-      } else {
-        horariosDisponiveis.push(horarioFormatado)
+        const temConflito = agendamentosExistentes.some((agendamento) => {
+          const inicioExistente = dayjs(agendamento.dataHora)
+          const fimExistente = inicioExistente.add(agendamento.duracaoMinutos ?? 30, "minute")
+
+          return dataHorario.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
+        })
+
+        if (temConflito) {
+          horariosOcupados.push(`${horarioFormatado} (ocupado)`)
+        } else {
+          horariosDisponiveis.push(horarioFormatado)
+        }
       }
     }
 
@@ -135,61 +116,13 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("💥 [WEBHOOK-HORARIOS] Erro:", error)
+    if (error instanceof Error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
   }
 }
 
-function getDiaSemana(date: Date): string {
-  const dias = ["domingo", "segunda", "terca", "quarta", "quinta", "sexta", "sabado"]
-  return dias[date.getDay()]
-}
-
-// Modificar a função verificarSeEstaEmIntervalo para usar os nomes corretos das colunas
-function verificarSeEstaEmIntervalo(horarioEmMinutos: number, intervalos: IntervaloTrabalho[]): boolean {
-  // Verificar se o horário está em um intervalo de pausa
-  for (const intervalo of intervalos) {
-    if (intervalo.tipo === "intervalo") {
-      const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-      const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
-
-      if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
-        continue
-      }
-
-      const inicioIntervalo = horaInicio * 60 + minutoInicio
-      const fimIntervalo = horaFim * 60 + minutoFim
-
-      if (horarioEmMinutos >= inicioIntervalo && horarioEmMinutos < fimIntervalo) {
-        return true // Está em um intervalo de pausa
-      }
-    }
-  }
-
-  // Se não há intervalos de trabalho definidos, consideramos o horário comercial padrão
-  if (intervalos.filter((i) => i.tipo === "trabalho").length === 0) {
-    return false
-  }
-
-  // Se há intervalos de trabalho definidos, verificar se o horário está fora de todos eles
-  let estaEmAlgumIntervaloTrabalho = false
-  for (const intervalo of intervalos) {
-    if (intervalo.tipo === "trabalho") {
-      const [horaInicio, minutoInicio] = intervalo.horaInicio.split(":").map(Number)
-      const [horaFim, minutoFim] = intervalo.horaFim.split(":").map(Number)
-
-      if (horaInicio === undefined || minutoInicio === undefined || horaFim === undefined || minutoFim === undefined) {
-        continue
-      }
-
-      const inicioTrabalho = horaInicio * 60 + minutoInicio
-      const fimTrabalho = horaFim * 60 + minutoFim
-
-      if (horarioEmMinutos >= inicioTrabalho && horarioEmMinutos < fimTrabalho) {
-        estaEmAlgumIntervaloTrabalho = true
-        break
-      }
-    }
-  }
-
-  return !estaEmAlgumIntervaloTrabalho
+function getDiaSemana(date: Date): number {
+  return date.getDay()
 }

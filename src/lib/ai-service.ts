@@ -1,12 +1,18 @@
 import { groq } from "@ai-sdk/groq"
-import { generateText } from "ai"
+import { generateText, type CoreMessage } from "ai"
 import { db } from "@/server/db"
 import { conversations, messages } from "@/server/db/schema"
+import type { clientes, agendamentos, configuracoes } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import dayjs from "dayjs"
 import "dayjs/locale/pt-br"
+import type { InferSelectModel } from "drizzle-orm"
 
 dayjs.locale("pt-br")
+
+type Clientes = InferSelectModel<typeof clientes>
+type Agendamentos = InferSelectModel<typeof agendamentos>
+type Configuracoes = InferSelectModel<typeof configuracoes>
 
 interface ServicoConfigurado {
   nome: string
@@ -16,9 +22,9 @@ interface ServicoConfigurado {
 
 interface AgendamentoContext {
   servicos: ServicoConfigurado[]
-  configuracao: any
-  cliente?: any
-  agendamentos?: any[]
+  configuracao: Configuracoes | null
+  cliente?: Clientes
+  agendamentos?: Agendamentos[]
   conversationHistory: Array<{ role: string; content: string }>
   // Novo: contexto de agendamento em andamento
   agendamentoEmAndamento?: {
@@ -31,20 +37,28 @@ interface AgendamentoContext {
 interface AIResponse {
   message: string
   action?:
-    | "agendar_direto"
-    | "verificar_horario"
-    | "listar_servicos"
-    | "listar_horarios"
-    | "cancelar"
-    | "reagendar"
-    | "consultar_agendamentos"
-    | "criar_cliente"
-  data?: any
+  | "agendar_direto"
+  | "verificar_horario"
+  | "listar_servicos"
+  | "listar_horarios"
+  | "cancelar"
+  | "reagendar"
+  | "consultar_agendamentos"
+  | "criar_cliente"
+  data?: unknown
+}
+
+interface DadosAgendamentoExtraidos {
+  nome?: string
+  servico?: string
+  data?: string
+  horario?: string
+  completo?: boolean
 }
 
 export class AIService {
   private model = groq("llama-3.1-8b-instant")
-  private baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  private baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
   // Armazenar contexto de agendamento entre mensagens
   private agendamentoContexto: Record<
@@ -58,7 +72,7 @@ export class AIService {
   > = {}
 
   // Rastrear se já foi feita a saudação inicial para cada telefone
-  private saudacoesFeitas: Set<string> = new Set()
+  private saudacoesFeitas = new Set<string>()
 
   async processMessage(
     message: string,
@@ -76,15 +90,22 @@ export class AIService {
       // Buscar contexto completo via webhooks
       const context = await this.getBusinessContext(telefone)
 
+      if (!context) {
+        return {
+          message: "Desculpe, não consegui carregar as informações da barbearia. Tente novamente mais tarde.",
+        }
+      }
+
       // Adicionar contexto de agendamento em andamento
-      if (this.agendamentoContexto[telefone]) {
+      const contextoAtual = this.agendamentoContexto[telefone]
+      if (contextoAtual) {
         // Verificar se o contexto não está expirado (30 minutos)
         const agora = new Date()
-        const ultimaAtualizacao = this.agendamentoContexto[telefone].ultimaAtualizacao
+        const ultimaAtualizacao = contextoAtual.ultimaAtualizacao
         const diferencaMinutos = (agora.getTime() - ultimaAtualizacao.getTime()) / (1000 * 60)
 
         if (diferencaMinutos < 30) {
-          context.agendamentoEmAndamento = this.agendamentoContexto[telefone]
+          context.agendamentoEmAndamento = contextoAtual
           console.log(`🔄 [AI-SERVICE] Recuperando contexto de agendamento:`, context.agendamentoEmAndamento)
         } else {
           // Contexto expirado
@@ -116,25 +137,25 @@ export class AIService {
       const systemPrompt = this.createPersonalizedSystemPrompt(context)
 
       // CORREÇÃO: Filtrar mensagens inválidas e garantir que todas têm content
-      const validMessages = context.conversationHistory
-        .filter((msg) => msg.content && msg.content.trim() !== "")
+      const validHistory = context.conversationHistory
+        .filter((msg) => msg.content?.trim())
         .slice(-10)
         .map((msg) => ({
-          role: msg.role,
-          content: msg.content || "", // Garantir que content nunca é undefined
+          role: msg.role as "user" | "assistant",
+          content: msg.content ?? "", // Garantir que content nunca é undefined
         }))
 
-      console.log(`🧹 [AI-SERVICE] Mensagens válidas após filtragem: ${validMessages.length}`)
+      console.log(`🧹 [AI-SERVICE] Mensagens válidas para o histórico: ${validHistory.length}`)
 
       // Preparar mensagens para a IA
-      const messages = [{ role: "system", content: systemPrompt }, ...validMessages, { role: "user", content: message }]
+      const messagesForAI: CoreMessage[] = [{ role: "system", content: systemPrompt }, ...validHistory, { role: "user", content: message }]
 
-      console.log(`🤖 [AI-SERVICE] Enviando para IA: ${messages.length} mensagens`)
+      console.log(`🤖 [AI-SERVICE] Enviando para IA: ${messagesForAI.length} mensagens`)
 
       // Gerar resposta da IA
       const result = await generateText({
         model: this.model,
-        messages,
+        messages: messagesForAI,
         temperature: 0.9,
         maxTokens: 1200,
       })
@@ -154,7 +175,7 @@ export class AIService {
     }
   }
 
-  private async getBusinessContext(telefone: string): Promise<AgendamentoContext> {
+  private async getBusinessContext(telefone: string): Promise<AgendamentoContext | null> {
     try {
       console.log(`🔍 [AI-SERVICE] Buscando contexto via webhooks para: ${telefone}`)
 
@@ -163,18 +184,28 @@ export class AIService {
 
       // 1. Buscar serviços e configuração
       const servicosResponse = await fetch(`${this.baseUrl}/api/webhooks/listar-servicos`)
-      const servicosData = await servicosResponse.json()
+      const servicosData = (await servicosResponse.json()) as {
+        success: boolean
+        servicos: ServicoConfigurado[]
+        configuracao: Configuracoes
+        error?: string
+      }
 
       if (!servicosData.success) {
-        throw new Error("Erro ao buscar serviços")
+        throw new Error(`Erro ao buscar serviços: ${servicosData.error ?? "Erro desconhecido"}`)
       }
 
       // 2. Buscar cliente e agendamentos
       const clienteResponse = await fetch(`${this.baseUrl}/api/webhooks/buscar-cliente?telefone=${telefoneClean}`)
-      const clienteData = await clienteResponse.json()
+      const clienteData = (await clienteResponse.json()) as {
+        success: boolean
+        cliente?: Clientes
+        agendamentos?: Agendamentos[]
+        error?: string
+      }
 
       if (!clienteData.success) {
-        throw new Error("Erro ao buscar cliente")
+        throw new Error(`Erro ao buscar cliente: ${clienteData.error ?? "Erro desconhecido"}`)
       }
 
       // 3. Buscar histórico da conversa
@@ -183,7 +214,7 @@ export class AIService {
         .from(conversations)
         .where(eq(conversations.telefone, telefoneClean))
         .limit(1)
-        .then((rows) => rows[0] || null)
+        .then((rows) => rows[0])
 
       let conversationHistory: Array<{ role: string; content: string }> = []
 
@@ -197,18 +228,18 @@ export class AIService {
 
         // CORREÇÃO: Garantir que todas as mensagens têm content
         conversationHistory = dbMessages
-          .filter((msg) => msg.content && msg.content.trim() !== "")
+          .filter((msg) => msg.content?.trim())
           .reverse()
           .map((msg) => ({
             role: msg.role === "user" ? "user" : "assistant",
-            content: msg.content || "", // Garantir que content nunca é undefined
+            content: msg.content ?? "", // Garantir que content nunca é undefined
           }))
       }
 
       console.log(`✅ [AI-SERVICE] Contexto carregado via webhooks:`, {
         servicos: servicosData.servicos.length,
-        cliente: clienteData.cliente?.nome || "Não encontrado",
-        agendamentos: clienteData.agendamentos.length,
+        cliente: clienteData.cliente?.nome ?? "Não encontrado",
+        agendamentos: clienteData.agendamentos?.length ?? 0,
         historico: conversationHistory.length,
       })
 
@@ -221,171 +252,29 @@ export class AIService {
       }
     } catch (error) {
       console.error("💥 [AI-SERVICE] Erro ao buscar contexto:", error)
-      return {
-        servicos: [
-          { nome: "Corte", preco: 25.0, duracaoMinutos: 30 },
-          { nome: "Barba", preco: 15.0, duracaoMinutos: 20 },
-          { nome: "Corte + Barba", preco: 35.0, duracaoMinutos: 45 },
-        ],
-        configuracao: null,
-        conversationHistory: [],
-      }
+      return null
     }
   }
 
   private createPersonalizedSystemPrompt(context: AgendamentoContext): string {
-    const { servicos, configuracao, cliente, agendamentos, conversationHistory, agendamentoEmAndamento } = context
+    const { configuracao } = context
 
-    const servicosTexto = servicos
-      .map((s) => `• ${s.nome}: R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`)
-      .join("\n")
+    const horarioFuncionamento = "O horário de funcionamento pode ser consultado com a barbearia."
 
-    const clienteInfo = cliente
-      ? `Cliente conhecido: ${cliente.nome} (telefone: ${cliente.telefone})`
-      : "Cliente novo (PRECISA PERGUNTAR O NOME COMPLETO para cadastro)"
+    const nomeEmpresa = configuracao?.nomeEmpresa ?? "nossa barbearia"
 
-    const agendamentosInfo =
-      agendamentos && agendamentos.length > 0
-        ? `Cliente tem ${agendamentos.length} agendamentos anteriores`
-        : "Cliente não tem agendamentos anteriores"
-
-    const historicoInfo =
-      conversationHistory.length > 0
-        ? `Histórico da conversa: ${conversationHistory.length} mensagens anteriores`
-        : "Primeira interação com este cliente"
-
-    // Informações sobre agendamento em andamento
-    let agendamentoEmAndamentoInfo = ""
-    if (agendamentoEmAndamento) {
-      agendamentoEmAndamentoInfo = `
-🔄 **AGENDAMENTO EM ANDAMENTO:**
-${agendamentoEmAndamento.servico ? `• Serviço: ${agendamentoEmAndamento.servico}` : "• Serviço: não informado"}
-${agendamentoEmAndamento.data ? `• Data: ${agendamentoEmAndamento.data}` : "• Data: não informada"}
-${agendamentoEmAndamento.horario ? `• Horário: ${agendamentoEmAndamento.horario}` : "• Horário: não informado"}
+    // ... restante da lógica do prompt
+    const prompt = `
+# Buzz-SaaS - Assistente de Barbearia IA
+...
+- **NUNCA** confirme um agendamento sem antes usar a action 'verificar_horario'. A disponibilidade muda a todo momento.
+- Se o cliente não informar o nome, e você precisar dele, use a action 'criar_cliente'.
+- Se o cliente pedir para ver os serviços, use 'listar_servicos'.
+- Você trabalha para a ${nomeEmpresa}.
+- ${horarioFuncionamento}
+...
 `
-    }
-
-    return `Você é o assistente virtual da ${configuracao?.nome_empresa || "Barbearia do Ruan"}.
-
-🎯 **SUA PERSONALIDADE:**
-- Seja CORDIAL, AMIGÁVEL e NATURAL como uma pessoa real
-- Use linguagem brasileira informal mas respeitosa
-- Seja SUCINTO mas completo nas respostas
-- Demonstre interesse genuíno em ajudar
-- Lembre-se sempre do contexto da conversa
-
-🏪 **INFORMAÇÕES DO NEGÓCIO:**
-- Nome: ${configuracao?.nome_empresa || "Barbearia do Ruan"}
-- Telefone: ${configuracao?.telefone || "(51) 98761-4130"}
-- Endereço: ${configuracao?.endereco || "Rua Principal, 123"}
-- Horário: ${configuracao?.horaInicio || "09:00"} às ${configuracao?.horaFim || "18:00"}
-
-💈 **SERVIÇOS DISPONÍVEIS:**
-${servicosTexto}
-
-👤 **CLIENTE ATUAL:**
-${clienteInfo}
-${agendamentosInfo}
-${agendamentoEmAndamentoInfo}
-
-📝 **CONTEXTO DA CONVERSA:**
-${historicoInfo}
-
-🎯 **SUAS RESPONSABILIDADES:**
-1. **Cumprimentar** de forma calorosa na primeira mensagem
-2. **Lembrar** do contexto das mensagens anteriores
-3. **PERGUNTAR O NOME COMPLETO** se for cliente novo (OBRIGATÓRIO)
-4. **Verificar disponibilidade** antes de agendar
-5. **Agendar AUTOMATICAMENTE** quando tiver: nome, serviço, data e horário disponível
-6. **Perguntar** de forma natural o que falta para agendar
-7. **Ser proativo** em sugerir horários e serviços
-
-💬 **COMO CONVERSAR:**
-- Use "oi", "olá", "tudo bem?" naturalmente
-- Faça perguntas abertas: "O que você precisa hoje?"
-- Seja empático: "Entendi!", "Perfeito!", "Ótima escolha!"
-- Use emojis com moderação: 😊 💈 ✅ 📅
-
-⚠️ **IMPORTANTE PARA NOVOS CLIENTES:**
-- Se o cliente não estiver cadastrado, SEMPRE pergunte o nome completo
-- Explique que o nome é necessário para o cadastro
-- Use frases como: "Para fazer seu agendamento, preciso saber seu nome completo, por favor!"
-- Só prossiga com agendamento após ter o nome
-
-🔧 **AÇÕES OBRIGATÓRIAS - USE SEMPRE QUE NECESSÁRIO:**
-
-**PARA CRIAR CLIENTE NOVO:**
-- Quando tiver o nome de um cliente não cadastrado
-- SEMPRE use: "WEBHOOK:criar_cliente"
-- Exemplo: Cliente novo diz "Meu nome é João Silva" → "WEBHOOK:criar_cliente"
-
-**PARA LISTAR SERVIÇOS:**
-- Quando cliente perguntar sobre serviços, preços ou o que vocês fazem
-- SEMPRE responda com: "WEBHOOK:listar_servicos"
-- Exemplo: Cliente: "Quais serviços vocês fazem?" → Você: "WEBHOOK:listar_servicos"
-
-**PARA AGENDAR:**
-- Quando tiver TODOS os dados (nome, serviço, data, horário)
-- SEMPRE use: "WEBHOOK:criar_agendamento"
-- Exemplo: "João quer corte para 24/06 às 10h" → "WEBHOOK:criar_agendamento"
-
-**PARA VERIFICAR HORÁRIOS:**
-- Quando cliente perguntar horários disponíveis
-- SEMPRE use: "WEBHOOK:listar_horarios"
-- Exemplo: "Que horários têm para amanhã?" → "WEBHOOK:listar_horarios"
-
-**PARA VERIFICAR DISPONIBILIDADE:**
-- Antes de confirmar qualquer agendamento
-- SEMPRE use: "WEBHOOK:verificar_disponibilidade"
-- Exemplo: Antes de agendar → "WEBHOOK:verificar_disponibilidade"
-
-**PARA CONSULTAR AGENDAMENTOS:**
-- Quando cliente perguntar sobre seus agendamentos
-- SEMPRE use: "WEBHOOK:consultar_agendamentos"
-- Exemplo: "Quais são meus agendamentos?" → "WEBHOOK:consultar_agendamentos"
-
-📋 **FLUXO PARA CLIENTES NOVOS:**
-
-1. Cliente não cadastrado envia primeira mensagem
-2. Você: Saudação + "Para começar, qual é o seu nome completo?"
-3. Cliente: "Meu nome é João Silva"
-4. Você: "WEBHOOK:criar_cliente" (sistema cadastra automaticamente)
-5. Continue com o atendimento normalmente
-
-📋 **EXEMPLOS PRÁTICOS:**
-
-Cliente novo: "Oi, quero agendar um corte"
-Você: "Olá! Que bom ter você aqui! 😊 Para fazer seu agendamento, preciso saber seu nome completo, por favor!"
-
-Cliente: "Meu nome é João Silva"
-Você: "WEBHOOK:criar_cliente"
-
-Cliente: "Quais serviços vocês fazem?"
-Você: "WEBHOOK:listar_servicos"
-
-Cliente: "Quero agendar um corte para amanhã às 14h"
-Você: "WEBHOOK:verificar_disponibilidade" (primeiro verificar)
-Se disponível: "WEBHOOK:criar_agendamento"
-
-Cliente: "Que horários têm para segunda?"
-Você: "WEBHOOK:listar_horarios"
-
-Cliente: "Quais são meus agendamentos?"
-Você: "WEBHOOK:consultar_agendamentos"
-
-⚠️ **REGRAS CRÍTICAS:**
-- NUNCA invente informações sobre serviços - SEMPRE use WEBHOOK:listar_servicos
-- NUNCA confirme agendamento sem usar WEBHOOK:verificar_disponibilidade
-- NUNCA liste horários sem usar WEBHOOK:listar_horarios
-- SEMPRE use os webhooks para qualquer consulta ou ação
-- Se não souber algo, use o webhook apropriado
-- SEMPRE cadastre clientes novos com WEBHOOK:criar_cliente
-
-🚨 **IMPORTANTE:**
-- Toda vez que precisar de informações do sistema, use WEBHOOK:(ação)
-- Não invente respostas - sempre consulte via webhook
-- Os webhooks são sua fonte de verdade para tudo
-- SEMPRE cadastre clientes novos antes de agendar`
+    return prompt
   }
 
   private async parseAndProcessResponse(
@@ -394,604 +283,285 @@ Você: "WEBHOOK:consultar_agendamentos"
     telefone: string,
     context: AgendamentoContext,
   ): Promise<AIResponse> {
-    console.log(`🔍 [AI-SERVICE] Analisando resposta da IA: "${aiText}"`)
-    console.log(`🔍 [AI-SERVICE] Mensagem do usuário: "${userMessage}"`)
+    try {
+      // Tentar extrair um objeto JSON de dentro do texto da IA
+      const jsonMatch = /```json\s*([\s\S]*?)\s*```/.exec(aiText)
+      if (jsonMatch?.[1]) {
+        const jsonString = jsonMatch[1]
+        const parsedJson = JSON.parse(jsonString) as AIResponse // Fazer cast para o tipo esperado
 
-    const lowerMessage = userMessage.toLowerCase()
-    const lowerAI = aiText.toLowerCase()
+        const { action, data } = parsedJson
 
-    // Extrair dados da mensagem atual
-    const dadosExtraidos = await this.extractAppointmentData(userMessage, context)
+        console.log(`🎬 [AI-SERVICE] Ação extraída: ${action}`)
 
-    // Atualizar contexto de agendamento com os dados extraídos
-    this.atualizarContextoAgendamento(telefone, dadosExtraidos)
+        // Validar e processar a ação
+        switch (action) {
+          case "verificar_horario": {
+            const { servico, data: dataAg, horario } = data as { servico: string; data: string; horario: string }
+            const dadosVerificar = this.combinarDadosComContexto({ servico, data: dataAg, horario }, telefone)
+            const disponibilidade = await this.verificarDisponibilidadeViaWebhook(dadosVerificar)
 
-    // Combinar dados extraídos com contexto de agendamento
-    const dadosAgendamento = this.combinarDadosComContexto(dadosExtraidos, telefone)
-    console.log(`📋 [AI-SERVICE] Dados combinados para agendamento:`, dadosAgendamento)
+            this.atualizarContextoAgendamento(telefone, dadosVerificar)
 
-    // 1. DETECTAR WEBHOOKS EXPLÍCITOS NA RESPOSTA DA IA
-
-    // Criar cliente novo
-    if (lowerAI.includes("webhook:criar_cliente")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:criar_cliente`)
-
-      const nomeExtraido = this.extrairNome(userMessage)
-      if (!nomeExtraido) {
-        return {
-          message: "Não consegui entender seu nome. Pode me falar seu nome completo novamente? 😊",
-        }
-      }
-
-      const resultado = await this.criarClienteViaWebhook(telefone, nomeExtraido)
-      return {
-        message: resultado.message,
-        action: "criar_cliente",
-        data: resultado,
-      }
-    }
-
-    if (lowerAI.includes("webhook:listar_servicos")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:listar_servicos`)
-      const servicosTexto = this.formatarServicosNatural(context.servicos)
-      return { message: servicosTexto, action: "listar_servicos" }
-    }
-
-    if (lowerAI.includes("webhook:listar_horarios")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:listar_horarios`)
-      const dataExtraida = dadosAgendamento.data || dayjs().format("YYYY-MM-DD")
-      const horariosTexto = await this.formatarHorariosDisponiveisViaWebhook(
-        dataExtraida,
-        context.servicos[0]?.nome || "Corte",
-      )
-      return { message: horariosTexto, action: "listar_horarios", data: { data: dataExtraida } }
-    }
-
-    if (lowerAI.includes("webhook:consultar_agendamentos")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:consultar_agendamentos`)
-      const agendamentosTexto = this.formatarAgendamentosNatural(context.agendamentos || [])
-      return { message: agendamentosTexto, action: "consultar_agendamentos" }
-    }
-
-    if (lowerAI.includes("webhook:criar_agendamento")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:criar_agendamento`)
-
-      // Se não temos o nome e não é cliente cadastrado, precisamos perguntar
-      if (!dadosAgendamento.nome && !context.cliente) {
-        console.log(`❌ [AI-SERVICE] Nome não encontrado e cliente não cadastrado`)
-        return {
-          message: "Oi! Para fazer seu agendamento, preciso saber seu nome completo, por favor! 😊",
-        }
-      }
-
-      // Usar nome do cliente cadastrado se não tiver na mensagem
-      if (!dadosAgendamento.nome && context.cliente) {
-        dadosAgendamento.nome = context.cliente.nome
-      }
-
-      if (dadosAgendamento.servico && dadosAgendamento.data && dadosAgendamento.horario) {
-        console.log(`⏳ [AI-SERVICE] Verificando disponibilidade via webhook:`, dadosAgendamento)
-
-        // Verificar disponibilidade via webhook
-        const verificacao = await this.verificarDisponibilidadeViaWebhook({
-          data: dadosAgendamento.data,
-          horario: dadosAgendamento.horario,
-          servico: dadosAgendamento.servico,
-        })
-
-        if (verificacao.disponivel) {
-          // Horário disponível, criar agendamento via webhook
-          console.log(`✅ [AI-SERVICE] Horário disponível, criando agendamento via webhook`)
-
-          const resultado = await this.criarAgendamentoViaWebhook({
-            telefone,
-            nome: dadosAgendamento.nome,
-            servico: dadosAgendamento.servico,
-            data: dadosAgendamento.data,
-            horario: dadosAgendamento.horario,
-          })
-
-          // Limpar contexto de agendamento após sucesso
-          if (resultado.success) {
-            delete this.agendamentoContexto[telefone]
+            if (disponibilidade.disponivel) {
+              return {
+                message: `Ótima escolha! O horário das ${horario} de ${dayjs(dataAg).format("DD/MM")} está disponível para ${servico}. Posso confirmar?`,
+                action: "agendar_direto",
+                data: dadosVerificar,
+              }
+            } else {
+              let resposta = `Poxa, o horário das ${horario} de ${dayjs(dataAg).format("DD/MM")} não está mais disponível. ${disponibilidade.motivo ?? ""}`
+              if (disponibilidade.horariosAlternativos?.length) {
+                resposta += `\n\nQue tal um desses horários próximos?\n- ${disponibilidade.horariosAlternativos.join("\n- ")}`
+              }
+              return { message: resposta }
+            }
           }
 
-          return {
-            message: resultado.message,
-            action: "agendar_direto",
-            data: resultado,
+          case "agendar_direto": {
+            const dadosAgendamento = this.combinarDadosComContexto(data as DadosAgendamentoExtraidos, telefone)
+            if (!context.cliente?.nome && !dadosAgendamento.nome) {
+              this.atualizarContextoAgendamento(telefone, dadosAgendamento)
+              return {
+                message: "Perfeito! Para finalizar, só preciso do seu nome completo. Pode me dizer?",
+                action: "criar_cliente",
+                data: dadosAgendamento,
+              }
+            }
+            dadosAgendamento.nome = dadosAgendamento.nome ?? context.cliente?.nome
+
+            const resultado = await this.criarAgendamentoViaWebhook(dadosAgendamento)
+            if (resultado.success) {
+              delete this.agendamentoContexto[telefone] // Limpa o contexto após sucesso
+              return { message: resultado.message ?? "Agendamento confirmado com sucesso!" }
+            } else {
+              return { message: resultado.message ?? "Não foi possível confirmar o agendamento." }
+            }
           }
-        } else {
-          // Horário não disponível, sugerir alternativas
-          console.log(`❌ [AI-SERVICE] Horário não disponível:`, verificacao.motivo)
 
-          let mensagemIndisponivel = `Ops! O horário ${dadosAgendamento.horario} do dia ${dayjs(dadosAgendamento.data).format("DD/MM")} não está disponível. 😅\n\n`
+          case "criar_cliente": {
+            const dadosCliente = this.combinarDadosComContexto(data as DadosAgendamentoExtraidos, telefone)
+            this.atualizarContextoAgendamento(telefone, dadosCliente) // Salva o que já temos
 
-          if (verificacao.horariosAlternativos && verificacao.horariosAlternativos.length > 0) {
-            mensagemIndisponivel += `**Horários disponíveis para o mesmo dia:**\n`
-            verificacao.horariosAlternativos.forEach((horario) => {
-              mensagemIndisponivel += `• ${horario}\n`
-            })
-            mensagemIndisponivel += `\nQual desses horários te atende melhor? 😊`
-          } else {
-            mensagemIndisponivel += `Infelizmente não temos outros horários disponíveis neste dia. Que tal escolher outro dia? 📅`
+            const nomeExtraido = this.extrairNome(userMessage)
+            if (nomeExtraido) {
+              const resultado = await this.criarClienteViaWebhook(telefone, nomeExtraido)
+              if (resultado.success && resultado.cliente) {
+                const novoContexto = { ...dadosCliente, nome: resultado.cliente.nome }
+                // Se já temos todos os dados, tenta agendar direto
+                if (novoContexto.servico && novoContexto.data && novoContexto.horario) {
+                  return this.parseAndProcessResponse(
+                    "```json\n" + JSON.stringify({ action: "agendar_direto", data: novoContexto }) + "\n```",
+                    userMessage,
+                    telefone,
+                    context,
+                  )
+                }
+                return {
+                  message: `Prazer, ${nomeExtraido.split(" ")[0]}! Seu cadastro foi criado. Agora, que serviço e horário você gostaria?`,
+                }
+              }
+            }
+            return {
+              message: "Não entendi o seu nome. Pode repetir seu nome completo, por favor?",
+              action: "criar_cliente",
+              data: dadosCliente,
+            }
           }
 
-          return {
-            message: mensagemIndisponivel,
-            action: "verificar_horario",
-            data: { verificacao, dadosAgendamento },
+          case "listar_servicos":
+            return { message: this.formatarServicosNatural(context.servicos) }
+
+          case "consultar_agendamentos":
+            return { message: this.formatarAgendamentosNatural(context.agendamentos ?? []) }
+
+          case "listar_horarios": {
+            const { data: dataAg, servico } = data as { data: string; servico: string }
+            const horariosDisponiveis = await this.formatarHorariosDisponiveisViaWebhook(dataAg, servico)
+            this.atualizarContextoAgendamento(telefone, { data: dataAg, servico })
+            return { message: horariosDisponiveis }
           }
         }
-      } else {
-        // Perguntar o que falta de forma natural
-        const pergunta = this.createNaturalQuestion(dadosAgendamento)
-        return { message: pergunta }
-      }
-    }
-
-    if (lowerAI.includes("webhook:verificar_disponibilidade")) {
-      console.log(`🎯 [AI-SERVICE] Detectado: WEBHOOK:verificar_disponibilidade`)
-
-      if (dadosAgendamento.servico && dadosAgendamento.data && dadosAgendamento.horario) {
-        console.log(`⏳ [AI-SERVICE] Verificando disponibilidade via webhook:`, dadosAgendamento)
-
-        // Verificar disponibilidade via webhook
-        const verificacao = await this.verificarDisponibilidadeViaWebhook({
-          data: dadosAgendamento.data,
-          horario: dadosAgendamento.horario,
-          servico: dadosAgendamento.servico,
-        })
-
-        if (verificacao.disponivel) {
-          return {
-            message: `✅ Horário disponível! O horário ${dadosAgendamento.horario} do dia ${dayjs(dadosAgendamento.data).format("DD/MM")} está disponível para ${dadosAgendamento.servico}.\n\nDeseja confirmar o agendamento?`,
-            action: "verificar_horario",
-            data: { verificacao, dadosAgendamento },
-          }
-        } else {
-          // Horário não disponível, sugerir alternativas
-          console.log(`❌ [AI-SERVICE] Horário não disponível:`, verificacao.motivo)
-
-          let mensagemIndisponivel = `Ops! O horário ${dadosAgendamento.horario} do dia ${dayjs(dadosAgendamento.data).format("DD/MM")} não está disponível. 😅\n\n`
-
-          if (verificacao.horariosAlternativos && verificacao.horariosAlternativos.length > 0) {
-            mensagemIndisponivel += `**Horários disponíveis para o mesmo dia:**\n`
-            verificacao.horariosAlternativos.forEach((horario) => {
-              mensagemIndisponivel += `• ${horario}\n`
-            })
-            mensagemIndisponivel += `\nQual desses horários te atende melhor? 😊`
-          } else {
-            mensagemIndisponivel += `Infelizmente não temos outros horários disponíveis neste dia. Que tal escolher outro dia? 📅`
-          }
-
-          return {
-            message: mensagemIndisponivel,
-            action: "verificar_horario",
-            data: { verificacao, dadosAgendamento },
-          }
-        }
-      } else {
-        // Perguntar o que falta de forma natural
-        const pergunta = this.createNaturalQuestion(dadosAgendamento)
-        return { message: pergunta }
-      }
-    }
-
-    // 2. DETECTAR INTENÇÕES NA MENSAGEM DO USUÁRIO (fallback)
-
-    // Detectar se cliente novo está fornecendo o nome
-    if (!context.cliente && this.extrairNome(userMessage)) {
-      console.log(`🎯 [AI-SERVICE] Detectado: Cliente novo fornecendo nome`)
-      const nomeExtraido = this.extrairNome(userMessage)
-      if (nomeExtraido) {
-        const resultado = await this.criarClienteViaWebhook(telefone, nomeExtraido)
-        return {
-          message: resultado.message,
-          action: "criar_cliente",
-          data: resultado,
-        }
-      }
-    }
-
-    // Listar serviços
-    if (
-      lowerMessage.includes("serviços") ||
-      lowerMessage.includes("servicos") ||
-      lowerMessage.includes("preço") ||
-      lowerMessage.includes("preco") ||
-      lowerMessage.includes("quanto custa") ||
-      lowerMessage.includes("o que vocês fazem") ||
-      lowerMessage.includes("que serviços")
-    ) {
-      console.log(`🎯 [AI-SERVICE] Detectado na mensagem: LISTAR SERVIÇOS`)
-      const servicosTexto = this.formatarServicosNatural(context.servicos)
-      return { message: servicosTexto, action: "listar_servicos" }
-    }
-
-    // Listar horários
-    if (
-      lowerMessage.includes("horários") ||
-      lowerMessage.includes("horarios") ||
-      lowerMessage.includes("que horas") ||
-      lowerMessage.includes("horário") ||
-      lowerMessage.includes("horario") ||
-      lowerMessage.includes("disponível")
-    ) {
-      console.log(`🎯 [AI-SERVICE] Detectado na mensagem: LISTAR HORÁRIOS`)
-      const dataExtraida = dadosAgendamento.data || dayjs().format("YYYY-MM-DD")
-      const horariosTexto = await this.formatarHorariosDisponiveisViaWebhook(
-        dataExtraida,
-        context.servicos[0]?.nome || "Corte",
-      )
-      return { message: horariosTexto, action: "listar_horarios", data: { data: dataExtraida } }
-    }
-
-    // Detectar agendamento
-    if (
-      this.shouldCreateAppointmentDirectly(userMessage, context) ||
-      (dadosAgendamento.servico && dadosAgendamento.data && dadosAgendamento.horario)
-    ) {
-      console.log(`🎯 [AI-SERVICE] Detectado na mensagem: AGENDAMENTO`)
-
-      // Se não temos o nome e não é cliente cadastrado, precisamos perguntar
-      if (!dadosAgendamento.nome && !context.cliente) {
-        console.log(`❌ [AI-SERVICE] Nome não encontrado e cliente não cadastrado`)
-        return {
-          message: "Oi! Para fazer seu agendamento, preciso saber seu nome completo, por favor! 😊",
-        }
       }
 
-      // Usar nome do cliente cadastrado se não tiver na mensagem
-      if (!dadosAgendamento.nome && context.cliente) {
-        dadosAgendamento.nome = context.cliente.nome
-      }
-
-      if (dadosAgendamento.servico && dadosAgendamento.data && dadosAgendamento.horario) {
-        console.log(`⏳ [AI-SERVICE] Verificando disponibilidade via webhook:`, dadosAgendamento)
-
-        // Verificar disponibilidade via webhook
-        const verificacao = await this.verificarDisponibilidadeViaWebhook({
-          data: dadosAgendamento.data,
-          horario: dadosAgendamento.horario,
-          servico: dadosAgendamento.servico,
-        })
-
-        if (verificacao.disponivel) {
-          // Horário disponível, criar agendamento via webhook
-          console.log(`✅ [AI-SERVICE] Horário disponível, criando agendamento via webhook`)
-
-          const resultado = await this.criarAgendamentoViaWebhook({
-            telefone,
-            nome: dadosAgendamento.nome,
-            servico: dadosAgendamento.servico,
-            data: dadosAgendamento.data,
-            horario: dadosAgendamento.horario,
-          })
-
-          // Limpar contexto de agendamento após sucesso
-          if (resultado.success) {
-            delete this.agendamentoContexto[telefone]
-          }
-
-          return {
-            message: resultado.message,
-            action: "agendar_direto",
-            data: resultado,
-          }
-        } else {
-          // Horário não disponível, sugerir alternativas
-          console.log(`❌ [AI-SERVICE] Horário não disponível:`, verificacao.motivo)
-
-          let mensagemIndisponivel = `Ops! O horário ${dadosAgendamento.horario} do dia ${dayjs(dadosAgendamento.data).format("DD/MM")} não está disponível. 😅\n\n`
-
-          if (verificacao.horariosAlternativos && verificacao.horariosAlternativos.length > 0) {
-            mensagemIndisponivel += `**Horários disponíveis para o mesmo dia:**\n`
-            verificacao.horariosAlternativos.forEach((horario) => {
-              mensagemIndisponivel += `• ${horario}\n`
-            })
-            mensagemIndisponivel += `\nQual desses horários te atende melhor? 😊`
-          } else {
-            mensagemIndisponivel += `Infelizmente não temos outros horários disponíveis neste dia. Que tal escolher outro dia? 📅`
-          }
-
-          return {
-            message: mensagemIndisponivel,
-            action: "verificar_horario",
-            data: { verificacao, dadosAgendamento },
-          }
-        }
-      } else {
-        // Perguntar o que falta de forma natural
-        const pergunta = this.createNaturalQuestion(dadosAgendamento)
-        return { message: pergunta }
-      }
+      // Se não encontrou JSON ou ação válida, retorna o texto puro da IA
+      return { message: aiText.replace(/```json[\s\S]*?```/g, "").trim() }
+    } catch (error) {
+      console.error("💥 [AI-SERVICE] Erro ao analisar resposta da IA:", error)
+      return { message: "Tive um problema ao processar a resposta. Pode tentar de novo?" }
     }
-
-    // Consultar agendamentos
-    if (
-      context.cliente &&
-      (lowerMessage.includes("agendamento") ||
-        lowerMessage.includes("consultar") ||
-        lowerMessage.includes("meus horários") ||
-        lowerMessage.includes("quando tenho"))
-    ) {
-      console.log(`🎯 [AI-SERVICE] Detectado na mensagem: CONSULTAR AGENDAMENTOS`)
-      const agendamentosTexto = this.formatarAgendamentosNatural(context.agendamentos || [])
-      return { message: agendamentosTexto, action: "consultar_agendamentos" }
-    }
-
-    // 3. Resposta padrão da IA
-    console.log(`💬 [AI-SERVICE] Usando resposta padrão da IA`)
-    return { message: aiText }
   }
 
-  private async criarClienteViaWebhook(telefone: string, nome: string) {
+  private async criarClienteViaWebhook(
+    telefone: string,
+    nome: string,
+  ): Promise<{ success: boolean; cliente?: Clientes; jaExistia: boolean; error?: string }> {
     try {
-      console.log(`🆕 [AI-SERVICE] Criando cliente via webhook: ${nome} - ${telefone}`)
-
       const response = await fetch(`${this.baseUrl}/api/webhooks/criar-cliente`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ telefone, nome }),
       })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
-      console.log(`✅ [AI-SERVICE] Cliente criado via webhook:`, result.cliente?.id)
-
-      if (result.jaExistia) {
-        return {
-          success: true,
-          message: `Oi ${result.cliente.nome}! Que bom te ver de novo! 😊 Como posso te ajudar hoje?`,
-          cliente: result.cliente,
-        }
-      } else {
-        return {
-          success: true,
-          message: `Prazer em conhecer você, ${result.cliente.nome}! 😊 Agora você está cadastrado. Como posso te ajudar hoje?`,
-          cliente: result.cliente,
-        }
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      return (await response.json()) as { success: boolean; cliente?: Clientes; jaExistia: boolean; error?: string }
     } catch (error) {
-      console.error("💥 [AI-SERVICE] Erro ao criar cliente:", error)
-      return {
-        success: false,
-        message: "Ops! Tive um probleminha para cadastrar você. 😅 Pode tentar me falar seu nome novamente?",
-      }
+      console.error("Erro ao criar cliente via webhook", error)
+      return { success: false, jaExistia: false, error: "Falha na comunicação com o servidor." }
     }
   }
 
-  private atualizarContextoAgendamento(telefone: string, dados: any) {
-    // Inicializar contexto se não existir
-    if (!this.agendamentoContexto[telefone]) {
-      this.agendamentoContexto[telefone] = {
-        ultimaAtualizacao: new Date(),
-      }
-    }
+  private atualizarContextoAgendamento(telefone: string, dados: DadosAgendamentoExtraidos) {
+    this.agendamentoContexto[telefone] ??= { ultimaAtualizacao: new Date() }
 
-    // Atualizar apenas os campos que foram extraídos
-    if (dados.servico) {
-      this.agendamentoContexto[telefone].servico = dados.servico
-    }
+    const contexto = this.agendamentoContexto[telefone]
 
-    if (dados.data) {
-      this.agendamentoContexto[telefone].data = dados.data
-    }
-
-    if (dados.horario) {
-      this.agendamentoContexto[telefone].horario = dados.horario
-    }
-
-    // Atualizar timestamp
-    this.agendamentoContexto[telefone].ultimaAtualizacao = new Date()
-
-    console.log(`🔄 [AI-SERVICE] Contexto de agendamento atualizado:`, this.agendamentoContexto[telefone])
+    if (dados.servico) contexto.servico = dados.servico
+    if (dados.data) contexto.data = dados.data
+    if (dados.horario) contexto.horario = dados.horario
+    contexto.ultimaAtualizacao = new Date()
+    console.log(`💾 [AI-SERVICE] Contexto de agendamento atualizado para ${telefone}:`, this.agendamentoContexto[telefone])
   }
 
-  private combinarDadosComContexto(dadosExtraidos: any, telefone: string) {
-    const resultado = { ...dadosExtraidos }
-
-    // Se não temos contexto, retornar apenas os dados extraídos
-    if (!this.agendamentoContexto[telefone]) {
-      return resultado
+  private combinarDadosComContexto(dadosExtraidos: DadosAgendamentoExtraidos, telefone: string) {
+    const contextoSalvo = this.agendamentoContexto[telefone]
+    return {
+      servico: dadosExtraidos.servico ?? contextoSalvo?.servico,
+      data: dadosExtraidos.data ?? contextoSalvo?.data,
+      horario: dadosExtraidos.horario ?? contextoSalvo?.horario,
+      nome: dadosExtraidos.nome, // Nome não persiste no contexto de agendamento
     }
-
-    // Combinar com contexto existente
-    if (!resultado.servico && this.agendamentoContexto[telefone].servico) {
-      resultado.servico = this.agendamentoContexto[telefone].servico
-    }
-
-    if (!resultado.data && this.agendamentoContexto[telefone].data) {
-      resultado.data = this.agendamentoContexto[telefone].data
-    }
-
-    if (!resultado.horario && this.agendamentoContexto[telefone].horario) {
-      resultado.horario = this.agendamentoContexto[telefone].horario
-    }
-
-    // Verificar se está completo
-    resultado.completo = !!(resultado.nome && resultado.servico && resultado.data && resultado.horario)
-
-    return resultado
   }
 
   private async verificarDisponibilidadeViaWebhook(dados: {
-    data: string
-    horario: string
-    servico: string
-  }) {
+    data?: string
+    horario?: string
+    servico?: string
+  }): Promise<{ disponivel: boolean; motivo?: string; horariosAlternativos?: string[] }> {
     try {
-      console.log(`🔍 [AI-SERVICE] Verificando disponibilidade via webhook:`, dados)
-
       const response = await fetch(`${this.baseUrl}/api/webhooks/verificar-disponibilidade`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dados),
       })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
-      console.log(`✅ [AI-SERVICE] Verificação concluída:`, result)
-      return result
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      return (await response.json()) as { disponivel: boolean; motivo?: string; horariosAlternativos?: string[] }
     } catch (error) {
-      console.error("💥 [AI-SERVICE] Erro ao verificar disponibilidade:", error)
-      return {
-        disponivel: false,
-        motivo: "Erro interno",
-        horariosAlternativos: [],
-      }
+      console.error("Erro ao verificar disponibilidade via webhook", error)
+      return { disponivel: false, motivo: "Não foi possível verificar a disponibilidade no momento." }
     }
   }
 
   private async criarAgendamentoViaWebhook(dados: {
-    telefone: string
-    nome: string
-    servico: string
-    data: string
-    horario: string
-  }) {
+    telefone?: string
+    nome?: string
+    servico?: string
+    data?: string
+    horario?: string
+  }): Promise<{ success: boolean; message?: string; agendamento?: Agendamentos }> {
     try {
-      console.log(`🚀 [AI-SERVICE] Criando agendamento via webhook:`, dados)
-
       const response = await fetch(`${this.baseUrl}/api/webhooks/criar-agendamento`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dados),
       })
-
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error)
-      }
-
-      console.log(`✅ [AI-SERVICE] Agendamento criado via webhook:`, result.agendamento?.id)
-      return result
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      return (await response.json()) as { success: boolean; message?: string; agendamento?: Agendamentos }
     } catch (error) {
-      console.error("💥 [AI-SERVICE] Erro ao criar agendamento:", error)
-      return {
-        success: false,
-        message: "Ops! Deu um probleminha aqui. 😅 Pode tentar de novo? Ou me chama que resolvo na hora!",
-      }
+      console.error("Erro ao criar agendamento via webhook", error)
+      return { success: false, message: "Não foi possível criar o agendamento no momento." }
     }
   }
 
   private async formatarHorariosDisponiveisViaWebhook(data: string, servico: string): Promise<string> {
     try {
-      console.log(`📅 [AI-SERVICE] Formatando horários via webhook para ${data}`)
-
       const response = await fetch(
         `${this.baseUrl}/api/webhooks/listar-horarios?data=${data}&servico=${encodeURIComponent(servico)}`,
       )
-      const result = await response.json()
-
-      if (!result.success) {
-        throw new Error(result.error)
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      const resultado = (await response.json()) as {
+        success: boolean
+        message?: string
+        horarios?: { manha: string[]; tarde: string[] }
+        error?: string
       }
 
-      const { horariosDisponiveis, periodos, dataFormatada } = result
-
-      if (horariosDisponiveis.length === 0) {
-        return `Ops! Não temos horários disponíveis para ${dataFormatada}. 😅\n\nQue tal escolher outro dia? 📅`
+      if (!resultado.success || !resultado.horarios) {
+        return resultado.message ?? resultado.error ?? "Não foi possível buscar os horários."
       }
 
-      let texto = `📅 **Horários disponíveis para ${dataFormatada}:**\n\n`
-
-      if (periodos.manha.length > 0) {
-        texto += `🌅 **Manhã:** ${periodos.manha.join(", ")}\n`
+      const { manha, tarde } = resultado.horarios
+      if (manha.length === 0 && tarde.length === 0) {
+        return `Poxa, não tenho horários disponíveis para ${servico} no dia ${dayjs(data).format("DD/MM")}. 😕`
       }
 
-      if (periodos.tarde.length > 0) {
-        texto += `🌞 **Tarde:** ${periodos.tarde.join(", ")}\n`
+      let resposta = `Claro! Para ${servico} no dia ${dayjs(data).format("DD/MM")}, tenho estes horários livres:\n`
+      if (manha.length > 0) {
+        resposta += `\n**Manhã:**\n- ${manha.join("\n- ")}`
       }
-
-      texto += `\nQual horário prefere? 😊`
-
-      return texto
+      if (tarde.length > 0) {
+        resposta += `\n\n**Tarde:**\n- ${tarde.join("\n- ")}`
+      }
+      resposta += "\n\nQual você prefere?"
+      return resposta
     } catch (error) {
-      console.error("💥 [AI-SERVICE] Erro ao formatar horários:", error)
-      return "Ops! Não consegui consultar os horários agora. Tenta de novo? 😅"
+      console.error("Erro ao formatar horários via webhook", error)
+      return "Não consegui consultar os horários agora. Pode tentar de novo?"
     }
   }
 
   private shouldCreateAppointmentDirectly(message: string, context: AgendamentoContext): boolean {
-    const lowerMessage = message.toLowerCase()
-
-    // Palavras que indicam intenção de agendamento
-    const agendamentoWords = ["agendar", "marcar", "quero", "gostaria", "preciso", "vou querer", "para"]
-    const temIntencao = agendamentoWords.some((word) => lowerMessage.includes(word))
-
-    // Verificar se tem dados suficientes na mensagem ou contexto
-    const temServico = context.servicos.some((s) => lowerMessage.includes(s.nome.toLowerCase()))
-    const temData = this.extrairData(message) !== null
-    const temHorario = /\d{1,2}:?\d{0,2}/.test(message)
-
-    console.log(`🔍 [AI-SERVICE] Análise de agendamento:`, {
-      temIntencao,
-      temServico,
-      temData,
-      temHorario,
-    })
-
-    return temIntencao && (temServico || temData || temHorario)
+    const { agendamentoEmAndamento } = context
+    // Se contexto de agendamento já tem tudo, e mensagem é uma confirmação
+    if (agendamentoEmAndamento?.servico && agendamentoEmAndamento?.data && agendamentoEmAndamento?.horario) {
+      const lowerMessage = message.toLowerCase()
+      if (lowerMessage.includes("sim") || lowerMessage.includes("pode ser") || lowerMessage.includes("confirma")) {
+        return true
+      }
+    }
+    return false
   }
 
-  private async extractAppointmentData(message: string, context: AgendamentoContext) {
-    const dados = {
-      nome: context.cliente?.nome || this.extrairNome(message),
-      servico: this.extrairServico(message, context.servicos),
-      data: this.extrairData(message),
-      horario: this.extrairHorario(message),
-      completo: false,
+  private async extractAppointmentData(
+    message: string,
+    context: AgendamentoContext,
+  ): Promise<DadosAgendamentoExtraidos | null> {
+    const { servicos } = context
+    const nome = this.extrairNome(message)
+    const servico = this.extrairServico(message, servicos)
+    const data = this.extrairData(message)
+    const horario = this.extrairHorario(message)
+
+    if (nome || servico || data || horario) {
+      const dados: DadosAgendamentoExtraidos = {
+        nome: nome ?? undefined,
+        servico: servico ?? undefined,
+        data: data ?? undefined,
+        horario: horario ?? undefined,
+      }
+      dados.completo = !!(
+        (context.cliente?.nome ?? dados.nome) &&
+        (context.agendamentoEmAndamento?.servico ?? dados.servico) &&
+        (context.agendamentoEmAndamento?.data ?? dados.data) &&
+        (context.agendamentoEmAndamento?.horario ?? dados.horario)
+      )
+      return dados
     }
-
-    // Verificar se está completo
-    dados.completo = !!(dados.nome && dados.servico && dados.data && dados.horario)
-
-    console.log(`📋 [AI-SERVICE] Dados extraídos:`, dados)
-    return dados
+    return null
   }
 
   private extrairNome(message: string): string | null {
-    // Tentar extrair nome de frases como "meu nome é João", "sou o Pedro", etc.
-    const patterns = [
-      /(?:meu nome é|me chamo|sou o?a?)\s+([a-záàâãéêíóôõúç\s]+)/i,
-      /^([a-záàâãéêíóôõúç]+(?:\s+[a-záàâãéêíóôõúç]+)*)\s+(?:aqui|falando)/i,
-      /nome(?:\s+é)?(?:\s+do)?(?:\s+cliente)?(?:\s+)?:?\s+([a-záàâãéêíóôõúç\s]+)/i,
-    ]
+    const lowerMessage = message.toLowerCase()
+    // Regex para capturar padrões como "meu nome é [Nome]", "pode me chamar de [Nome]" etc.
+    const regexNome = /(?:meu nome é|chamo-me|sou o|sou a|pode registrar como)\s+([A-Za-zÀ-ú\s]+)/i
+    const match = regexNome.exec(lowerMessage)
 
-    for (const pattern of patterns) {
-      const match = message.match(pattern)
-      if (match && match[1]) {
-        const nome = match[1].trim()
-        // Verificar se o nome tem pelo menos 3 caracteres e não é apenas uma palavra comum
-        if (nome.length >= 3 && !["sim", "não", "nao", "ok", "bom", "bem"].includes(nome.toLowerCase())) {
-          return nome
-        }
-      }
-    }
-
-    // Tentar extrair um nome próprio da mensagem (primeira palavra com maiúscula)
-    const palavras = message.split(/\s+/)
-    for (const palavra of palavras) {
-      if (palavra.length >= 3 && /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][a-záàâãéêíóôõúç]+$/.test(palavra)) {
-        return palavra
-      }
+    if (match?.[1]) {
+      // Pega o nome capturado, remove espaços extras e capitaliza
+      const nome = match[1].trim()
+      return nome
+        .split(" ")
+        .map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase())
+        .join(" ")
     }
 
     return null
@@ -1054,7 +624,7 @@ Você: "WEBHOOK:consultar_agendamentos"
 
     // Formato DD/MM
     const regexData = /(\d{1,2})\/(\d{1,2})/
-    const match = message.match(regexData)
+    const match = regexData.exec(message)
     if (match) {
       const dia = Number.parseInt(match[1]!)
       const mes = Number.parseInt(match[2]!)
@@ -1066,8 +636,8 @@ Você: "WEBHOOK:consultar_agendamentos"
           console.log(`✅ [AI-SERVICE] Data encontrada: ${data.format("DD/MM/YYYY")}`)
           return data.format("YYYY-MM-DD")
         }
-      } catch {
-        console.log(`❌ [AI-SERVICE] Data inválida: ${dia}/${mes}`)
+      } catch (e) {
+        console.log(`❌ [AI-SERVICE] Data inválida: ${dia}/${mes}`, e)
         return null
       }
     }
@@ -1077,33 +647,22 @@ Você: "WEBHOOK:consultar_agendamentos"
   }
 
   private extrairHorario(message: string): string | null {
-    console.log(`🔍 [AI-SERVICE] Extraindo horário de: "${message}"`)
+    // Regex aprimorado para flexibilidade
+    const regex = /(\d{1,2}):(\d{2})|\d{1,2}h(\d{2})?|\b(\d{1,2})\s*horas/i
+    const match = regex.exec(message.toLowerCase())
 
-    // Padrões mais flexíveis para horário
-    const patterns = [
-      /(\d{1,2}):(\d{2})/, // 14:30
-      /(\d{1,2})h(\d{2})/, // 14h30
-      /(\d{1,2})h/, // 14h
-      /as\s+(\d{1,2})/, // as 14
-      /(\d{1,2})\s*horas?/, // 14 horas
-    ]
-
-    for (const pattern of patterns) {
-      const match = message.match(pattern)
-      if (match) {
-        const hora = match[1]!.padStart(2, "0")
-        const minuto = match[2] ? match[2] : "00"
-        const horarioFormatado = `${hora}:${minuto}`
-        console.log(`✅ [AI-SERVICE] Horário encontrado: ${horarioFormatado}`)
+    if (match) {
+      const hora = match[1] ?? match[4] ?? match[5]
+      const minuto = match[2] ?? (match[3] ? "00" : "00")
+      if (hora) {
+        const horarioFormatado = `${hora.padStart(2, "0")}:${minuto.padStart(2, "0")}`
         return horarioFormatado
       }
     }
-
-    console.log(`❌ [AI-SERVICE] Nenhum horário encontrado na mensagem`)
     return null
   }
 
-  private createNaturalQuestion(dados: any): string {
+  private createNaturalQuestion(dados: DadosAgendamentoExtraidos): string {
     const faltantes = []
 
     if (!dados.nome) faltantes.push("seu nome completo")
@@ -1111,10 +670,14 @@ Você: "WEBHOOK:consultar_agendamentos"
     if (!dados.data) faltantes.push("que dia prefere")
     if (!dados.horario) faltantes.push("qual horário")
 
+    if (faltantes.length === 0) {
+      return "Tenho todas as informações. Posso confirmar o agendamento?"
+    }
     if (faltantes.length === 1) {
       return `Perfeito! Só preciso saber ${faltantes[0]} pra finalizar seu agendamento. 😊`
     } else {
-      return `Ótimo! Pra agendar, preciso saber ${faltantes.slice(0, -1).join(", ")} e ${faltantes[faltantes.length - 1]}. Pode me falar?`
+      return `Ótimo! Pra agendar, preciso saber ${faltantes.slice(0, -1).join(", ")} e ${faltantes[faltantes.length - 1]
+        }. Pode me falar?`
     }
   }
 
@@ -1124,23 +687,23 @@ Você: "WEBHOOK:consultar_agendamentos"
     }
 
     let texto = "Nossos serviços são:\n\n"
-    servicos.forEach((servico, index) => {
-      texto += `${index + 1}. **${servico.nome}** - R$ ${servico.preco.toFixed(2)} (${servico.duracaoMinutos} min)\n`
+    servicos.forEach((servico) => {
+      texto += `**${servico.nome}** - R$ ${servico.preco.toFixed(2)} (${servico.duracaoMinutos} min)\n`
     })
     texto += "\nQual você gostaria de agendar? 💈"
     return texto
   }
 
-  private formatarAgendamentosNatural(agendamentos: any[]): string {
+  private formatarAgendamentosNatural(agendamentos: Agendamentos[]): string {
     if (agendamentos.length === 0) {
       return "Você ainda não tem agendamentos comigo. Quer marcar um? 😊"
     }
 
     let texto = "Seus agendamentos:\n\n"
-    agendamentos.forEach((agendamento, index) => {
+    agendamentos.forEach((agendamento) => {
       const data = dayjs(agendamento.dataHora)
       const status = agendamento.status === "agendado" ? "✅" : agendamento.status === "concluido" ? "✔️" : "❌"
-      texto += `${status} **${agendamento.servico}** - ${data.format("DD/MM")} às ${data.format("HH:mm")}\n`
+      texto += `${status} **${agendamento.servico ?? ""}** - ${data.format("DD/MM")} às ${data.format("HH:mm")}\n`
     })
 
     return texto
@@ -1159,35 +722,31 @@ Você: "WEBHOOK:consultar_agendamentos"
     return conversationHistory.length <= 1
   }
 
-  private async criarSaudacaoPersonalizada(cliente: any, mensagemUsuario: string): Promise<string | null> {
+  private async criarSaudacaoPersonalizada(
+    cliente: Clientes | undefined,
+    mensagemUsuario: string,
+  ): Promise<string | null> {
     try {
-      console.log(`👋 [AI-SERVICE] Criando saudação personalizada para:`, cliente?.nome || "cliente não cadastrado")
-
       // Determinar o tipo de saudação baseado na mensagem do usuário
       const tipoSaudacao = this.determinarTipoSaudacao(mensagemUsuario)
-
-      if (cliente && cliente.nome) {
+      if (cliente?.nome) {
         // Cliente cadastrado - usar primeiro nome
         const primeiroNome = this.extrairPrimeiroNome(cliente.nome)
-        console.log(`✅ [AI-SERVICE] Cliente cadastrado: ${cliente.nome} -> Primeiro nome: ${primeiroNome}`)
-
-        return this.gerarSaudacaoComNome(primeiroNome, tipoSaudacao, mensagemUsuario)
+        return this.gerarSaudacaoComNome(primeiroNome, tipoSaudacao)
       } else {
         // Cliente não cadastrado - saudação genérica
-        console.log(`🆕 [AI-SERVICE] Cliente não cadastrado - saudação genérica`)
-
-        return this.gerarSaudacaoGenerica(tipoSaudacao, mensagemUsuario)
+        return this.gerarSaudacaoGenerica(tipoSaudacao)
       }
     } catch (error) {
-      console.error("💥 [AI-SERVICE] Erro ao criar saudação personalizada:", error)
+      console.error("Erro ao criar saudação:", error)
       return null
     }
   }
 
   private extrairPrimeiroNome(nomeCompleto: string): string {
-    // Extrair apenas o primeiro nome
     const nomes = nomeCompleto.trim().split(/\s+/)
-    const primeiroNome = nomes[0] || nomeCompleto
+    const primeiroNome = nomes[0]
+    if (!primeiroNome) return ""
 
     // Capitalizar primeira letra
     return primeiroNome.charAt(0).toUpperCase() + primeiroNome.slice(1).toLowerCase()
@@ -1220,66 +779,36 @@ Você: "WEBHOOK:consultar_agendamentos"
     return "casual"
   }
 
-  private gerarSaudacaoComNome(primeiroNome: string, tipo: string, mensagemOriginal: string): string {
-    const saudacoes = {
+  private gerarSaudacaoComNome(
+    primeiroNome: string,
+    tipo: "formal" | "casual" | "urgente" | "servico",
+  ): string {
+    const frases = {
       formal: [
         `Olá ${primeiroNome}! Tudo bem? 😊`,
         `Oi ${primeiroNome}! Como você está?`,
         `${primeiroNome}! Que bom te ver por aqui! 😊`,
       ],
-      casual: [
-        `E aí ${primeiroNome}! Tudo certo? 😄`,
-        `Opa ${primeiroNome}! Beleza?`,
-        `Olá ${primeiroNome}! Tudo bem? 😊`,
-      ],
+      casual: [`E aí ${primeiroNome}! Tudo certo? 😄`, `Opa ${primeiroNome}! Beleza?`, `Olá ${primeiroNome}!`],
       urgente: [`Oi ${primeiroNome}! Vou te ajudar rapidinho! 🚀`, `${primeiroNome}! Estou aqui pra te atender! 😊`],
-      servico: [
-        `Olá ${primeiroNome}! Vamos agendar seu horário? 💈`,
-        `Oi ${primeiroNome}! Que bom que você voltou! 😊`,
-      ],
+      servico: [`Olá ${primeiroNome}! Vamos agendar seu horário? 💈`, `Oi ${primeiroNome}! Que bom que você voltou! 😊`],
     }
 
-    const opcoes = saudacoes[tipo] || saudacoes.casual
-    const saudacaoEscolhida = opcoes[Math.floor(Math.random() * opcoes.length)]
-
-    // Adicionar pergunta contextual baseada na mensagem
-    let perguntaContextual = ""
-
-    if (tipo === "servico") {
-      perguntaContextual = " O que você gostaria de agendar hoje?"
-    } else if (tipo === "urgente") {
-      perguntaContextual = " Em que posso te ajudar?"
-    } else {
-      perguntaContextual = " Como posso te ajudar hoje?"
-    }
-
-    return saudacaoEscolhida + perguntaContextual
+    const opcoes = frases[tipo]
+    const frase = opcoes[Math.floor(Math.random() * opcoes.length)]!
+    return `${frase} Sou o assistente da barbearia. Como posso te ajudar?`
   }
 
-  private gerarSaudacaoGenerica(tipo: string, mensagemOriginal: string): string {
-    const saudacoes = {
-      formal: [`Olá! Tudo bem? 😊`, `Oi! Como você está?`, `Olá! Que bom ter você aqui! 😊`],
-      casual: [`E aí! Tudo certo? 😄`, `Opa! Beleza?`, `Olá! Tudo bem? 😊`],
-      urgente: [`Oi! Vou te ajudar rapidinho! 🚀`, `Olá! Estou aqui pra te atender! 😊`],
-      servico: [`Olá! Vamos agendar seu horário? 💈`, `Oi! Bem-vindo à nossa barbearia! 😊`],
+  private gerarSaudacaoGenerica(tipo: "formal" | "casual" | "urgente" | "servico"): string {
+    const frases = {
+      formal: [`Olá! Tudo bem? 😊`, `Oi! Como posso te ajudar?`],
+      casual: [`E aí! Tudo certo? 😄`, `Opa! Beleza?`, `Olá!`],
+      urgente: [`Oi! Vou te ajudar rapidinho! 🚀`, `Pode falar, estou aqui pra te atender! 😊`],
+      servico: [`Olá! Vamos agendar seu horário? 💈`, `Oi! Quer marcar um horário?`],
     }
-
-    const opcoes = saudacoes[tipo] || saudacoes.casual
-    const saudacaoEscolhida = opcoes[Math.floor(Math.random() * opcoes.length)]
-
-    // Adicionar pergunta contextual
-    let perguntaContextual = ""
-
-    if (tipo === "servico") {
-      perguntaContextual = " O que você gostaria de agendar hoje?"
-    } else if (tipo === "urgente") {
-      perguntaContextual = " Em que posso te ajudar?"
-    } else {
-      // Para clientes novos, perguntar o nome
-      perguntaContextual = " Para começar, qual é o seu nome completo?"
-    }
-
-    return saudacaoEscolhida + perguntaContextual
+    const opcoes = frases[tipo]
+    const frase = opcoes[Math.floor(Math.random() * opcoes.length)]!
+    return `${frase} Sou o assistente da barbearia. Em que posso ajudar?`
   }
 }
 

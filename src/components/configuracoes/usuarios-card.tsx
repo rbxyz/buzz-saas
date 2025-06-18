@@ -41,7 +41,7 @@ import { Eye, EyeOff, Pencil, Plus, Trash, UserCog } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type User = {
-  id: string;
+  id: number;
   name: string;
   email: string;
   role: "admin" | "superadmin";
@@ -200,7 +200,7 @@ export function UsuariosCard() {
         id: selectedUser.id,
         name: formData.name,
         email: formData.email,
-        password: formData.password || undefined,
+        password: formData.password ?? undefined,
         role: formData.role,
         phone: formData.phone,
       });
@@ -209,7 +209,7 @@ export function UsuariosCard() {
       createUserMutation.mutate({
         name: formData.name,
         email: formData.email,
-        password: formData.password || undefined,
+        password: formData.password ?? undefined,
         role: formData.role,
         phone: formData.phone,
       });

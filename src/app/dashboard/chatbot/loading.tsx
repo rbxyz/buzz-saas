@@ -10,7 +10,7 @@ export default function ChatbotLoading() {
   const router = useRouter();
 
   // Pré-carrega dados do chatbot se houver
-  const { data: configs, isLoading } = api.configuracao.listar.useQuery();
+  const { isLoading } = api.configuracao.listar.useQuery();
 
   useEffect(() => {
     if (!isLoading) {

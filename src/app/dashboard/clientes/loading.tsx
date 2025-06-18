@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 
 const PRELOAD_CONFIG = {
   clientes: { staleTime: 2 * 60 * 1000, cacheTime: 10 * 60 * 1000 },
-  historico: { staleTime: 5 * 60 * 1000, cacheTime: 15 * 60 * 1000 },
 };
 
 export default function ClientesLoading() {
@@ -16,16 +15,6 @@ export default function ClientesLoading() {
   // Pré-carrega lista de clientes
   const { data: clientes, isLoading: isLoadingClientes } =
     api.cliente.listar.useQuery(undefined, PRELOAD_CONFIG.clientes);
-
-  // Pré-carrega histórico dos primeiros clientes para cache
-  const { data: historicoPrimeirosClientes } =
-    api.agendamento.getHistoricoPorCliente.useQuery(
-      { clienteId: clientes?.[0]?.id ?? "" },
-      {
-        enabled: !!clientes?.[0]?.id,
-        ...PRELOAD_CONFIG.historico,
-      },
-    );
 
   useEffect(() => {
     if (!isLoadingClientes && clientes) {

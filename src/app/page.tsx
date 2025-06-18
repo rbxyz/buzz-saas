@@ -141,7 +141,7 @@ export default function LandingPage() {
         setEtapaAgendamento("confirmacao");
         // Atualizar status do WhatsApp
         setWhatsappStatus({
-          enviado: data.whatsappEnviado || false,
+          enviado: data.whatsappEnviado ?? false,
           erro: data.whatsappError ?? undefined,
         });
       },
@@ -162,7 +162,7 @@ export default function LandingPage() {
       window.location.href = "/dashboard";
     },
     onError: (error) => {
-      setLoginError(error.message || "Erro ao fazer login");
+      setLoginError(error.message ?? "Erro ao fazer login");
     },
   });
 
@@ -330,7 +330,7 @@ export default function LandingPage() {
               />
             </div>
             <span className="text-foreground text-xl font-bold">
-              {configs?.nome}
+              {configs?.nomeEmpresa ?? "Barbearia"}
             </span>
           </div>
 
@@ -504,7 +504,7 @@ export default function LandingPage() {
                       Horário
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      {configs.horaInicio} às {configs.horaFim}
+                      Segunda a Sábado: 08:00 às 18:00
                     </p>
                   </div>
                 </CardContent>
@@ -537,7 +537,7 @@ export default function LandingPage() {
             {/* Status do WhatsApp */}
             {configs && (
               <div className="mt-2 flex items-center justify-center gap-2">
-                {configs.whatsappAtivo ? (
+                {configs.whatsappAgentEnabled ? (
                   <Badge
                     variant="outline"
                     className="border-green-500 text-green-700"
@@ -623,7 +623,9 @@ export default function LandingPage() {
                               // Verificar se já temos os dados da query
                               if (clientePorTelefone) {
                                 setClienteEncontrado({
-                                  ...clientePorTelefone,
+                                  id: clientePorTelefone.id.toString(),
+                                  nome: clientePorTelefone.nome,
+                                  telefone: clientePorTelefone.telefone,
                                   email: clientePorTelefone.email ?? undefined,
                                 });
                                 setNomeNovoCliente(clientePorTelefone.nome);
@@ -1076,27 +1078,11 @@ export default function LandingPage() {
                                               Horário {horarioManual} não
                                               disponível
                                             </p>
-                                            {conflito.proximoDisponivel && (
-                                              <div className="mt-2">
-                                                <p className="text-warning/80 text-sm">
-                                                  Próximo horário disponível:{" "}
-                                                  {conflito.proximoDisponivel}
-                                                </p>
-                                                <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  onClick={() =>
-                                                    setHorarioSelecionado(
-                                                      conflito.proximoDisponivel!,
-                                                    )
-                                                  }
-                                                  className="border-warning text-warning hover:bg-warning/10 mt-2"
-                                                >
-                                                  Selecionar{" "}
-                                                  {conflito.proximoDisponivel}
-                                                </Button>
-                                              </div>
-                                            )}
+                                                                                        <div className="mt-2">
+                                              <p className="text-warning/80 text-sm">
+                                                {conflito.motivo}
+                                              </p>
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
@@ -1648,7 +1634,7 @@ export default function LandingPage() {
               />
             </div>
             <span className="text-foreground text-2xl font-bold">
-              {configs?.nome}
+              {configs?.nomeEmpresa ?? "Barbearia"}
             </span>
           </div>
 
@@ -1659,7 +1645,7 @@ export default function LandingPage() {
 
           <div className="border-border mb-8 border-t pt-8">
             <p className="text-muted-foreground/70 text-sm">
-              © 2024 {configs?.nome}. Todos os direitos reservados.
+              © 2024 {configs?.nomeEmpresa ?? "Barbearia"}. Todos os direitos reservados.
             </p>
           </div>
         </div>

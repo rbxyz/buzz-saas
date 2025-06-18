@@ -7,7 +7,6 @@ import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 
 // Tipos para o webhook da Z-API
 interface WebhookBody {
-  // Campos originais
   phone?: string
   fromMe?: boolean
   chatName?: string
@@ -27,7 +26,7 @@ interface WebhookBody {
     type?: string
   }
   event?: string
-  data?: any
+  data?: unknown
 
   // Novos campos específicos do Z-API
   isStatusReply?: boolean
@@ -46,8 +45,6 @@ interface WebhookBody {
   fromApi?: boolean
 }
 
-type MessageTipo = "texto" | "imagem" | "audio" | "documento"
-
 interface Conversation {
   id: number
   userId: number
@@ -62,13 +59,13 @@ interface Conversation {
 }
 
 interface DbMessage {
-  id: string
-  conversationId: string
+  id: number
+  conversationId: number
   content: string
   role: "user" | "assistant" | "system" | "bot"
   timestamp: Date
-  messageId?: string
-  createdAt: Date | null
+  messageId?: string | null
+  createdAt: Date
 }
 
 export async function POST(request: NextRequest) {
@@ -126,21 +123,17 @@ export async function POST(request: NextRequest) {
       messageId,
       timestamp,
       senderName,
-    }).catch((error) => {
-      console.error("💥 [WEBHOOK] Erro ao processar mensagem:", error)
+    }).catch((err) => {
+      // Apenas logamos o erro, a resposta principal já foi enviada
+      console.error("💥 [WEBHOOK] Erro no processamento assíncrono:", err)
     })
 
     // Responder imediatamente para evitar timeout
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("💥 [WEBHOOK] Erro:", error)
-    return NextResponse.json(
-      {
-        error: "Erro interno do servidor",
-        message: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+  } catch (e) {
+    console.error("💥 [WEBHOOK] Erro principal:", e)
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: "Erro interno do servidor", message }, { status: 500 })
   }
 }
 
@@ -252,29 +245,22 @@ async function processIncomingMessage(data: {
 
     console.log(`💾 [WEBHOOK] Salvando resposta da IA: ${aiResponse.message.substring(0, 50)}...`)
 
-    // Salvar resposta da IA - CORRIGIDO para usar os nomes corretos dos campos
-    await db.insert(messages).values({
-      conversationId: conversation.id,
-      content: aiResponse.message,
-      role: "assistant", // Usar "assistant" em vez de "bot"
-      timestamp: new Date(),
-    })
+    // Salvar resposta da IA
+    if (aiResponse.message) {
+      await db.insert(messages).values({
+        conversationId: conversation.id,
+        content: aiResponse.message,
+        role: "assistant",
+        timestamp: new Date(),
+      })
 
-    console.log(`📤 [WEBHOOK] Enviando resposta via WhatsApp para ${telefoneClean}`)
-
-    // Enviar resposta via WhatsApp
-    const sendResult = await enviarMensagemWhatsApp(telefoneClean, aiResponse.message)
-
-    if (!sendResult.success) {
-      console.error(`❌ [WEBHOOK] Erro ao enviar mensagem WhatsApp:`, sendResult.error)
-    } else {
-      console.log(`✅ [WEBHOOK] Mensagem WhatsApp enviada com sucesso`)
+      // Enviar resposta para o cliente
+      await enviarMensagemWhatsApp(phone, aiResponse.message)
     }
 
-    // Processar ações específicas se necessário
+    // Se a IA retornou uma ação, processá-la
     if (aiResponse.action) {
-      console.log(`🎬 [WEBHOOK] Processando ação: ${aiResponse.action}`)
-      await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, telefoneClean, message)
+      await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, phone, message)
     }
 
     // Atualizar última mensagem da conversa
@@ -287,8 +273,18 @@ async function processIncomingMessage(data: {
       .where(eq(conversations.id, conversation.id))
 
     console.log(`✅ [WEBHOOK] Processamento de mensagem concluído para ${telefoneClean}`)
-  } catch (error) {
-    console.error("💥 [WEBHOOK] Erro ao processar mensagem:", error)
+  } catch (e) {
+    console.error(`💥 [ProcessIncomingMessage] Erro ao processar mensagem para ${data.phone}:`, e)
+    // Opcional: Enviar uma mensagem de erro para o usuário final
+    const errorMessage = e instanceof Error ? e.message : "Não foi possível processar sua solicitação."
+    try {
+      await enviarMensagemWhatsApp(
+        data.phone,
+        `Desculpe, encontrei um erro e não consegui processar sua mensagem: "${errorMessage}". Pode tentar novamente?`,
+      )
+    } catch (sendError) {
+      console.error(`💥 [ProcessIncomingMessage] Falha ao enviar mensagem de erro:`, sendError)
+    }
   }
 }
 
@@ -297,7 +293,7 @@ async function handleAIAction(
   data: unknown,
   conversationId: number, // Alterado para number
   phone: string,
-  userMessage: string,
+  _userMessage: string,
 ): Promise<void> {
   try {
     console.log(`🎬 [WEBHOOK-ACTION] Iniciando ação ${action}`)
@@ -330,8 +326,10 @@ async function handleAIAction(
     }
 
     console.log(`✅ [WEBHOOK-ACTION] Ação ${action} concluída`)
-  } catch (error) {
-    console.error("💥 [WEBHOOK-ACTION] Erro ao processar ação da IA:", error)
+  } catch (e) {
+    console.error(`💥 [ACTION] Erro ao executar ação ${action}:`, e)
+    const errorMessage = e instanceof Error ? e.message : String(e)
+    await enviarMensagemWhatsApp(phone, `Ocorreu um erro ao processar sua solicitação: ${errorMessage}`)
   }
 }
 
