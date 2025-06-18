@@ -444,7 +444,7 @@ export default function AgendamentosPage() {
               </CardHeader>
                 <CardContent>
                 {agendamentos?.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">Nenhum agendamento para esta data.</p>
+                  <p className="text-muted-foreground text-center py-8">Nenhum agendamento para esta data</p>
                 ) : (
                   <div className="space-y-4">
                 {agendamentos?.map((agendamento) => (
