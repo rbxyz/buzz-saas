@@ -84,7 +84,7 @@ export default function AgendamentosPage() {
   const { data: agendamentosRecentes } = api.agendamento.getAgendamentosRecentes.useQuery();
 
   const { data: clientesEncontrados, isFetching } =
-    api.agendamento.getByClientCode.useQuery(
+    api.cliente.buscarPorNomeOuTelefone.useQuery(
       { query: clienteQuery },
       {
         enabled: clienteQuery.length > 1,
@@ -111,7 +111,7 @@ export default function AgendamentosPage() {
       date: selectedDate.toISOString(),
     });
 
-  const atualizarStatus = api.agendamento.atualizarStatus.useMutation({
+  const atualizarStatus = api.agendamento.updateStatus.useMutation({
     onSuccess: () => {
       void refetchAgendamentos();
       void refetchAgendamentosDoMes();
@@ -239,7 +239,7 @@ export default function AgendamentosPage() {
     }
 
     createMutation.mutate({
-      clienteId,
+      clienteId: parseInt(clienteId, 10),
       data: format(dataParaAgendamento, "yyyy-MM-dd"),
       horario,
       servico,

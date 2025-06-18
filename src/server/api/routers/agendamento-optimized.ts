@@ -14,9 +14,9 @@ interface CacheEntry<T> {
 
 // Interfaces para os dados retornados
 interface ClienteBasico {
-  id: string
+  id: number
   nome: string
-  telefone: string | null
+  telefone: string
 }
 
 interface AgendamentoStatus {

@@ -175,10 +175,15 @@ export const configuracaoRouter = createTRPCRouter({
 
         // Se tem ID, é uma atualização
         if (id) {
+          // Remover propriedades com valor null/undefined
+          const updateData = Object.fromEntries(
+            Object.entries(configData).filter(([_, value]) => value !== null && value !== undefined)
+          )
+
           const updated = await db
             .update(configuracoes)
             .set({
-              ...configData,
+              ...updateData,
               updatedAt: new Date(),
             })
             .where(eq(configuracoes.id, id))
@@ -199,10 +204,15 @@ export const configuracaoRouter = createTRPCRouter({
           if (existing) {
             // Se já existe, atualizar
             console.log("📝 Configuração já existe, atualizando...")
+            // Remover propriedades com valor null/undefined
+            const updateData = Object.fromEntries(
+              Object.entries(configData).filter(([_, value]) => value !== null && value !== undefined)
+            )
+
             const updated = await db
               .update(configuracoes)
               .set({
-                ...configData,
+                ...updateData,
                 updatedAt: new Date(),
               })
               .where(eq(configuracoes.id, existing.id))
@@ -224,10 +234,29 @@ export const configuracaoRouter = createTRPCRouter({
               configData.userId = firstUser.id
             }
 
+            // Garantir que temos um userId válido
+            if (!configData.userId) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Erro interno: userId não encontrado",
+              })
+            }
+
             const created = await db
               .insert(configuracoes)
               .values({
-                ...configData,
+                userId: configData.userId,
+                nomeEmpresa: configData.nomeEmpresa,
+                telefone: configData.telefone,
+                endereco: configData.endereco,
+                logoUrl: configData.logoUrl,
+                corPrimaria: configData.corPrimaria,
+                corSecundaria: configData.corSecundaria,
+                zapiInstanceId: configData.zapiInstanceId,
+                zapiToken: configData.zapiToken,
+                zapiClientToken: configData.zapiClientToken,
+                aiEnabled: configData.aiEnabled,
+                whatsappAgentEnabled: configData.whatsappAgentEnabled,
                 createdAt: new Date(),
                 updatedAt: new Date(),
               })

@@ -283,7 +283,7 @@ export const authRouter = createTRPCRouter({
       const decoded = jwt.verify(input.token, JWT_SECRET) as { id: string; email: string; role: string }
 
       const user = await db.query.users.findFirst({
-        where: eq(users.id, decoded.id),
+        where: eq(users.id, parseInt(decoded.id, 10)),
       })
 
       if (!user?.active) {

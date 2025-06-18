@@ -241,4 +241,48 @@ export const clienteRouter = createTRPCRouter({
       })
     }
   }),
+
+  buscarPorNomeOuTelefone: publicProcedure.input(z.object({ query: z.string() })).query(async ({ input }) => {
+    const searchQuery = input.query.trim().toLowerCase()
+
+    if (!searchQuery || searchQuery.length < 2) {
+      return []
+    }
+
+    try {
+      // Verifica se a query contém apenas números (busca por telefone)
+      const isPhoneSearch = /^\d+$/.test(searchQuery.replace(/\D/g, ""))
+
+      if (isPhoneSearch) {
+        // Busca por telefone
+        const telefoneNumeros = searchQuery.replace(/\D/g, "")
+        const clientesPorTelefone = await db
+          .select()
+          .from(clientes)
+          .where(
+            sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') LIKE ${`%${telefoneNumeros}%`}`,
+          )
+          .orderBy(clientes.nome)
+          .limit(10)
+
+        return clientesPorTelefone
+      } else {
+        // Busca por nome
+        const searchTerm = `%${searchQuery}%`
+        const clientesPorNome = await db
+          .select()
+          .from(clientes)
+          .where(sql`LOWER(${clientes.nome}) LIKE ${searchTerm}`)
+          .orderBy(clientes.nome)
+          .limit(10)
+
+        return clientesPorNome
+      }
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao buscar clientes",
+      })
+    }
+  }),
 })

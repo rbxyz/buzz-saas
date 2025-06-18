@@ -2,17 +2,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/utils/trpc";
 
-// Tipos específicos para o status
+// Tipos específicos para o status (mantido para possível uso futuro)
 type AppointmentStatus = "agendado" | "cancelado" | "concluido" | "pendente";
-
-// Interface para o appointment
-interface Appointment {
-  id: string;
-  clienteNome: string | null;
-  servico: string;
-  dataHora: string | Date;
-  status: AppointmentStatus;
-}
 
 // Ajuste da tipagem para aceitar string ou Date
 function formatDate(dateInput: string | Date): string {
@@ -39,8 +30,8 @@ function formatDate(dateInput: string | Date): string {
   return date.toLocaleDateString("pt-BR") + ", " + time;
 }
 
-// Removido o "| string" para evitar tipos redundantes
-function formatStatus(status: AppointmentStatus): string {
+// Função que aceita string e retorna o status formatado
+function formatStatus(status: string): string {
   switch (status) {
     case "agendado":
       return "Agendado";
@@ -51,8 +42,8 @@ function formatStatus(status: AppointmentStatus): string {
     case "concluido":
       return "Concluído";
     default:
-      // TypeScript garante que este caso nunca será alcançado
-      return status;
+      // Para qualquer status não conhecido, retorna capitalizado
+      return status.charAt(0).toUpperCase() + status.slice(1);
   }
 }
 
@@ -105,7 +96,7 @@ export function RecentAppointments() {
           Atualizando dados...
         </div>
       )}
-      {data.map((appointment: Appointment) => {
+      {data.map((appointment) => {
         const clientName = appointment.clienteNome ?? "Cliente";
         const initials = getInitials(clientName);
 
