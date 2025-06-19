@@ -155,157 +155,241 @@ async function processIncomingMessage(data: {
     // Por enquanto, usar userId = 1 (primeiro usuário).
     // TODO: Implementar lógica para identificar o usuário correto baseado na instância Z-API
     const userId = 1 // Temporário - usar o primeiro usuário
+    console.log(`👤 [DEBUG] userId definido como: ${userId}`)
 
     // Limpar telefone (remover caracteres especiais)
     const telefoneClean = phone.replace(/\D/g, "")
+    console.log(`📞 [DEBUG] Telefone limpo: ${telefoneClean}`)
 
+    console.log(`🔍 [DEBUG] Tentando buscar conversa existente...`)
     // Buscar ou criar conversa com retry
-    let conversation: Conversation | null = await withDrizzleRetry(
-      () => db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.telefone, telefoneClean))
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-      `Buscar conversa para ${telefoneClean}`
-    )
-
-    if (!conversation) {
-      console.log(`🆕 [WEBHOOK] Criando nova conversa para ${telefoneClean}`)
+    let conversation: Conversation | null = null
+    try {
       conversation = await withDrizzleRetry(
         () => db
-          .insert(conversations)
-          .values({
-            userId: userId,
-            telefone: telefoneClean,
-            ativa: true,
-            ultimaMensagem: null,
-          })
-          .returning()
+          .select()
+          .from(conversations)
+          .where(eq(conversations.telefone, telefoneClean))
+          .limit(1)
           .then((rows) => rows[0] ?? null),
-        `Criar conversa para ${telefoneClean}`
+        `Buscar conversa para ${telefoneClean}`
       )
+      console.log(`✅ [DEBUG] Busca de conversa concluída. Resultado:`, conversation ? `Conversa encontrada (ID: ${conversation.id})` : 'Nenhuma conversa encontrada')
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO ao buscar conversa:`, error)
+      throw error
     }
 
     if (!conversation) {
-      throw new Error("Erro ao criar ou encontrar conversa!")
-    }
-
-    // Buscar cliente pelo telefone com retry
-    let cliente = await withDrizzleRetry(
-      () => db
-        .select()
-        .from(clientes)
-        .where(eq(clientes.telefone, telefoneClean))
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-      `Buscar cliente ${telefoneClean}`
-    )
-
-    // Se temos o nome do remetente e não temos cliente, criar um novo cliente
-    if (!cliente && senderName && senderName.trim() !== "") {
-      console.log(`🆕 [WEBHOOK] Criando novo cliente com nome do WhatsApp: ${senderName}`)
-      cliente = await withDrizzleRetry(
-        () => db
-          .insert(clientes)
-          .values({
-            userId: userId,
-            nome: senderName,
-            telefone: telefoneClean,
-          })
-          .returning()
-          .then((rows) => rows[0] ?? null),
-        `Criar cliente ${senderName}`
-      )
-
-      // Atualizar a conversa com o ID do cliente
-      if (cliente) {
-        await withDrizzleRetry(
-          () => db.update(conversations).set({ clienteId: cliente!.id }).where(eq(conversations.id, conversation.id)),
-          `Vincular cliente ${cliente.id} à conversa`
+      console.log(`🆕 [DEBUG] Criando nova conversa para ${telefoneClean}`)
+      try {
+        conversation = await withDrizzleRetry(
+          () => db
+            .insert(conversations)
+            .values({
+              userId: userId,
+              telefone: telefoneClean,
+              ativa: true,
+              ultimaMensagem: null,
+            })
+            .returning()
+            .then((rows) => rows[0] ?? null),
+          `Criar conversa para ${telefoneClean}`
         )
-
-        console.log(`✅ [WEBHOOK] Cliente criado e vinculado à conversa: ${cliente.id}`)
+        console.log(`✅ [DEBUG] Nova conversa criada:`, conversation ? `ID: ${conversation.id}` : 'FALHA')
+      } catch (error) {
+        console.error(`❌ [DEBUG] ERRO ao criar conversa:`, error)
+        throw error
       }
     }
 
+    if (!conversation) {
+      throw new Error("ERRO CRÍTICO: Não foi possível criar ou encontrar conversa!")
+    }
+
+    console.log(`🔍 [DEBUG] Tentando buscar cliente pelo telefone...`)
+    // Buscar cliente pelo telefone com retry
+    let cliente = null
+    try {
+      cliente = await withDrizzleRetry(
+        () => db
+          .select()
+          .from(clientes)
+          .where(eq(clientes.telefone, telefoneClean))
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
+        `Buscar cliente ${telefoneClean}`
+      )
+      console.log(`✅ [DEBUG] Busca de cliente concluída:`, cliente ? `Cliente encontrado: ${cliente.nome} (ID: ${cliente.id})` : 'Nenhum cliente encontrado')
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO ao buscar cliente:`, error)
+      throw error
+    }
+
+    // Se temos o nome do remetente e não temos cliente, criar um novo cliente
+    if (!cliente && senderName && senderName.trim() !== "") {
+      console.log(`🆕 [DEBUG] Criando novo cliente com nome do WhatsApp: ${senderName}`)
+      try {
+        cliente = await withDrizzleRetry(
+          () => db
+            .insert(clientes)
+            .values({
+              userId: userId,
+              nome: senderName,
+              telefone: telefoneClean,
+            })
+            .returning()
+            .then((rows) => rows[0] ?? null),
+          `Criar cliente ${senderName}`
+        )
+        console.log(`✅ [DEBUG] Cliente criado:`, cliente ? `${cliente.nome} (ID: ${cliente.id})` : 'FALHA')
+
+        // Atualizar a conversa com o ID do cliente
+        if (cliente) {
+          try {
+            await withDrizzleRetry(
+              () => db.update(conversations).set({ clienteId: cliente!.id }).where(eq(conversations.id, conversation.id)),
+              `Vincular cliente ${cliente.id} à conversa`
+            )
+            console.log(`✅ [DEBUG] Cliente vinculado à conversa com sucesso`)
+          } catch (error) {
+            console.error(`❌ [DEBUG] ERRO ao vincular cliente à conversa:`, error)
+            throw error
+          }
+        }
+      } catch (error) {
+        console.error(`❌ [DEBUG] ERRO ao criar cliente:`, error)
+        throw error
+      }
+    }
+
+    console.log(`💾 [DEBUG] Tentando salvar mensagem do usuário...`)
     // Salvar mensagem do cliente com retry
-    await withDrizzleRetry(
-      () => db.insert(messages).values({
-        conversationId: conversation.id,
-        content: message,
-        role: "user", // Usar "user" em vez de "cliente"
-        timestamp: new Date(timestamp),
-        messageId: messageId,
-      }),
-      `Salvar mensagem do usuário`
-    )
+    try {
+      await withDrizzleRetry(
+        () => db.insert(messages).values({
+          conversationId: conversation.id,
+          content: message,
+          role: "user", // Usar "user" em vez de "cliente"
+          timestamp: new Date(timestamp),
+          messageId: messageId,
+        }),
+        `Salvar mensagem do usuário`
+      )
+      console.log(`✅ [DEBUG] Mensagem do usuário salva com sucesso`)
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO ao salvar mensagem do usuário:`, error)
+      throw error
+    }
 
-    console.log(`💾 [WEBHOOK] Mensagem do cliente salva no banco de dados`)
-
+    console.log(`🗣️ [DEBUG] Tentando buscar histórico da conversa...`)
     // Buscar histórico da conversa com retry
-    const conversationHistory: DbMessage[] = await withDrizzleRetry(
-      () => db
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, conversation.id))
-        .orderBy(messages.createdAt)
-        .limit(20),
-      `Buscar histórico da conversa ${conversation.id}`
-    )
+    let conversationHistory: DbMessage[] = []
+    try {
+      conversationHistory = await withDrizzleRetry(
+        () => db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, conversation.id))
+          .orderBy(messages.createdAt)
+          .limit(20),
+        `Buscar histórico da conversa ${conversation.id}`
+      )
+      console.log(`✅ [DEBUG] Histórico da conversa obtido: ${conversationHistory.length} mensagens`)
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO ao buscar histórico:`, error)
+      throw error
+    }
 
-    console.log(`🗣️ [WEBHOOK] Histórico da conversa obtido. ${conversationHistory.length} mensagens.`)
-
+    console.log(`🤖 [DEBUG] Tentando chamar o serviço de IA...`)
     // Chamar a IA para obter uma resposta
-    console.log(`🤖 [AI_SERVICE] Chamando serviço de IA...`)
-    const aiResponse = await aiService.processMessage(
-      message,
-      telefoneClean,
-      conversationHistory.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
-    )
-    console.log(`🤖 [AI_SERVICE] Resposta da IA recebida:`, aiResponse)
+    let aiResponse
+    try {
+      aiResponse = await aiService.processMessage(
+        message,
+        telefoneClean,
+        conversationHistory.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+      )
+      console.log(`✅ [DEBUG] Resposta da IA recebida:`, aiResponse)
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO no serviço de IA:`, error)
+      throw error
+    }
 
+    console.log(`💾 [DEBUG] Tentando salvar e enviar resposta da IA...`)
     // Salvar e enviar a resposta da IA
     if (aiResponse.message) {
-      console.log(`💾 [WEBHOOK] Salvando resposta da IA...`)
-      await withDrizzleRetry(
-        () =>
-          db.insert(messages).values({
-            conversationId: conversation.id,
-            content: aiResponse.message,
-            role: "assistant",
-            timestamp: new Date(),
-          }),
-        `Salvar resposta da IA`,
-      )
+      try {
+        await withDrizzleRetry(
+          () =>
+            db.insert(messages).values({
+              conversationId: conversation.id,
+              content: aiResponse.message,
+              role: "assistant",
+              timestamp: new Date(),
+            }),
+          `Salvar resposta da IA`,
+        )
+        console.log(`✅ [DEBUG] Resposta da IA salva no banco`)
+      } catch (error) {
+        console.error(`❌ [DEBUG] ERRO ao salvar resposta da IA:`, error)
+        throw error
+      }
 
-      console.log(`📤 [WEBHOOK] Enviando mensagem para ${phone}...`)
-      await enviarMensagemWhatsApp(phone, aiResponse.message)
-      console.log(`✅ [WEBHOOK] Mensagem de texto da IA enviada para ${phone}`)
+      console.log(`📤 [DEBUG] Tentando enviar mensagem via WhatsApp...`)
+      try {
+        await enviarMensagemWhatsApp(phone, aiResponse.message)
+        console.log(`✅ [DEBUG] Mensagem enviada via WhatsApp com sucesso`)
+      } catch (error) {
+        console.error(`❌ [DEBUG] ERRO ao enviar mensagem via WhatsApp:`, error)
+        throw error
+      }
     }
 
     // Processar ação se houver
     if (aiResponse.action) {
-      console.log(`🛠️ [AI_TOOL] IA solicitou o uso de ferramenta: ${aiResponse.action}`)
-      await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, phone, message)
+      console.log(`🛠️ [DEBUG] Tentando processar ação da IA: ${aiResponse.action}`)
+      try {
+        await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, phone, message)
+        console.log(`✅ [DEBUG] Ação da IA processada com sucesso`)
+      } catch (error) {
+        console.error(`❌ [DEBUG] ERRO ao processar ação da IA:`, error)
+        throw error
+      }
     }
 
+    console.log(`🔄 [DEBUG] Tentando atualizar última interação...`)
     // Atualizar a conversa com a última interação
-    await withDrizzleRetry(
-      () =>
-        db.update(conversations)
-          .set({ ultimaInteracao: new Date() })
-          .where(eq(conversations.id, conversation.id)),
-      `Atualizar última interação da conversa ${conversation.id}`,
-    )
-    console.log(`[PROCESS_END] Finalizado processamento para ${phone}.`)
+    try {
+      await withDrizzleRetry(
+        () =>
+          db.update(conversations)
+            .set({ ultimaInteracao: new Date() })
+            .where(eq(conversations.id, conversation.id)),
+        `Atualizar última interação da conversa ${conversation.id}`,
+      )
+      console.log(`✅ [DEBUG] Última interação atualizada com sucesso`)
+    } catch (error) {
+      console.error(`❌ [DEBUG] ERRO ao atualizar última interação:`, error)
+      throw error
+    }
+
+    console.log(`[PROCESS_END] ✅ Processamento concluído com SUCESSO para ${phone}.`)
   } catch (error) {
-    console.error(`💥 [PROCESS_ERROR] Erro no processamento para ${data.phone}:`, error)
-    // Opcional: Enviar uma mensagem de erro para o usuário final ou para um canal de admin
-    // await enviarMensagemWhatsApp(data.phone, "Ops! Algo deu errado do nosso lado. Já estamos verificando.");
+    console.error(`💥 [PROCESS_ERROR] ERRO CAPTURADO no processamento para ${data.phone}:`)
+    console.error(`💥 [PROCESS_ERROR] Tipo do erro:`, typeof error)
+    console.error(`💥 [PROCESS_ERROR] Erro completo:`, error)
+    console.error(`💥 [PROCESS_ERROR] Stack trace:`, error instanceof Error ? error.stack : 'N/A')
+
+    // Tentar enviar uma mensagem de erro para o usuário
+    try {
+      await enviarMensagemWhatsApp(data.phone, "Ops! Algo deu errado do nosso lado. Já estamos verificando o problema. Tente novamente em alguns minutos.")
+    } catch (sendError) {
+      console.error(`💥 [PROCESS_ERROR] Falha ao enviar mensagem de erro:`, sendError)
+    }
   }
 }
 
