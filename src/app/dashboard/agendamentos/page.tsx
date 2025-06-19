@@ -94,7 +94,7 @@ export default function AgendamentosPage() {
 
   const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
 
-  const { data: conflito } = api.agendamento.verificarConflito.useQuery(
+  const { data: conflito, isFetching: verificandoHorario } = api.agendamento.verificarConflito.useQuery(
     {
       data: format(dataParaAgendamento, "yyyy-MM-dd"),
       horario: horario,
@@ -375,11 +375,29 @@ export default function AgendamentosPage() {
                   className="bg-background border-border mt-1 block w-full rounded-md border p-2" 
                             maxLength={5}
                 />
-                {conflito?.temConflito && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {conflito.motivo}
-                            </p>
-                          )}
+                {/* Feedback de disponibilidade */}
+                {verificandoHorario && horario && servico && (
+                  <p className="mt-1 text-sm text-blue-600 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Verificando disponibilidade...
+                  </p>
+                )}
+
+                {!verificandoHorario && horario && servico && !conflito?.temConflito && (
+                  <p className="mt-1 text-sm text-green-600 flex items-center gap-1">
+                    <Check className="h-3 w-3" /> Horário disponível!
+                  </p>
+                )}
+
+                {!verificandoHorario && conflito?.temConflito && (
+                  <div className="mt-1 text-sm text-red-600 space-y-1">
+                    <p className="flex items-center gap-1"><XIcon className="h-3 w-3" /> {conflito.motivo}</p>
+                    {(conflito as any)?.horariosAlternativos && (conflito as any).horariosAlternativos.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Horários sugeridos: {(conflito as any).horariosAlternativos.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                )}
                       </div>
                             </div>
 
