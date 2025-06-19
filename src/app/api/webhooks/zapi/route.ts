@@ -255,7 +255,15 @@ async function processIncomingMessage(data: {
       })
 
       // Enviar resposta para o cliente
-      await enviarMensagemWhatsApp(phone, aiResponse.message)
+      console.log(`📤 [WEBHOOK] Tentando enviar mensagem para ${phone}:`, aiResponse.message.substring(0, 100))
+
+      const resultadoEnvio = await enviarMensagemWhatsApp(phone, aiResponse.message)
+
+      if (resultadoEnvio.success) {
+        console.log(`✅ [WEBHOOK] Mensagem enviada com sucesso para ${phone}`)
+      } else {
+        console.error(`❌ [WEBHOOK] Falha ao enviar mensagem para ${phone}:`, resultadoEnvio.error)
+      }
     }
 
     // Se a IA retornou uma ação, processá-la
