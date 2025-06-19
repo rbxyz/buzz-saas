@@ -145,6 +145,7 @@ async function processIncomingMessage(data: {
   timestamp: number
   senderName?: string
 }): Promise<void> {
+  console.log(`[PROCESS_START] Iniciando processamento para ${data.phone}.`)
   try {
     const { phone, message, messageId, timestamp, senderName } = data
 
@@ -250,77 +251,61 @@ async function processIncomingMessage(data: {
         .where(eq(messages.conversationId, conversation.id))
         .orderBy(messages.createdAt)
         .limit(20),
-      `Buscar histórico da conversa`
+      `Buscar histórico da conversa ${conversation.id}`
     )
 
-    console.log(`🧠 [WEBHOOK] Processando com IA. Histórico: ${conversationHistory.length} mensagens`)
+    console.log(`🗣️ [WEBHOOK] Histórico da conversa obtido. ${conversationHistory.length} mensagens.`)
 
-    // Processar mensagem com IA
+    // Chamar a IA para obter uma resposta
+    console.log(`🤖 [AI_SERVICE] Chamando serviço de IA...`)
     const aiResponse = await aiService.processMessage(
       message,
       telefoneClean,
       conversationHistory.map((msg) => ({
-        role: msg.role === "user" ? "user" : "assistant",
+        role: msg.role,
         content: msg.content,
       })),
     )
+    console.log(`🤖 [AI_SERVICE] Resposta da IA recebida:`, aiResponse)
 
-    console.log(`💾 [WEBHOOK] Salvando resposta da IA: ${aiResponse.message.substring(0, 50)}...`)
-
-    // Salvar resposta da IA com retry
+    // Salvar e enviar a resposta da IA
     if (aiResponse.message) {
+      console.log(`💾 [WEBHOOK] Salvando resposta da IA...`)
       await withDrizzleRetry(
-        () => db.insert(messages).values({
-          conversationId: conversation.id,
-          content: aiResponse.message,
-          role: "assistant",
-          timestamp: new Date(),
-        }),
-        `Salvar resposta da IA`
+        () =>
+          db.insert(messages).values({
+            conversationId: conversation.id,
+            content: aiResponse.message,
+            role: "assistant",
+            timestamp: new Date(),
+          }),
+        `Salvar resposta da IA`,
       )
 
-      // Enviar resposta para o cliente
-      console.log(`📤 [WEBHOOK] Tentando enviar mensagem para ${phone}:`, aiResponse.message.substring(0, 100))
-
-      const resultadoEnvio = await enviarMensagemWhatsApp(phone, aiResponse.message)
-
-      if (resultadoEnvio.success) {
-        console.log(`✅ [WEBHOOK] Mensagem enviada com sucesso para ${phone}`)
-      } else {
-        console.error(`❌ [WEBHOOK] Falha ao enviar mensagem para ${phone}:`, resultadoEnvio.error)
-      }
+      console.log(`📤 [WEBHOOK] Enviando mensagem para ${phone}...`)
+      await enviarMensagemWhatsApp(phone, aiResponse.message)
+      console.log(`✅ [WEBHOOK] Mensagem de texto da IA enviada para ${phone}`)
     }
 
-    // Se a IA retornou uma ação, processá-la
+    // Processar ação se houver
     if (aiResponse.action) {
+      console.log(`🛠️ [AI_TOOL] IA solicitou o uso de ferramenta: ${aiResponse.action}`)
       await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, phone, message)
     }
 
-    // Atualizar última mensagem da conversa com retry
+    // Atualizar a conversa com a última interação
     await withDrizzleRetry(
-      () => db
-        .update(conversations)
-        .set({
-          ultimaMensagem: aiResponse.message.substring(0, 100), // Salvar o texto da mensagem
-          updatedAt: new Date(),
-        })
-        .where(eq(conversations.id, conversation.id)),
-      `Atualizar última mensagem da conversa`
+      () =>
+        db.update(conversations)
+          .set({ ultimaInteracao: new Date() })
+          .where(eq(conversations.id, conversation.id)),
+      `Atualizar última interação da conversa ${conversation.id}`,
     )
-
-    console.log(`✅ [WEBHOOK] Processamento de mensagem concluído para ${telefoneClean}`)
-  } catch (e) {
-    console.error(`💥 [ProcessIncomingMessage] Erro ao processar mensagem para ${data.phone}:`, e)
-    // Opcional: Enviar uma mensagem de erro para o usuário final
-    const errorMessage = e instanceof Error ? e.message : "Não foi possível processar sua solicitação."
-    try {
-      await enviarMensagemWhatsApp(
-        data.phone,
-        `Desculpe, encontrei um erro e não consegui processar sua mensagem: "${errorMessage}". Pode tentar novamente?`,
-      )
-    } catch (sendError) {
-      console.error(`💥 [ProcessIncomingMessage] Falha ao enviar mensagem de erro:`, sendError)
-    }
+    console.log(`[PROCESS_END] Finalizado processamento para ${phone}.`)
+  } catch (error) {
+    console.error(`💥 [PROCESS_ERROR] Erro no processamento para ${data.phone}:`, error)
+    // Opcional: Enviar uma mensagem de erro para o usuário final ou para um canal de admin
+    // await enviarMensagemWhatsApp(data.phone, "Ops! Algo deu errado do nosso lado. Já estamos verificando.");
   }
 }
 
