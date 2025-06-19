@@ -683,8 +683,6 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   }
 
   private extrairNome(message: string): string | null {
-    const lowerMessage = message.toLowerCase().trim()
-
     console.log(`🔍 [AI-SERVICE] Extraindo nome de: "${message}"`)
 
     // Padrões mais robustos para capturar nomes
@@ -826,7 +824,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
           console.log(`✅ [AI-SERVICE] Data encontrada: ${data.format('DD/MM/YYYY')}`)
           return data.format('YYYY-MM-DD')
         }
-      } catch (e) {
+      } catch {
         console.log(`❌ [AI-SERVICE] Data inválida: ${dia}/${mes}/${anoCompleto}`)
       }
     }
@@ -859,8 +857,8 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     const match = regexHorario.exec(message)
 
     if (match) {
-      const hora = parseInt(match[1] || match[3] || match[5] || '0')
-      const minuto = parseInt(match[2] || match[4] || match[6] || '0')
+      const hora = parseInt(match[1] ?? match[3] ?? match[5] ?? '0')
+      const minuto = parseInt(match[2] ?? match[4] ?? match[6] ?? '0')
 
       // Validar horário
       if (hora >= 0 && hora <= 23 && minuto >= 0 && minuto <= 59) {
@@ -934,7 +932,6 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     // Separar agendamentos por status
     const agendamentosAtivos = agendamentos.filter(a => a.status === 'confirmado' || a.status === 'agendado')
     const agendamentosPassados = agendamentos.filter(a => a.status === 'concluido')
-    const agendamentosCancelados = agendamentos.filter(a => a.status === 'cancelado')
 
     if (agendamentosAtivos.length > 0) {
       texto += "🟢 **Próximos agendamentos:**\n"
@@ -1072,7 +1069,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   private async processVerificarHorario(
     data: unknown,
     telefone: string,
-    context: AgendamentoContext
+    _context: AgendamentoContext
   ): Promise<AIResponse> {
     try {
       const { servico, data: dataAg, horario } = data as { servico: string; data: string; horario: string }
@@ -1104,7 +1101,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     data: unknown,
     telefone: string,
     context: AgendamentoContext,
-    userMessage: string
+    _userMessage: string
   ): Promise<AIResponse> {
     try {
       const dadosAgendamento = this.combinarDadosComContexto(data as DadosAgendamentoExtraidos, telefone)
@@ -1242,7 +1239,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   }
 
   private async processEncaminharHumano(data: unknown, telefone: string): Promise<AIResponse> {
-    const { motivo, detalhes } = data as { motivo?: string; detalhes?: unknown }
+    const { motivo } = data as { motivo?: string; detalhes?: unknown }
 
     console.log(`👤 [AI-SERVICE] Encaminhando para humano - Telefone: ${telefone}, Motivo: ${motivo}`)
 
