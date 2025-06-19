@@ -389,14 +389,9 @@ export default function AgendamentosPage() {
                 )}
 
                 {!verificandoHorario && conflito?.temConflito && (
-                  <div className="mt-1 text-sm text-red-600 space-y-1">
-                    <p className="flex items-center gap-1"><XIcon className="h-3 w-3" /> {conflito.motivo}</p>
-                    {(conflito as any)?.horariosAlternativos && (conflito as any).horariosAlternativos.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Horários sugeridos: {(conflito as any).horariosAlternativos.join(", ")}
-                      </p>
-                    )}
-                  </div>
+                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                    <XIcon className="h-3 w-3" /> {conflito.motivo}
+                  </p>
                 )}
                       </div>
                             </div>
