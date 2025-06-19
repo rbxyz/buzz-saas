@@ -1,8 +1,11 @@
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
+import jwt from "jsonwebtoken";
 
 import { db } from "@/server/db";
+import { users } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * CONTEXT
@@ -60,18 +63,59 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * Adapte esse middleware com seu sistema de autenticação, por exemplo:
  * ctx.session ou token.
  */
+interface UserPayload {
+  id: number;
+  email: string;
+  role: "superadmin" | "admin";
+}
+
 const isAuthed = t.middleware(async ({ ctx, next }) => {
-  // Exemplo básico: verifique se existe algum token/header obrigatório
-  if (!ctx.headers.get("authorization")) {
-    throw new Error("Not authenticated");
+  const authHeader = ctx.headers.get("authorization");
+
+  if (!authHeader) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Token não fornecido." });
   }
 
-  return next({
-    ctx: {
-      ...ctx,
-      user: { id: "placeholder" }, // substitua com lógica real
-    },
-  });
+  try {
+    const decoded = jwt.verify(
+      authHeader,
+      process.env.JWT_SECRET ?? "your-secret-key",
+    ) as UserPayload;
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, decoded.id),
+    });
+
+    if (!user || !user.active) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Usuário inválido ou inativo.",
+      });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: `Token inválido: ${error.message}`,
+      });
+    }
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Erro ao autenticar.",
+    });
+  }
 });
 
 export const protectedProcedure = t.procedure.use(timingMiddleware).use(isAuthed);
