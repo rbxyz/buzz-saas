@@ -96,6 +96,7 @@ export class AIService {
       const context = await this.getBusinessContext(telefone)
 
       if (!context) {
+        console.error("❌ [AI-SERVICE] Contexto de negócio não pôde ser carregado.")
         return {
           message: "Desculpe, não consegui carregar as informações da barbearia. Tente novamente mais tarde.",
         }
@@ -158,18 +159,20 @@ export class AIService {
       console.log(`🤖 [AI-SERVICE] Enviando para IA: ${messagesForAI.length} mensagens`)
 
       // Gerar resposta da IA
+      console.log("⏳ [AI-SERVICE] Chamando a API da IA (generateText)...")
       const result = await generateText({
         model: this.model,
         messages: messagesForAI,
         temperature: 0.9,
         maxTokens: 1200,
       })
-
-      console.log(`✅ [AI-SERVICE] Resposta recebida (${result.text.length} chars)`)
+      console.log("✅ [AI-SERVICE] Resposta da IA recebida.")
+      console.log("🤖 [AI-SERVICE] Resposta crua da IA:", result.text)
 
       // Analisar e processar a resposta
       const aiResponse = await this.parseAndProcessResponse(result.text, message, telefone, context)
 
+      console.log("💬 [AI-SERVICE] Resposta final gerada:", aiResponse)
       return aiResponse
     } catch (error) {
       console.error("💥 [AI-SERVICE] Erro no processamento da IA:", error)
@@ -189,6 +192,10 @@ export class AIService {
 
       // 1. Buscar serviços e configuração
       const servicosResponse = await fetch(`${this.baseUrl}/api/webhooks/listar-servicos`)
+      if (!servicosResponse.ok) {
+        const errorText = await servicosResponse.text()
+        throw new Error(`Erro ao buscar serviços: ${servicosResponse.statusText} - ${errorText}`)
+      }
       const servicosData = (await servicosResponse.json()) as {
         success: boolean
         servicos: ServicoConfigurado[]
@@ -199,9 +206,14 @@ export class AIService {
       if (!servicosData.success) {
         throw new Error(`Erro ao buscar serviços: ${servicosData.error ?? "Erro desconhecido"}`)
       }
+      console.log("✅ [AI-SERVICE] Contexto de serviços carregado.")
 
       // 2. Buscar cliente e agendamentos
       const clienteResponse = await fetch(`${this.baseUrl}/api/webhooks/buscar-cliente?telefone=${telefoneClean}`)
+      if (!clienteResponse.ok) {
+        const errorText = await clienteResponse.text()
+        throw new Error(`Erro ao buscar cliente: ${clienteResponse.statusText} - ${errorText}`)
+      }
       const clienteData = (await clienteResponse.json()) as {
         success: boolean
         cliente?: Clientes
@@ -212,6 +224,7 @@ export class AIService {
       if (!clienteData.success) {
         throw new Error(`Erro ao buscar cliente: ${clienteData.error ?? "Erro desconhecido"}`)
       }
+      console.log("✅ [AI-SERVICE] Contexto de cliente e agendamentos carregado.")
 
       // 3. Buscar histórico da conversa
       const conversation = await db
@@ -240,6 +253,8 @@ export class AIService {
             content: msg.content ?? "", // Garantir que content nunca é undefined
           }))
       }
+
+      console.log("✅ [AI-SERVICE] Histórico da conversa carregado.")
 
       console.log(`✅ [AI-SERVICE] Contexto carregado via webhooks:`, {
         servicos: servicosData.servicos.length,
@@ -1071,6 +1086,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     telefone: string,
     _context: AgendamentoContext
   ): Promise<AIResponse> {
+    console.log("🔄 [AI-ACTION] Processando verificação de horário:", data)
     try {
       const { servico, data: dataAg, horario } = data as { servico: string; data: string; horario: string }
       const dadosVerificar = this.combinarDadosComContexto({ servico, data: dataAg, horario }, telefone)
@@ -1092,7 +1108,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
         return { message: resposta }
       }
     } catch (error) {
-      console.error("Erro ao verificar horário:", error)
+      console.error("💥 [AI-ACTION] Erro ao verificar horário:", error)
       return { message: "Tive um problema ao verificar a disponibilidade. Pode tentar novamente?" }
     }
   }
@@ -1103,6 +1119,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     context: AgendamentoContext,
     _userMessage: string
   ): Promise<AIResponse> {
+    console.log("🔄 [AI-ACTION] Processando agendamento direto:", data)
     try {
       const dadosAgendamento = this.combinarDadosComContexto(data as DadosAgendamentoExtraidos, telefone)
 
@@ -1134,7 +1151,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
         }
       }
     } catch (error) {
-      console.error("Erro ao agendar direto:", error)
+      console.error("💥 [AI-ACTION] Erro ao agendar direto:", error)
       return { message: "Tive um problema ao confirmar o agendamento. Vou conectar você com nossa equipe." }
     }
   }
@@ -1178,14 +1195,15 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   }
 
   private async processListarHorarios(data: unknown, telefone: string): Promise<AIResponse> {
+    console.log("🔄 [AI-ACTION] Processando listagem de horários:", data)
     try {
       const { data: dataAg, servico } = data as { data: string; servico: string }
       const horariosDisponiveis = await this.formatarHorariosDisponiveisViaWebhook(dataAg, servico)
       this.atualizarContextoAgendamento(telefone, { data: dataAg, servico })
       return { message: horariosDisponiveis }
     } catch (error) {
-      console.error("Erro ao listar horários:", error)
-      return { message: "Tive um problema ao consultar os horários. Pode me dizer que dia prefere?" }
+      console.error("💥 [AI-ACTION] Erro ao listar horários:", error)
+      return { message: "Tive um problema ao buscar os horários. Tente novamente." }
     }
   }
 
