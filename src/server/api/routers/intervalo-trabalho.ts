@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { createTRPCRouter, publicProcedure } from "../trpc"
+import { createTRPCRouter, protectedProcedure } from "../trpc"
 import { db } from "@/server/db"
 import { intervalosTrabalho } from "@/server/db/schema"
 import { eq, and } from "drizzle-orm"
@@ -28,9 +28,14 @@ const diasSemanaReverseMap = {
 const diasSemanaEnumZod = z.enum(["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"])
 
 export const intervalosTrabalhoRouter = createTRPCRouter({
-  listar: publicProcedure.query(async () => {
+  listar: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user.id
+
     const intervalos = await db.query.intervalosTrabalho.findMany({
-      where: eq(intervalosTrabalho.ativo, true),
+      where: and(
+        eq(intervalosTrabalho.userId, userId),
+        eq(intervalosTrabalho.ativo, true)
+      ),
       orderBy: [intervalosTrabalho.diaSemana, intervalosTrabalho.horaInicio],
     })
 
@@ -42,7 +47,7 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
     }))
   }),
 
-  salvarIntervalos: publicProcedure
+  salvarIntervalos: protectedProcedure
     .input(
       z.object({
         diaSemana: diasSemanaEnumZod,
@@ -55,26 +60,30 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
         ),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
-        console.log("💾 Salvando intervalos para:", input.diaSemana)
+        const userId = ctx.user.id
+        console.log("💾 Salvando intervalos para userId:", userId, "dia:", input.diaSemana)
 
         // Converter o nome do dia para número
         const diaSemanaNumero = diasSemanaMap[input.diaSemana]
 
         console.log("🔢 Dia da semana convertido:", input.diaSemana, "->", diaSemanaNumero)
 
-        // Primeiro, desativar todos os intervalos existentes para este dia
+        // Primeiro, desativar todos os intervalos existentes para este dia e usuário
         await db
           .update(intervalosTrabalho)
           .set({ ativo: false, updatedAt: new Date() })
-          .where(eq(intervalosTrabalho.diaSemana, diaSemanaNumero))
+          .where(and(
+            eq(intervalosTrabalho.userId, userId),
+            eq(intervalosTrabalho.diaSemana, diaSemanaNumero)
+          ))
 
         // Depois, criar os novos intervalos
         if (input.intervalos.length > 0) {
           await db.insert(intervalosTrabalho).values(
             input.intervalos.map((intervalo) => ({
-              userId: 1, // TODO: Pegar do contexto de autenticação
+              userId,
               diaSemana: diaSemanaNumero,
               horaInicio: intervalo.horaInicio,
               horaFim: intervalo.horaFim,
@@ -90,37 +99,51 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
       }
     }),
 
-  obterPorDia: publicProcedure.input(z.object({ diaSemana: diasSemanaEnumZod })).query(async ({ input }) => {
-    const diaSemanaNumero = diasSemanaMap[input.diaSemana]
+  obterPorDia: protectedProcedure
+    .input(z.object({ diaSemana: diasSemanaEnumZod }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user.id
+      const diaSemanaNumero = diasSemanaMap[input.diaSemana]
 
-    const intervalos = await db.query.intervalosTrabalho.findMany({
-      where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
-      orderBy: [intervalosTrabalho.horaInicio],
-    })
+      const intervalos = await db.query.intervalosTrabalho.findMany({
+        where: and(
+          eq(intervalosTrabalho.userId, userId),
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true)
+        ),
+        orderBy: [intervalosTrabalho.horaInicio],
+      })
 
-    return intervalos.map((intervalo) => ({
-      ...intervalo,
-      diaSemana: input.diaSemana,
-      turno: "manha" as const, // Valor padrão para compatibilidade
-    }))
-  }),
+      return intervalos.map((intervalo) => ({
+        ...intervalo,
+        diaSemana: input.diaSemana,
+        turno: "manha" as const, // Valor padrão para compatibilidade
+      }))
+    }),
 
-  listarPorDia: publicProcedure.input(z.object({ diaSemana: diasSemanaEnumZod })).query(async ({ input }) => {
-    const diaSemanaNumero = diasSemanaMap[input.diaSemana]
+  listarPorDia: protectedProcedure
+    .input(z.object({ diaSemana: diasSemanaEnumZod }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user.id
+      const diaSemanaNumero = diasSemanaMap[input.diaSemana]
 
-    const intervalos = await db.query.intervalosTrabalho.findMany({
-      where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
-      orderBy: [intervalosTrabalho.horaInicio],
-    })
+      const intervalos = await db.query.intervalosTrabalho.findMany({
+        where: and(
+          eq(intervalosTrabalho.userId, userId),
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true)
+        ),
+        orderBy: [intervalosTrabalho.horaInicio],
+      })
 
-    return intervalos.map((intervalo) => ({
-      ...intervalo,
-      diaSemana: input.diaSemana,
-      turno: "manha" as const,
-    }))
-  }),
+      return intervalos.map((intervalo) => ({
+        ...intervalo,
+        diaSemana: input.diaSemana,
+        turno: "manha" as const,
+      }))
+    }),
 
-  criar: publicProcedure
+  criar: protectedProcedure
     .input(
       z.object({
         diaSemana: diasSemanaEnumZod,
@@ -128,12 +151,17 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
         horaFim: z.string(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id
       const diaSemanaNumero = diasSemanaMap[input.diaSemana]
 
       // Validar se não há sobreposição
       const intervalosExistentes = await db.query.intervalosTrabalho.findMany({
-        where: and(eq(intervalosTrabalho.diaSemana, diaSemanaNumero), eq(intervalosTrabalho.ativo, true)),
+        where: and(
+          eq(intervalosTrabalho.userId, userId),
+          eq(intervalosTrabalho.diaSemana, diaSemanaNumero),
+          eq(intervalosTrabalho.ativo, true)
+        ),
       })
 
       // Verificar sobreposição
@@ -153,7 +181,7 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
       const result = await db
         .insert(intervalosTrabalho)
         .values({
-          userId: 1, // TODO: Pegar do contexto de autenticação
+          userId,
           diaSemana: diaSemanaNumero,
           horaInicio: input.horaInicio,
           horaFim: input.horaFim,
@@ -163,7 +191,7 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
       return result[0]
     }),
 
-  atualizar: publicProcedure
+  atualizar: protectedProcedure
     .input(
       z.object({
         id: z.number(),
@@ -172,7 +200,8 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
         ativo: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id
       const { id, ...dadosAtualizar } = input
 
       const result = await db
@@ -181,18 +210,28 @@ export const intervalosTrabalhoRouter = createTRPCRouter({
           ...dadosAtualizar,
           updatedAt: new Date(),
         })
-        .where(eq(intervalosTrabalho.id, id))
+        .where(and(
+          eq(intervalosTrabalho.id, id),
+          eq(intervalosTrabalho.userId, userId)
+        ))
         .returning()
 
       return result[0]
     }),
 
-  remover: publicProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
-    await db
-      .update(intervalosTrabalho)
-      .set({ ativo: false, updatedAt: new Date() })
-      .where(eq(intervalosTrabalho.id, input.id))
+  remover: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id
 
-    return { success: true }
-  }),
+      await db
+        .update(intervalosTrabalho)
+        .set({ ativo: false, updatedAt: new Date() })
+        .where(and(
+          eq(intervalosTrabalho.id, input.id),
+          eq(intervalosTrabalho.userId, userId)
+        ))
+
+      return { success: true }
+    }),
 })

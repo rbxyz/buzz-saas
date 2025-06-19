@@ -95,7 +95,9 @@ export default function AgendamentosPage() {
       },
     );
 
-  const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
+  const { data: config } =
+    api.configuracao.obterConfiguracaoCompleta.useQuery();
+  const servicosDisponiveis = config?.servicos;
 
   const { data: conflito, isFetching: verificandoHorario } = api.agendamento.verificarConflito.useQuery(
     {
@@ -138,10 +140,33 @@ export default function AgendamentosPage() {
       });
     },
     onError: (error) => {
-      toast.error("Erro ao criar agendamento", {
-        description: error.message,
-        duration: 5000,
-      });
+      // Tratar diferentes tipos de erro com mensagens específicas
+      if (error.message.includes("Fora do horário de funcionamento")) {
+        toast.error("⏰ Horário não disponível", {
+          description: "Este horário está fora do funcionamento do estabelecimento. Verifique os horários de atendimento.",
+          duration: 5000,
+        });
+      } else if (error.message.includes("dia fechado")) {
+        toast.error("📅 Estabelecimento fechado", {
+          description: "O estabelecimento está fechado neste dia. Escolha uma data em que esteja funcionando.",
+          duration: 5000,
+        });
+      } else if (error.message.includes("já ocupado")) {
+        toast.error("🚫 Horário ocupado", {
+          description: "Este horário já está ocupado. Escolha outro horário disponível.",
+          duration: 5000,
+        });
+      } else if (error.message.includes("Serviço") && error.message.includes("não encontrado")) {
+        toast.error("✂️ Serviço indisponível", {
+          description: "O serviço selecionado não está disponível. Verifique suas configurações.",
+          duration: 5000,
+        });
+      } else {
+        toast.error("❌ Erro ao criar agendamento", {
+          description: error.message,
+          duration: 5000,
+        });
+      }
     },
   });
 
@@ -490,7 +515,7 @@ export default function AgendamentosPage() {
                            )}
                            <Select value={agendamento.status ?? ""} onValueChange={(newStatus) => { atualizarStatus.mutate({ id: agendamento.id, status: newStatus as "agendado" | "cancelado" | "concluido", }); }}>
                               <SelectTrigger className="w-auto h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="bg-background">
                                   <SelectItem value="agendado">Agendado</SelectItem>
                                   <SelectItem value="concluido">Concluído</SelectItem>
                                   <SelectItem value="cancelado">Cancelado</SelectItem>

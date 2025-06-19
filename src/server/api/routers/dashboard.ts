@@ -1,5 +1,5 @@
-import { createTRPCRouter, publicProcedure } from "@/server/api/trpc"
-import { agendamentos, clientes } from "@/server/db/schema"
+import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc"
+import { agendamentos, clientes, conversations, messages } from "@/server/db/schema"
 import { eq, gte, lte, and, desc, sql } from "drizzle-orm"
 import dayjs from "dayjs"
 
@@ -14,7 +14,8 @@ type FaturamentoResult = { total: number | null }
 
 export const dashboardRouter = createTRPCRouter({
   // Total de agendamentos nos últimos 30 dias por dia (para gráfico)
-  getAgendamentosUltimos30Dias: publicProcedure.query(async ({ ctx }) => {
+  getAgendamentosUltimos30Dias: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user.id;
     const dataLimite = dayjs().subtract(30, "day").toDate()
 
     const agendamentosPorDia = await ctx.db
@@ -23,7 +24,10 @@ export const dashboardRouter = createTRPCRouter({
         total: sql`COUNT(*)`,
       })
       .from(agendamentos)
-      .where(gte(agendamentos.dataHora, dataLimite))
+      .where(and(
+        eq(agendamentos.userId, userId),
+        gte(agendamentos.dataHora, dataLimite)
+      ))
       .groupBy(sql`DATE("data_hora")`)
       .orderBy(sql`DATE("data_hora")`)
 
@@ -31,7 +35,8 @@ export const dashboardRouter = createTRPCRouter({
   }),
 
   // Total de agendamentos últimos 10 dias para overview gráfico
-  getOverviewData: publicProcedure.query(async ({ ctx }) => {
+  getOverviewData: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user.id;
     const dataLimite = dayjs().subtract(9, "day").startOf("day").toDate()
 
     const agendamentosPorDia = (await ctx.db
@@ -40,7 +45,10 @@ export const dashboardRouter = createTRPCRouter({
         total: sql`COUNT(*)`,
       })
       .from(agendamentos)
-      .where(gte(agendamentos.dataHora, dataLimite))
+      .where(and(
+        eq(agendamentos.userId, userId),
+        gte(agendamentos.dataHora, dataLimite)
+      ))
       .groupBy(sql`DATE("data_hora")`)
       .orderBy(sql`DATE("data_hora")`)) as AgendamentoPorDia[]
 
@@ -65,8 +73,9 @@ export const dashboardRouter = createTRPCRouter({
   }),
 
   // Últimos 5 agendamentos com dados do cliente
-  getUltimosAgendamentos: publicProcedure.query(async ({ ctx }) => {
+  getUltimosAgendamentos: protectedProcedure.query(async ({ ctx }) => {
     try {
+      const userId = ctx.user.id;
       const agendamentosRecentes = await ctx.db
         .select({
           id: agendamentos.id,
@@ -77,6 +86,7 @@ export const dashboardRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+        .where(eq(agendamentos.userId, userId))
         .orderBy(desc(agendamentos.dataHora))
         .limit(5)
 
@@ -95,7 +105,7 @@ export const dashboardRouter = createTRPCRouter({
   }),
 
   // Estatísticas gerais com cálculos de variações percentuais entre períodos
-  getStats: publicProcedure.query(async ({ ctx }) => {
+  getStats: protectedProcedure.query(async ({ ctx }) => {
     function toNumber(value: unknown): number {
       if (typeof value === "string") return Number.parseFloat(value)
       if (typeof value === "number") return value
@@ -103,6 +113,8 @@ export const dashboardRouter = createTRPCRouter({
     }
 
     try {
+      const userId = ctx.user.id;
+
       // Datas para períodos atuais e anteriores
       const hojeInicio = dayjs().startOf("day").toDate()
       const hojeFim = dayjs().endOf("day").toDate()
@@ -113,8 +125,17 @@ export const dashboardRouter = createTRPCRouter({
       const quatorzeDiasAtras = dayjs().subtract(14, "day").startOf("day").toDate()
 
       // Contagem total de clientes e agendamentos
-      const totalClientesRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(clientes)) as CountResult[]
-      const totalAgendamentosRes = (await ctx.db.select({ count: sql`COUNT(*)` }).from(agendamentos)) as CountResult[]
+      const totalClientesRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(clientes)
+        .where(eq(clientes.userId, userId))
+      ) as CountResult[]
+
+      const totalAgendamentosRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(agendamentos)
+        .where(eq(agendamentos.userId, userId))
+      ) as CountResult[]
 
       // Agendamentos hoje (status "agendado")
       const agendamentosHojeRes = (await ctx.db
@@ -122,6 +143,7 @@ export const dashboardRouter = createTRPCRouter({
         .from(agendamentos)
         .where(
           and(
+            eq(agendamentos.userId, userId),
             gte(agendamentos.dataHora, hojeInicio),
             lte(agendamentos.dataHora, hojeFim),
             eq(agendamentos.status, "agendado"),
@@ -134,6 +156,7 @@ export const dashboardRouter = createTRPCRouter({
         .from(agendamentos)
         .where(
           and(
+            eq(agendamentos.userId, userId),
             gte(agendamentos.dataHora, ontemInicio),
             lte(agendamentos.dataHora, ontemFim),
             eq(agendamentos.status, "agendado"),
@@ -144,14 +167,50 @@ export const dashboardRouter = createTRPCRouter({
       const novosClientesRes = (await ctx.db
         .select({ count: sql`COUNT(*)` })
         .from(clientes)
-        .where(gte(clientes.createdAt, seteDiasAtras))) as CountResult[]
+        .where(and(
+          eq(clientes.userId, userId),
+          gte(clientes.createdAt, seteDiasAtras)
+        ))
+      ) as CountResult[]
 
       // Novos clientes 7 dias anteriores (para comparação)
       const novosClientesSemanaAnteriorRes = (await ctx.db
         .select({ count: sql`COUNT(*)` })
         .from(clientes)
         .where(
-          and(gte(clientes.createdAt, quatorzeDiasAtras), lte(clientes.createdAt, seteDiasAtras)),
+          and(
+            eq(clientes.userId, userId),
+            gte(clientes.createdAt, quatorzeDiasAtras),
+            lte(clientes.createdAt, seteDiasAtras)
+          ),
+        )) as CountResult[]
+
+      // 📱 MENSAGENS WHATSAPP RECEBIDAS HOJE
+      const mensagensHojeRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(messages)
+        .leftJoin(conversations, eq(messages.conversationId, conversations.id))
+        .where(
+          and(
+            eq(conversations.userId, userId),
+            eq(messages.role, "user"), // Mensagens de clientes (não do sistema/bot)
+            gte(messages.timestamp, hojeInicio),
+            lte(messages.timestamp, hojeFim),
+          ),
+        )) as CountResult[]
+
+      // Mensagens WhatsApp ontem (para comparação)
+      const mensagensOntemRes = (await ctx.db
+        .select({ count: sql`COUNT(*)` })
+        .from(messages)
+        .leftJoin(conversations, eq(messages.conversationId, conversations.id))
+        .where(
+          and(
+            eq(conversations.userId, userId),
+            eq(messages.role, "user"),
+            gte(messages.timestamp, ontemInicio),
+            lte(messages.timestamp, ontemFim),
+          ),
         )) as CountResult[]
 
       // Faturamento últimos 7 dias (status "concluido") - CORRIGIDO
@@ -162,7 +221,11 @@ export const dashboardRouter = createTRPCRouter({
         })
         .from(agendamentos)
         .where(
-          and(gte(agendamentos.dataHora, seteDiasAtras), eq(agendamentos.status, "concluido")),
+          and(
+            eq(agendamentos.userId, userId),
+            gte(agendamentos.dataHora, seteDiasAtras),
+            eq(agendamentos.status, "concluido")
+          ),
         )) as FaturamentoResult[]
 
       // Faturamento 7 dias anteriores (status "concluido") para comparação - CORRIGIDO
@@ -173,6 +236,7 @@ export const dashboardRouter = createTRPCRouter({
         .from(agendamentos)
         .where(
           and(
+            eq(agendamentos.userId, userId),
             gte(agendamentos.dataHora, quatorzeDiasAtras),
             lte(agendamentos.dataHora, seteDiasAtras),
             eq(agendamentos.status, "concluido"),
@@ -186,6 +250,8 @@ export const dashboardRouter = createTRPCRouter({
       const agendamentosOntem = toNumber(agendamentosOntemRes?.[0]?.count)
       const novosClientes = toNumber(novosClientesRes?.[0]?.count)
       const novosClientesSemanaAnterior = toNumber(novosClientesSemanaAnteriorRes?.[0]?.count)
+      const mensagensWhatsApp = toNumber(mensagensHojeRes?.[0]?.count)
+      const mensagensOntem = toNumber(mensagensOntemRes?.[0]?.count)
       const faturamentoEstimado = faturamento7DiasRes?.[0]?.total ?? 0
       const faturamentoSemanaAnterior = faturamento7DiasAnterioresRes?.[0]?.total ?? 0
 
@@ -199,6 +265,7 @@ export const dashboardRouter = createTRPCRouter({
 
       const variacaoAgendamentos = calcPercentual(agendamentosHoje, agendamentosOntem)
       const variacaoNovosClientes = calcPercentual(novosClientes, novosClientesSemanaAnterior)
+      const variacaoMensagens = calcPercentual(mensagensWhatsApp, mensagensOntem)
       const variacaoFaturamento = calcPercentual(faturamentoEstimado, faturamentoSemanaAnterior)
 
       // Contagem de agendamentos por status
@@ -208,6 +275,7 @@ export const dashboardRouter = createTRPCRouter({
           count: sql`COUNT(*)`,
         })
         .from(agendamentos)
+        .where(eq(agendamentos.userId, userId))
         .groupBy(agendamentos.status)) as StatusCountResult[]
 
       const statusMap: Record<string, number> = {}
@@ -221,12 +289,13 @@ export const dashboardRouter = createTRPCRouter({
         agendamentosPorStatus: statusMap,
         agendamentosHoje,
         novosClientes,
-        mensagensWhatsApp: 0, // Pode implementar depois a contagem real
+        mensagensWhatsApp, // ✅ Agora implementado!
         faturamentoEstimado,
 
         // Variações percentuais para o frontend exibir
         variacaoAgendamentos,
         variacaoNovosClientes,
+        variacaoMensagens, // ✅ Nova variação adicionada
         variacaoFaturamento,
       }
     } catch (error) {
@@ -241,6 +310,7 @@ export const dashboardRouter = createTRPCRouter({
         faturamentoEstimado: 0,
         variacaoAgendamentos: 0,
         variacaoNovosClientes: 0,
+        variacaoMensagens: 0,
         variacaoFaturamento: 0,
       }
     }

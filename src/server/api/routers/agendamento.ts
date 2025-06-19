@@ -636,7 +636,7 @@ Obrigado pela preferência! 💈✨`;
   updateStatus: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: z.number(),
         status: z.enum(["agendado", "cancelado", "concluido"]),
       }),
     )
@@ -676,7 +676,7 @@ Obrigado pela preferência! 💈✨`;
   delete: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: z.number(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -713,7 +713,7 @@ Obrigado pela preferência! 💈✨`;
   cancelar: protectedProcedure
     .input(
       z.object({
-        agendamentoId: z.string(),
+        agendamentoId: z.number(),
         motivo: z.string().optional(),
       }),
     )
@@ -785,7 +785,7 @@ Obrigado pela preferência! 💈✨`;
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: z.number(),
         clienteId: z.number(),
         data: z.string(),
         horario: z.string(),

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MessageSquare, TrendingUp, Users } from "lucide-react";
-import { trpc } from "@/utils/trpc";
+import { api } from "@/trpc/react";
 
 export function DashboardStats() {
   // Query otimizada com cache de 30 segundos
-  const { data, isLoading, error, isStale } = trpc.dashboard.getStats.useQuery(
+  const { data, isLoading, error, isStale } = api.dashboard.getStats.useQuery(
     undefined,
     {
       staleTime: 30 * 1000, // 30 segundos
@@ -25,6 +25,7 @@ export function DashboardStats() {
 
   const [variacaoAgendamentos, setVariacaoAgendamentos] = useState(0);
   const [variacaoNovosClientes, setVariacaoNovosClientes] = useState(0);
+  const [variacaoMensagens, setVariacaoMensagens] = useState(0);
   const [variacaoFaturamento, setVariacaoFaturamento] = useState(0);
 
   // Atualizar estados locais quando os dados do backend chegarem
@@ -38,6 +39,7 @@ export function DashboardStats() {
 
     setVariacaoAgendamentos(data.variacaoAgendamentos ?? 0);
     setVariacaoNovosClientes(data.variacaoNovosClientes ?? 0);
+    setVariacaoMensagens(data.variacaoMensagens ?? 0);
     setVariacaoFaturamento(data.variacaoFaturamento ?? 0);
   }, [data]);
 
@@ -80,8 +82,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">{agendamentosHoje}</div>
           <p className="text-muted-foreground text-xs">
-            {variacaoAgendamentos >= 0}
-            Agendamentos para hoje
+            {variacaoAgendamentos >= 0 ? "+" : ""}
+            {variacaoAgendamentos.toFixed(1)}% vs ontem
           </p>
         </CardContent>
       </Card>
@@ -95,7 +97,7 @@ export function DashboardStats() {
           <div className="text-2xl font-bold">+{novosClientes}</div>
           <p className="text-muted-foreground text-xs">
             {variacaoNovosClientes >= 0 ? "+" : ""}
-            {variacaoNovosClientes.toFixed(1)}% em relação à semana passada
+            {variacaoNovosClientes.toFixed(1)}% vs semana passada
           </p>
         </CardContent>
       </Card>
@@ -110,7 +112,8 @@ export function DashboardStats() {
         <CardContent>
           <div className="text-2xl font-bold">{mensagensWhatsApp}</div>
           <p className="text-muted-foreground text-xs">
-            Sistema em desenvolvimento
+            {variacaoMensagens >= 0 ? "+" : ""}
+            {variacaoMensagens.toFixed(1)}% vs ontem
           </p>
         </CardContent>
       </Card>
@@ -128,7 +131,7 @@ export function DashboardStats() {
           </div>
           <p className="text-muted-foreground text-xs">
             {variacaoFaturamento >= 0 ? "+" : ""}
-            {variacaoFaturamento.toFixed(1)}% em relação à semana passada
+            {variacaoFaturamento.toFixed(1)}% vs semana passada
           </p>
         </CardContent>
       </Card>

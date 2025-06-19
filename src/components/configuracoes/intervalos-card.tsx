@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/trpc/react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Plus, Trash2, Clock } from "lucide-react";
 
 const DIAS_SEMANA = [
@@ -57,18 +57,11 @@ export function IntervalosCard() {
 
   const salvarIntervalos = api.intervalosTrabalho.salvarIntervalos.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Sucesso!",
-        description: "Intervalos salvos com sucesso!",
-      });
+      toast.success("Intervalos salvos com sucesso!");
       void refetch();
     },
     onError: (error) => {
-      toast({
-        title: "Erro!",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error(error.message);
     },
   });
 
@@ -95,12 +88,7 @@ export function IntervalosCard() {
 
   const handleSalvar = () => {
     if (intervalos.length === 0) {
-      toast({
-        title: "Aviso!",
-        description:
-          "Adicione pelo menos um intervalo ou deixe vazio para marcar como fechado",
-        variant: "default",
-      });
+      toast.info("Adicione pelo menos um intervalo ou deixe vazio para marcar como fechado");
     }
 
     salvarIntervalos.mutate({

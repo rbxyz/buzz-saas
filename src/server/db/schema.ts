@@ -167,7 +167,7 @@ export const intervalosTrabalho = pgTable(
 export const agendamentos = pgTable(
   "agendamentos",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: serial("id").primaryKey(),
     userId: integer("user_id")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull()

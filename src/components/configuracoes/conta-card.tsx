@@ -13,45 +13,39 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { trpc } from "@/utils/trpc";
-import { toast } from "@/hooks/use-toast";
-import { Building2, Phone, MapPin } from "lucide-react";
+import { api } from "@/trpc/react";
+import { toast } from "sonner";
+import { Building2, Phone, MapPin, Loader2 } from "lucide-react";
 
 export function ContaCard() {
   const [nomeEmpresa, setNomeEmpresa] = useState("");
   const [telefone, setTelefone] = useState("");
   const [endereco, setEndereco] = useState("");
 
+  const utils = api.useContext();
+
   // Buscando configs para preencher dados iniciais
-  const { data: configs, refetch } = trpc.configuracao.listar.useQuery();
+  const { data: configs, isLoading } = api.configuracao.listar.useQuery();
 
   // Mutation para atualizar configuração geral
-  const mutation = trpc.configuracao.atualizarConfiguracao.useMutation({
+  const mutation = api.configuracao.atualizarConfiguracao.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Sucesso!",
-        description: "Configuração atualizada com sucesso!",
-      });
-      void refetch();
+      toast.success("Informações da empresa atualizadas com sucesso!");
+      void utils.configuracao.listar.invalidate();
     },
     onError: (error) => {
-      toast({
-        title: "Erro!",
-        description: error.message ?? "Erro ao atualizar a configuração.",
-        variant: "destructive",
+      toast.error("Erro ao atualizar informações", {
+        description: error.message,
       });
     },
   });
 
   function handleSalvar() {
-    const payload = {
-      id: configs?.id ?? null,
+    mutation.mutate({
       nomeEmpresa,
       telefone,
       endereco,
-    };
-
-    mutation.mutate(payload);
+    });
   }
 
   function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -75,17 +69,23 @@ export function ContaCard() {
     setEndereco(configs.endereco ?? "");
   }, [configs]);
 
+  if (isLoading) {
+    return (
+      <Card className="flex h-full min-h-[300px] w-full items-center justify-center border-gray-200 shadow-sm">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full border-gray-200 shadow-sm">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center gap-3 text-lg">
-          <div className="rounded-lg bg-gray-100 p-2">
-            <Building2 className="h-5 w-5 text-gray-600" />
-          </div>
+        <CardTitle className="text-foreground flex items-center gap-3 text-lg">
+          <Building2 className="h-5 w-5" />
           Informações da Empresa
         </CardTitle>
-        <CardDescription className="text-sm text-gray-600">
-          Gerencie as informações básicas da sua empresa
+        <CardDescription>
+          Gerencie as informações básicas da sua empresa.
         </CardDescription>
       </CardHeader>
 
@@ -96,7 +96,7 @@ export function ContaCard() {
               htmlFor="nomeEmpresa"
               className="flex items-center gap-2 text-sm font-medium"
             >
-              <Building2 className="h-4 w-4 text-gray-500" />
+              <Building2 className="h-4 w-4 text-muted-foreground" />
               Nome da Empresa
             </Label>
             <Input
@@ -104,7 +104,6 @@ export function ContaCard() {
               placeholder="Ex: Barbearia do João"
               value={nomeEmpresa}
               onChange={(e) => setNomeEmpresa(e.target.value)}
-              className="transition-all duration-200"
             />
           </div>
 
@@ -113,7 +112,7 @@ export function ContaCard() {
               htmlFor="telefone"
               className="flex items-center gap-2 text-sm font-medium"
             >
-              <Phone className="h-4 w-4 text-gray-500" />
+              <Phone className="h-4 w-4 text-muted-foreground" />
               Telefone
             </Label>
             <Input
@@ -121,7 +120,6 @@ export function ContaCard() {
               placeholder="(11) 91234-5678"
               value={telefone}
               onChange={handleTelefoneChange}
-              className="transition-all duration-200"
             />
           </div>
         </div>
@@ -131,7 +129,7 @@ export function ContaCard() {
             htmlFor="endereco"
             className="flex items-center gap-2 text-sm font-medium"
           >
-            <MapPin className="h-4 w-4 text-gray-500" />
+            <MapPin className="h-4 w-4 text-muted-foreground" />
             Endereço
           </Label>
           <Textarea
@@ -139,7 +137,7 @@ export function ContaCard() {
             placeholder="Rua Exemplo, 123 - Bairro - Cidade"
             value={endereco}
             onChange={(e) => setEndereco(e.target.value)}
-            className="min-h-[80px] transition-all duration-200"
+            className="min-h-[80px]"
           />
         </div>
 
@@ -149,7 +147,10 @@ export function ContaCard() {
             disabled={mutation.isPending}
             className="w-full sm:w-auto"
           >
-            {mutation.isPending ? "Salvando..." : "Salvar Informações"}
+            {mutation.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Salvar Informações
           </Button>
         </div>
       </CardContent>
