@@ -86,7 +86,7 @@ const isAuthed = t.middleware(async ({ ctx, next }) => {
       where: eq(users.id, decoded.id),
     });
 
-    if (!user || !user.active) {
+    if (!user?.active) {
       throw new TRPCError({
         code: "UNAUTHORIZED",
         message: "Usuário inválido ou inativo.",
