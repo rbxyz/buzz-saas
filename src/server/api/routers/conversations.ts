@@ -14,7 +14,7 @@ export const conversationsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { status, busca, limite } = input;
-      const userId = Number.parseInt(ctx.user.id);
+      const userId = ctx.user.id;
 
       const conditions: (SQL | undefined)[] = [eq(conversations.userId, userId)];
       if (status) {
@@ -70,7 +70,7 @@ export const conversationsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const telefoneClean = input.telefone.replace(/\D/g, "");
-      const userId = Number.parseInt(ctx.user.id);
+      const userId = ctx.user.id;
 
       const conversa = await ctx.db.query.conversations.findFirst({
         where: and(eq(conversations.telefone, telefoneClean), eq(conversations.userId, userId)),
@@ -107,7 +107,7 @@ export const conversationsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { telefone, clienteId } = input;
-      const userId = Number.parseInt(ctx.user.id);
+      const userId = ctx.user.id;
       const telefoneClean = telefone.replace(/\D/g, "");
 
       const existingConversation = await ctx.db.query.conversations.findFirst({
