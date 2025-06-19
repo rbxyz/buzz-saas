@@ -148,7 +148,7 @@ export const agendamentoRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = parseInt(ctx.user.id, 10);
+      const userId = ctx.user.id;
       if (isNaN(userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -645,7 +645,7 @@ Obrigado pela preferência! 💈✨`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = parseInt(ctx.user.id, 10);
+      const userId = ctx.user.id;
       if (isNaN(userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -684,7 +684,7 @@ Obrigado pela preferência! 💈✨`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = parseInt(ctx.user.id, 10);
+      const userId = ctx.user.id;
       if (isNaN(userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -722,7 +722,7 @@ Obrigado pela preferência! 💈✨`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = parseInt(ctx.user.id, 10);
+      const userId = ctx.user.id;
       if (isNaN(userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
@@ -799,7 +799,7 @@ Obrigado pela preferência! 💈✨`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const userId = parseInt(ctx.user.id, 10);
+      const userId = ctx.user.id;
       if (isNaN(userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
