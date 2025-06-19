@@ -35,6 +35,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -76,6 +77,8 @@ export default function AgendamentosPage() {
   const [clienteNomeSelecionado, setClienteNomeSelecionado] = useState("");
   const [mostrarListaClientes, setMostrarListaClientes] = useState(false);
 
+  const utils = api.useContext();
+
   const { data: agendamentosDoMes, refetch: refetchAgendamentosDoMes } = api.agendamento.getAgendamentosDoMes.useQuery({
     month: selectedDate.getMonth() + 1,
     year: selectedDate.getFullYear(),
@@ -115,6 +118,7 @@ export default function AgendamentosPage() {
     onSuccess: () => {
       void refetchAgendamentos();
       void refetchAgendamentosDoMes();
+      void utils.dashboard.getStats.invalidate();
       toast.success("Status atualizado com sucesso!");
     },
     onError: (error) => {
@@ -285,6 +289,9 @@ export default function AgendamentosPage() {
               <DialogTitle>
                 Novo Agendamento - {format(dataParaAgendamento, "dd/MM/yyyy")}
               </DialogTitle>
+              <DialogDescription>
+                Preencha os campos abaixo para criar um novo agendamento.
+              </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-4">
                       <div className="relative">
@@ -461,19 +468,36 @@ export default function AgendamentosPage() {
                 ) : (
                   <div className="space-y-4">
                 {agendamentos?.map((agendamento) => (
-                      <div key={agendamento.id} className="border-border flex items-center justify-between rounded-lg border p-4">
-                        <div className="flex items-center gap-4">
-                          <Clock className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                            <p className="font-semibold">{dayjs(agendamento.dataHora).format("HH:mm")}</p>
-                            <p className="text-sm text-muted-foreground">{agendamento.cliente?.nome}</p>
+                      <div key={agendamento.id} className="border-border flex flex-col items-stretch gap-2 rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <Clock className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <p className="font-semibold">{dayjs(agendamento.dataHora).format("HH:mm")}</p>
+                              <p className="text-sm text-muted-foreground">{agendamento.cliente?.nome}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                              <p className="font-medium">{agendamento.servico}</p>
+                              <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(agendamento.status ?? "")}`}>{agendamento.status}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 border-t pt-2 mt-2">
+                           {agendamento.status === "agendado" && (
+                              <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: agendamento.id, status: 'concluido' })}>
+                                <Check className="h-4 w-4 text-green-500 mr-2"/>Concluir
+                              </Button>
+                           )}
+                           <Select value={agendamento.status ?? ""} onValueChange={(newStatus) => { atualizarStatus.mutate({ id: agendamento.id, status: newStatus as "agendado" | "cancelado" | "concluido", }); }}>
+                              <SelectTrigger className="w-auto h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="agendado">Agendado</SelectItem>
+                                  <SelectItem value="concluido">Concluído</SelectItem>
+                                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                              </SelectContent>
+                           </Select>
+                        </div>
                       </div>
-                    </div>
-                        <div className="text-right">
-                            <p className="font-medium">{agendamento.servico}</p>
-                            <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(agendamento.status ?? "")}`}>{agendamento.status}</span>
-                      </div>
-                  </div>
                 ))}
                   </div>
                 )}
@@ -546,6 +570,12 @@ export default function AgendamentosPage() {
                                 <p className="font-medium">{agendamento.servico}</p>
                                 <span className={`rounded-full px-2 py-1 text-xs ${getStatusColor(agendamento.status ?? "")}`}>{agendamento.status}</span>
                     </div>
+                    {agendamento.status === 'agendado' && (
+                        <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: agendamento.id, status: 'concluido' })}>
+                            <Check className="h-4 w-4 text-green-500 mr-2"/>
+                            Concluir
+                        </Button>
+                    )}
                             <Select value={agendamento.status ?? ""} onValueChange={(newStatus) => { atualizarStatus.mutate({ id: agendamento.id, status: newStatus as "agendado" | "cancelado" | "concluido", }); }}>
                                 <SelectTrigger className="w-auto border-none bg-transparent focus:ring-0"><SelectValue placeholder="Status" /></SelectTrigger>
                                 <SelectContent>

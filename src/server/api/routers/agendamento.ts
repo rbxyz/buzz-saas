@@ -271,15 +271,11 @@ export const agendamentoRouter = createTRPCRouter({
       return novoAgendamento[0]!;
     }),
 
-  getServicos: publicProcedure.query(async () => {
+  getServicos: protectedProcedure.query(async ({ ctx }) => {
     try {
-      const configuracao = await db.query.configuracoes.findFirst();
-      if (!configuracao) {
-        return [];
-      }
-
+      const userId = ctx.user.id;
       const servicosUsuario = await db.query.servicos.findMany({
-        where: eq(servicos.userId, configuracao.userId),
+        where: and(eq(servicos.userId, userId), eq(servicos.ativo, true)),
         orderBy: (servicos, { asc }) => [asc(servicos.nome)],
       });
 
@@ -1110,7 +1106,7 @@ Obrigado pela preferência! 💈✨`;
       };
     }),
 
-  verificarConflito: publicProcedure
+  verificarConflito: protectedProcedure
     .input(
       z.object({
         data: z.string(),
@@ -1118,27 +1114,30 @@ Obrigado pela preferência! 💈✨`;
         servico: z.string(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const { data, horario, servico } = input;
+      const userId = ctx.user.id;
 
       const horarioRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!horarioRegex.test(horario)) {
         return { temConflito: true, motivo: "Formato de horário inválido" };
       }
 
-      const config = await db.query.configuracoes.findFirst();
-      if (!config) {
+      const servicoInfo = await db.query.servicos.findFirst({
+        where: and(
+          eq(servicos.userId, userId),
+          eq(servicos.nome, servico),
+          eq(servicos.ativo, true),
+        ),
+      });
+
+      if (!servicoInfo) {
         return {
           temConflito: true,
-          motivo: "Configurações não encontradas",
+          motivo: `Serviço "${servico}" não encontrado ou inativo`,
         };
       }
-
-      const servicosUsuario = await db.query.servicos.findMany({
-        where: eq(servicos.userId, config.userId),
-      });
-      const servicoInfo = servicosUsuario.find((s) => s.nome === servico);
-      const duracaoMinutos = servicoInfo?.duracao ?? 30;
+      const duracaoMinutos = servicoInfo.duracao;
 
       const dataObj = dayjs(data);
       const diaSemanaNumero = getDiaSemanaNumero(dataObj.toDate());
@@ -1201,6 +1200,7 @@ Obrigado pela preferência! 💈✨`;
         .from(agendamentos)
         .where(
           and(
+            eq(agendamentos.userId, userId),
             gte(agendamentos.dataHora, start),
             lte(agendamentos.dataHora, end),
             eq(agendamentos.status, "agendado"),
