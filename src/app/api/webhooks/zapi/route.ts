@@ -209,9 +209,9 @@ async function processIncomingMessage(data: {
 
     console.log(`🔍 [DEBUG] Tentando buscar cliente pelo telefone...`)
     // Buscar cliente pelo telefone com retry
-    let cliente = null
+    let cliente: { id: number; nome: string; telefone: string } | null = null
     try {
-      cliente = await withDrizzleRetry(
+      const clienteResult = await withDrizzleRetry(
         () => db
           .select()
           .from(clientes)
@@ -220,6 +220,7 @@ async function processIncomingMessage(data: {
           .then((rows) => rows[0] ?? null),
         `Buscar cliente ${telefoneClean}`
       )
+      cliente = clienteResult as { id: number; nome: string; telefone: string } | null
       console.log(`✅ [DEBUG] Busca de cliente concluída:`, cliente ? `Cliente encontrado: ${cliente.nome} (ID: ${cliente.id})` : 'Nenhum cliente encontrado')
     } catch (error) {
       console.error(`❌ [DEBUG] ERRO ao buscar cliente:`, error)
@@ -230,7 +231,7 @@ async function processIncomingMessage(data: {
     if (!cliente && senderName && senderName.trim() !== "") {
       console.log(`🆕 [DEBUG] Criando novo cliente com nome do WhatsApp: ${senderName}`)
       try {
-        cliente = await withDrizzleRetry(
+        const novoClienteResult = await withDrizzleRetry(
           () => db
             .insert(clientes)
             .values({
@@ -242,6 +243,7 @@ async function processIncomingMessage(data: {
             .then((rows) => rows[0] ?? null),
           `Criar cliente ${senderName}`
         )
+        cliente = novoClienteResult as { id: number; nome: string; telefone: string } | null
         console.log(`✅ [DEBUG] Cliente criado:`, cliente ? `${cliente.nome} (ID: ${cliente.id})` : 'FALHA')
 
         // Atualizar a conversa com o ID do cliente
