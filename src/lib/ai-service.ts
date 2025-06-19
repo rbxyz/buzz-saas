@@ -80,24 +80,10 @@ export class AIService {
   private saudacoesFeitas = new Set<string>()
 
   async processMessage(
-    _message: string,
-    _telefone: string,
-    _conversationHistory: Array<{ role: string; content?: string }> = [],
+    message: string,
+    telefone: string,
+    conversationHistory: Array<{ role: string; content?: string }> = [],
   ): Promise<AIResponse> {
-    // --- INÍCIO DO CÓDIGO DE DEPURAÇÃO ---
-    // Temporariamente, retornamos uma mensagem de teste para isolar problemas.
-    // Se esta mensagem for recebida, o problema está na lógica interna do ai-service
-    // que foi desativada abaixo (chamadas de API, webhooks, etc.).
-    console.log("⚠️ [AI-SERVICE-DEBUG] Bypass: Retornando mensagem de teste hardcoded.")
-    return {
-      message:
-        "Olá! Este é um teste de resposta do ai-service. Se você recebeu esta mensagem, a comunicação básica do webhook está funcionando.",
-      action: undefined,
-      data: undefined,
-    }
-    // --- FIM DO CÓDIGO DE DEPURAÇÃO ---
-
-    /* CÓDIGO ORIGINAL DESATIVADO PARA DEPURAÇÃO
     try {
       console.log(`🧠 [AI-SERVICE] Processando mensagem: "${message}"`)
       console.log(`📱 [AI-SERVICE] Telefone do cliente: ${telefone}`)
@@ -195,7 +181,6 @@ export class AIService {
           "Oi! Desculpa, tive um probleminha aqui. 😅 Pode repetir o que você precisa? Estou aqui pra te ajudar! 💈",
       }
     }
-    */
   }
 
   private async getBusinessContext(telefone: string): Promise<AgendamentoContext | null> {

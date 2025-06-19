@@ -1,5 +1,5 @@
 {
-  "id": "143aef17-dc83-42d9-8dc8-3310a2c84013",
+  "id": "ca9a6446-86c5-4cff-b16e-519d8aed6859",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -18,7 +18,8 @@
           "name": "user_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": 1
         },
         "cliente_id": {
           "name": "cliente_id",
@@ -32,11 +33,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "servico": {
+          "name": "servico",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "data_hora": {
           "name": "data_hora",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
+        },
+        "duracao_minutos": {
+          "name": "duracao_minutos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 30
+        },
+        "valor_cobrado": {
+          "name": "valor_cobrado",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1221,19 +1241,6 @@
     }
   },
   "enums": {
-    "public.dias_semana": {
-      "name": "dias_semana",
-      "schema": "public",
-      "values": [
-        "segunda",
-        "terca",
-        "quarta",
-        "quinta",
-        "sexta",
-        "sabado",
-        "domingo"
-      ]
-    },
     "public.link_type_enum": {
       "name": "link_type_enum",
       "schema": "public",

@@ -1,13 +1,15 @@
-CREATE TYPE "public"."dias_semana" AS ENUM('segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo');--> statement-breakpoint
 CREATE TYPE "public"."link_type_enum" AS ENUM('cliente', 'parceria');--> statement-breakpoint
 CREATE TYPE "public"."message_role" AS ENUM('user', 'assistant', 'system', 'bot');--> statement-breakpoint
 CREATE TYPE "public"."user_role_enum" AS ENUM('superadmin', 'admin');--> statement-breakpoint
 CREATE TABLE "agendamentos" (
 	"id" serial PRIMARY KEY NOT NULL,
-	"user_id" integer NOT NULL,
+	"user_id" integer DEFAULT 1 NOT NULL,
 	"cliente_id" integer NOT NULL,
 	"servico_id" integer,
+	"servico" varchar(255) NOT NULL,
 	"data_hora" timestamp with time zone NOT NULL,
+	"duracao_minutos" integer DEFAULT 30 NOT NULL,
+	"valor_cobrado" numeric(10, 2),
 	"status" varchar(50) DEFAULT 'agendado' NOT NULL,
 	"observacoes" text,
 	"created_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
