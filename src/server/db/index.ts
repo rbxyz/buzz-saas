@@ -19,7 +19,7 @@ const sql = neon(env.DATABASE_URL, {
   fullResults: false,
   arrayMode: false,
   fetchOptions: {
-    timeout: 120000, // 2 minutos para cold starts
+    timeout: 180000, // 3 minutos para cold starts extremos
   },
 })
 
