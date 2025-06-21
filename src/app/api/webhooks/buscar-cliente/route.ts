@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/server/db"
+import { db, executeWithRetry } from "@/server/db"
 import { clientes, agendamentos } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { type InferSelectModel } from "drizzle-orm"
-import { withDrizzleRetry } from "@/lib/database-retry"
 
 type Agendamento = InferSelectModel<typeof agendamentos>;
 
@@ -22,27 +21,21 @@ export async function GET(request: NextRequest) {
     const telefoneClean = telefone.replace(/\D/g, "")
 
     // Buscar cliente com retry
-    const cliente = await withDrizzleRetry(
-      () => db
-        .select()
-        .from(clientes)
-        .where(eq(clientes.telefone, telefoneClean))
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-      `Buscar cliente ${telefoneClean}`
+    const cliente = await executeWithRetry(
+      () =>
+        db
+          .select()
+          .from(clientes)
+          .where(eq(clientes.telefone, telefoneClean))
+          .limit(1)
+          .then((rows) => (rows.length > 0 ? rows[0] : null)),
     )
 
     // Buscar agendamentos do cliente (se existir) com retry
     let agendamentosCliente: Agendamento[] = []
     if (cliente) {
-      agendamentosCliente = await withDrizzleRetry(
-        () => db
-          .select()
-          .from(agendamentos)
-          .where(eq(agendamentos.clienteId, cliente.id))
-          .orderBy(desc(agendamentos.dataHora))
-          .limit(10),
-        `Buscar agendamentos do cliente ${cliente.id}`
+      agendamentosCliente = await executeWithRetry(() =>
+        db.select().from(agendamentos).where(eq(agendamentos.clienteId, cliente.id)).orderBy(desc(agendamentos.dataHora)).limit(10),
       )
     }
 

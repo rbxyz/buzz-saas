@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/server/db"
+import { db, executeWithRetry } from "@/server/db"
 import { clientes } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
-import { withDrizzleRetry } from "@/lib/database-retry"
 
 interface RequestBody {
   telefone: string;
@@ -28,14 +27,13 @@ export async function POST(request: NextRequest) {
     const userId = 1
 
     // Verificar se já existe um cliente com este telefone com retry
-    const clienteExistente = await withDrizzleRetry(
-      () => db
+    const clienteExistente = await executeWithRetry(() =>
+      db
         .select()
         .from(clientes)
         .where(eq(clientes.telefone, telefoneClean))
         .limit(1)
-        .then((rows) => rows[0] ?? null),
-      `Verificar cliente existente ${telefoneClean}`
+        .then((rows) => (rows.length > 0 ? rows[0] : null)),
     )
 
     if (clienteExistente) {
@@ -49,18 +47,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar novo cliente com retry
-    const novoCliente = await withDrizzleRetry(
-      () => db
+    const novoClienteResult = await executeWithRetry(() =>
+      db
         .insert(clientes)
         .values({
           userId: userId,
           nome: nome.trim(),
           telefone: telefoneClean,
         })
-        .returning()
-        .then((rows) => rows[0]),
-      `Criar novo cliente ${nome}`
+        .returning(),
     )
+
+    const novoCliente = novoClienteResult[0]
 
     if (!novoCliente) {
       throw new Error("Erro ao criar cliente")
