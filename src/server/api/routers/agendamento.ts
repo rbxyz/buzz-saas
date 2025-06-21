@@ -61,7 +61,7 @@ async function obterColunasReais(nomeTabela: string): Promise<string[]> {
       WHERE table_name = ${nomeTabela}
     `);
 
-    const colunas = (result as unknown as { column_name: string }[]).map(
+    const colunas = (result.rows as { column_name: string }[]).map(
       (row) => row.column_name,
     );
     return colunas;
