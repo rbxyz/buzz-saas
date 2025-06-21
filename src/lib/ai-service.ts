@@ -63,7 +63,7 @@ interface DadosAgendamentoExtraidos {
 
 export class AIService {
   private model = groq("llama-3.1-8b-instant")
-  private baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  private baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://buzz-saas.vercel.app/"
 
   // Armazenar contexto de agendamento entre mensagens
   private agendamentoContexto: Record<
