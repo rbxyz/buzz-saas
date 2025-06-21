@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`📨 [WEBHOOK] Recebido:`, JSON.stringify(body, null, 2))
-    console.log(`[ENV] DATABASE_URL: ${process.env.DATABASE_URL ?? 'undefined'}`)
+    console.log(`[ENV] DATABASE_URL: ${process.env.DATABASE_URL || 'undefined'}`)
 
     // Verificar se é uma mensagem de callback de recebimento
     if (body.type !== "ReceivedCallback") {
@@ -103,11 +103,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Extrair informações da mensagem do formato Z-API
-    const phone = body.phone ?? ""
-    const messageText = body.text?.message ?? body.body ?? ""
-    const messageId = body.messageId ?? ""
-    const timestamp = body.momment ?? Date.now()
-    const senderName = body.senderName ?? ""
+    const phone = body.phone || ""
+    const messageText = body.text?.message || body.body || ""
+    const messageId = body.messageId || ""
+    const timestamp = body.momment || Date.now()
+    const senderName = body.senderName || ""
 
     // Verificar se temos os dados mínimos necessários
     if (!phone || !messageText) {
@@ -208,7 +208,7 @@ async function processIncomingMessage(data: {
           .from(conversations)
           .where(eq(conversations.telefone, telefoneClean))
           .limit(1)
-          .then((rows) => rows[0] ?? null),
+          .then((rows) => rows[0] || null),
         `Buscar conversa para ${telefoneClean}`
       )
       console.log(`✅ [DEBUG] Busca de conversa concluída. Resultado:`, conversation ? `Conversa encontrada (ID: ${conversation.id})` : 'Nenhuma conversa encontrada')
@@ -230,7 +230,7 @@ async function processIncomingMessage(data: {
               ultimaMensagem: null,
             })
             .returning()
-            .then((rows) => rows[0] ?? null),
+            .then((rows) => rows[0] || null),
           `Criar conversa para ${telefoneClean}`
         )
         console.log(`✅ [DEBUG] Nova conversa criada:`, conversation ? `ID: ${conversation.id}` : 'FALHA')
@@ -254,7 +254,7 @@ async function processIncomingMessage(data: {
           .from(clientes)
           .where(eq(clientes.telefone, telefoneClean))
           .limit(1)
-          .then((rows) => rows[0] ?? null),
+          .then((rows) => rows[0] || null),
         `Buscar cliente ${telefoneClean}`
       )
       cliente = clienteResult as { id: number; nome: string; telefone: string } | null
@@ -277,7 +277,7 @@ async function processIncomingMessage(data: {
               telefone: telefoneClean,
             })
             .returning()
-            .then((rows) => rows[0] ?? null),
+            .then((rows) => rows[0] || null),
           `Criar cliente ${senderName}`
         )
         cliente = novoClienteResult as { id: number; nome: string; telefone: string } | null
