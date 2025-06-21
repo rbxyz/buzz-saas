@@ -165,15 +165,39 @@ async function processIncomingMessage(data: {
 
     console.log(`🔍 [DEBUG] Tentando buscar conversa existente...`)
 
+    // LOGS DETALHADOS ANTES DA CONEXÃO
+    console.log(`🔧 [DEBUG] Verificando configuração do banco...`)
+    console.log(`🔧 [DEBUG] NODE_ENV:`, process.env.NODE_ENV)
+    console.log(`🔧 [DEBUG] DATABASE_URL length:`, process.env.DATABASE_URL?.length || 0)
+    console.log(`🔧 [DEBUG] DATABASE_URL starts with:`, process.env.DATABASE_URL?.substring(0, 30) + '...')
+    console.log(`🔧 [DEBUG] DATABASE_URL contains pooler:`, process.env.DATABASE_URL?.includes('pooler') || false)
+    console.log(`🔧 [DEBUG] DATABASE_URL contains sslmode:`, process.env.DATABASE_URL?.includes('sslmode') || false)
+
     // TESTE SIMPLES DE CONEXÃO ANTES DA QUERY COMPLEXA
     console.log(`🧪 [DEBUG] Testando conexão simples ao banco...`)
+    console.log(`🧪 [DEBUG] Timestamp antes da conexão:`, new Date().toISOString())
+
+    let testStartTime = Date.now()
     try {
+      console.log(`🧪 [DEBUG] Executando SELECT 1...`)
       const testResult = await db.execute(sql`SELECT 1 as test`)
-      console.log(`✅ [DEBUG] Teste de conexão bem-sucedido:`, testResult)
+      const testDuration = Date.now() - testStartTime
+      console.log(`✅ [DEBUG] Teste de conexão bem-sucedido em ${testDuration}ms:`, testResult)
+      console.log(`✅ [DEBUG] Tipo do resultado:`, typeof testResult)
+      console.log(`✅ [DEBUG] Estrutura do resultado:`, Object.keys(testResult || {}))
     } catch (testError) {
-      console.error(`❌ [DEBUG] ERRO no teste de conexão:`, testError)
+      const testDuration = Date.now() - testStartTime
+      console.error(`❌ [DEBUG] ERRO no teste de conexão após ${testDuration}ms:`)
+      console.error(`❌ [DEBUG] Tipo do erro:`, typeof testError)
+      console.error(`❌ [DEBUG] Nome do erro:`, testError?.constructor?.name)
+      console.error(`❌ [DEBUG] Mensagem do erro:`, testError instanceof Error ? testError.message : String(testError))
+      console.error(`❌ [DEBUG] Código do erro:`, (testError as any)?.code)
+      console.error(`❌ [DEBUG] Stack do erro:`, testError instanceof Error ? testError.stack : 'N/A')
+      console.error(`❌ [DEBUG] Erro completo:`, testError)
       throw testError
     }
+
+    console.log(`🔍 [DEBUG] Teste de conexão passou, continuando com query de conversa...`)
 
     // Buscar ou criar conversa com retry
     let conversation: Conversation | null = null
