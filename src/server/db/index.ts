@@ -40,7 +40,7 @@ export async function executeWithRetry<T>(
   maxRetries = 3,
   baseDelay = 1000
 ): Promise<T> {
-  let lastError: Error | unknown
+  let lastError: unknown
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
