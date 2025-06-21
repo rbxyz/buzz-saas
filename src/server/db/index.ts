@@ -13,7 +13,7 @@ if (!env.DATABASE_URL) {
 }
 
 // Configurar conexão SQL usando Neon HTTP com configurações otimizadas para produção
-console.log(`🔧 [DB_INIT] Configurando cliente Neon com timeout de 60s...`)
+console.log(`🔧 [DB_INIT] Configurando cliente Neon com timeout de 180s...`)
 const sql = neon(env.DATABASE_URL, {
   // Configurações otimizadas para Neon HTTP
   fullResults: false,
