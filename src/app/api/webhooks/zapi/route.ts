@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { withDrizzleRetry } from "@/lib/database-retry"
+import { sql } from "drizzle-orm"
 
 // Tipos para o webhook da Z-API
 interface WebhookBody {
@@ -163,6 +164,17 @@ async function processIncomingMessage(data: {
     console.log(`📞 [DEBUG] Telefone limpo: ${telefoneClean}`)
 
     console.log(`🔍 [DEBUG] Tentando buscar conversa existente...`)
+
+    // TESTE SIMPLES DE CONEXÃO ANTES DA QUERY COMPLEXA
+    console.log(`🧪 [DEBUG] Testando conexão simples ao banco...`)
+    try {
+      const testResult = await db.execute(sql`SELECT 1 as test`)
+      console.log(`✅ [DEBUG] Teste de conexão bem-sucedido:`, testResult)
+    } catch (testError) {
+      console.error(`❌ [DEBUG] ERRO no teste de conexão:`, testError)
+      throw testError
+    }
+
     // Buscar ou criar conversa com retry
     let conversation: Conversation | null = null
     try {
