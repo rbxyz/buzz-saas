@@ -15,12 +15,11 @@ if (!env.DATABASE_URL) {
 // Configurar conexão SQL usando Neon HTTP com configurações otimizadas para produção
 console.log(`🔧 [DB_INIT] Configurando cliente Neon com timeout de 60s...`)
 const sql = neon(env.DATABASE_URL, {
-  // Configurações otimizadas para o driver neon-http
-  fullResults: false, // Otimizar para resultados menores
-  arrayMode: false, // Usar objetos ao invés de arrays
+  // Configurações otimizadas para Neon HTTP
+  fullResults: false,
+  arrayMode: false,
   fetchOptions: {
-    // Configurações de timeout aumentadas para lidar com hibernação do banco
-    timeout: 60000, // 60 segundos timeout para requisições (banco pode estar hibernado)
+    timeout: 120000, // 2 minutos para cold starts
   },
 })
 
@@ -34,3 +33,39 @@ export const db = drizzle(sql, {
 console.log(`🔧 [DB_INIT] Drizzle inicializado com sucesso`)
 console.log(`🔧 [DB_INIT] Tipo do db:`, typeof db)
 console.log(`🔧 [DB_INIT] Métodos disponíveis:`, Object.getOwnPropertyNames(Object.getPrototypeOf(db)))
+
+// Função para executar queries com retry para lidar com hibernação do Neon
+export async function executeWithRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<T> {
+  let lastError: Error | unknown
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 [DB_RETRY] Tentativa ${attempt}/${maxRetries}`)
+      const startTime = Date.now()
+      const result = await operation()
+      const duration = Date.now() - startTime
+      console.log(`✅ [DB_RETRY] Sucesso na tentativa ${attempt} em ${duration}ms`)
+      return result
+    } catch (error) {
+      lastError = error
+      const duration = Date.now()
+      console.error(`❌ [DB_RETRY] Falha na tentativa ${attempt}/${maxRetries} após ${duration}ms:`, error)
+
+      if (attempt === maxRetries) {
+        console.error(`❌ [DB_RETRY] Todas as tentativas falharam. Último erro:`, error)
+        throw error
+      }
+
+      // Backoff exponencial: 1s, 2s, 4s...
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      console.log(`⏳ [DB_RETRY] Aguardando ${delay}ms antes da próxima tentativa...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
+}
