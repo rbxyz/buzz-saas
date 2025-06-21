@@ -199,15 +199,13 @@ async function processIncomingMessage(data: {
     // Buscar ou criar conversa com retry
     let conversation: Conversation | null = null
     try {
-      conversation = await executeWithRetry(
-        () =>
-          db
-            .select()
-            .from(conversations)
-            .where(eq(conversations.telefone, telefoneClean))
-            .limit(1)
-            .then((rows) => rows[0] ?? null),
-        `Buscar conversa para ${telefoneClean}`
+      conversation = await executeWithRetry(() =>
+        db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.telefone, telefoneClean))
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
       )
       console.log(`✅ [DEBUG] Busca de conversa concluída. Resultado:`, conversation ? `Conversa encontrada (ID: ${conversation.id})` : 'Nenhuma conversa encontrada')
     } catch (error) {
@@ -218,19 +216,17 @@ async function processIncomingMessage(data: {
     if (!conversation) {
       console.log(`🆕 [DEBUG] Criando nova conversa para ${telefoneClean}`)
       try {
-        conversation = await executeWithRetry(
-          () =>
-            db
-              .insert(conversations)
-              .values({
-                userId: userId,
-                telefone: telefoneClean,
-                ativa: true,
-                ultimaMensagem: null,
-              })
-              .returning()
-              .then((rows) => rows[0] ?? null),
-          `Criar conversa para ${telefoneClean}`
+        conversation = await executeWithRetry(() =>
+          db
+            .insert(conversations)
+            .values({
+              userId: userId,
+              telefone: telefoneClean,
+              ativa: true,
+              ultimaMensagem: null,
+            })
+            .returning()
+            .then((rows) => rows[0] ?? null),
         )
         console.log(`✅ [DEBUG] Nova conversa criada:`, conversation ? `ID: ${conversation.id}` : 'FALHA')
       } catch (error) {
@@ -247,15 +243,13 @@ async function processIncomingMessage(data: {
     // Buscar cliente pelo telefone com retry
     let cliente: { id: number; nome: string; telefone: string } | null = null
     try {
-      const clienteResult = await executeWithRetry(
-        () =>
-          db
-            .select()
-            .from(clientes)
-            .where(eq(clientes.telefone, telefoneClean))
-            .limit(1)
-            .then((rows) => rows[0] ?? null),
-        `Buscar cliente ${telefoneClean}`
+      const clienteResult = await executeWithRetry(() =>
+        db
+          .select()
+          .from(clientes)
+          .where(eq(clientes.telefone, telefoneClean))
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
       )
       cliente = clienteResult as { id: number; nome: string; telefone: string } | null
       console.log(`✅ [DEBUG] Busca de cliente concluída:`, cliente ? `Cliente encontrado: ${cliente.nome} (ID: ${cliente.id})` : 'Nenhum cliente encontrado')
@@ -268,18 +262,16 @@ async function processIncomingMessage(data: {
     if (!cliente && senderName && senderName.trim() !== "") {
       console.log(`🆕 [DEBUG] Criando novo cliente com nome do WhatsApp: ${senderName}`)
       try {
-        const novoClienteResult = await executeWithRetry(
-          () =>
-            db
-              .insert(clientes)
-              .values({
-                userId: userId,
-                nome: senderName,
-                telefone: telefoneClean,
-              })
-              .returning()
-              .then((rows) => rows[0] ?? null),
-          `Criar cliente ${senderName}`
+        const novoClienteResult = await executeWithRetry(() =>
+          db
+            .insert(clientes)
+            .values({
+              userId: userId,
+              nome: senderName,
+              telefone: telefoneClean,
+            })
+            .returning()
+            .then((rows) => rows[0] ?? null),
         )
         cliente = novoClienteResult as { id: number; nome: string; telefone: string } | null
         console.log(`✅ [DEBUG] Cliente criado:`, cliente ? `${cliente.nome} (ID: ${cliente.id})` : 'FALHA')
@@ -313,7 +305,6 @@ async function processIncomingMessage(data: {
           timestamp: new Date(timestamp),
           messageId: messageId,
         }),
-        `Salvar mensagem do usuário`
       )
       console.log(`✅ [DEBUG] Mensagem do usuário salva com sucesso`)
     } catch (error) {
@@ -325,15 +316,13 @@ async function processIncomingMessage(data: {
     // Buscar histórico da conversa com retry
     let conversationHistory: DbMessage[] = []
     try {
-      conversationHistory = await executeWithRetry(
-        () =>
-          db
-            .select()
-            .from(messages)
-            .where(eq(messages.conversationId, conversation.id))
-            .orderBy(messages.createdAt)
-            .limit(20),
-        `Buscar histórico da conversa ${conversation.id}`
+      conversationHistory = await executeWithRetry(() =>
+        db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, conversation.id))
+          .orderBy(messages.createdAt)
+          .limit(20),
       )
       console.log(`✅ [DEBUG] Histórico da conversa obtido: ${conversationHistory.length} mensagens`)
     } catch (error) {
@@ -370,7 +359,6 @@ async function processIncomingMessage(data: {
             role: "assistant",
             timestamp: new Date(),
           }),
-          `Salvar resposta da IA`
         )
         console.log(`✅ [DEBUG] Resposta da IA salva no banco`)
       } catch (error) {
@@ -404,10 +392,10 @@ async function processIncomingMessage(data: {
     // Atualizar a conversa com a última interação
     try {
       await executeWithRetry(() =>
-        db.update(conversations)
+        db
+          .update(conversations)
           .set({ ultimaInteracao: new Date() })
           .where(eq(conversations.id, conversation.id)),
-        `Atualizar última interação da conversa ${conversation.id}`,
       )
       console.log(`✅ [DEBUG] Última interação atualizada com sucesso`)
     } catch (error) {
