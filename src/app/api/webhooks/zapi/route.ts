@@ -90,6 +90,10 @@ const executeDb = <T>(operation: () => Promise<T>) =>
 // Garantir que o Route Handler seja executado como Serverless Function (Node.js) e não Edge
 export const runtime = "nodejs" as const
 
+export const dynamic = "force-dynamic"
+// Vercel permite sobrescrever o tempo máximo (segundos) em Serverless; ajustamos para 15 s
+export const maxDuration = 15
+
 export async function POST(request: NextRequest) {
   try {
     let body: WebhookBody
