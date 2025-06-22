@@ -68,6 +68,25 @@ interface DbMessage {
   createdAt: Date
 }
 
+// +++ Adição: helper para limitar tempo das operações de BD +++
+
+// Tempo máximo (ms) que esperamos por qualquer operação de banco
+const DB_OP_TIMEOUT_MS = 15_000
+
+// Envolve uma Promise com timeout; rejeita se extrapolar o limite
+function withTimeout<T>(promise: Promise<T>, ms = DB_OP_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`DB operation timed out after ${ms}ms`)), ms),
+    ),
+  ])
+}
+
+// Wrapper padrão para todas as chamadas ao banco neste arquivo
+const executeDb = <T>(operation: () => Promise<T>) =>
+  withTimeout(executeWithRetry(operation), DB_OP_TIMEOUT_MS)
+
 export async function POST(request: NextRequest) {
   try {
     let body: WebhookBody
@@ -178,7 +197,7 @@ async function processIncomingMessage(data: {
     const testStartTime = Date.now()
     try {
       console.log(`🧪 [DEBUG] Executando SELECT 1 com retry...`)
-      const testResult = await executeWithRetry(() => db.execute(sql`SELECT 1 as test`))
+      const testResult = await executeDb(() => db.execute(sql`SELECT 1 as test`))
       const testDuration = Date.now() - testStartTime
       console.log(`✅ [DEBUG] Teste de conexão bem-sucedido em ${testDuration}ms:`, testResult)
       console.log(`✅ [DEBUG] Tipo do resultado:`, typeof testResult)
@@ -199,7 +218,7 @@ async function processIncomingMessage(data: {
     // Buscar ou criar conversa com retry
     let conversation: Conversation | null = null
     try {
-      conversation = await executeWithRetry(() =>
+      conversation = await executeDb(() =>
         db
           .select()
           .from(conversations)
@@ -216,7 +235,7 @@ async function processIncomingMessage(data: {
     if (!conversation) {
       console.log(`🆕 [DEBUG] Criando nova conversa para ${telefoneClean}`)
       try {
-        conversation = await executeWithRetry(() =>
+        conversation = await executeDb(() =>
           db
             .insert(conversations)
             .values({
@@ -243,7 +262,7 @@ async function processIncomingMessage(data: {
     // Buscar cliente pelo telefone com retry
     let cliente: { id: number; nome: string; telefone: string } | null = null
     try {
-      const clienteResult = await executeWithRetry(() =>
+      const clienteResult = await executeDb(() =>
         db
           .select()
           .from(clientes)
@@ -262,7 +281,7 @@ async function processIncomingMessage(data: {
     if (!cliente && senderName && senderName.trim() !== "") {
       console.log(`🆕 [DEBUG] Criando novo cliente com nome do WhatsApp: ${senderName}`)
       try {
-        const novoClienteResult = await executeWithRetry(() =>
+        const novoClienteResult = await executeDb(() =>
           db
             .insert(clientes)
             .values({
@@ -279,7 +298,7 @@ async function processIncomingMessage(data: {
         // Atualizar a conversa com o ID do cliente
         if (cliente) {
           try {
-            await executeWithRetry(() =>
+            await executeDb(() =>
               db.update(conversations).set({ clienteId: cliente!.id }).where(eq(conversations.id, conversation.id)),
             )
             console.log(`✅ [DEBUG] Cliente vinculado à conversa com sucesso`)
@@ -297,7 +316,7 @@ async function processIncomingMessage(data: {
     console.log(`💾 [DEBUG] Tentando salvar mensagem do usuário...`)
     // Salvar mensagem do cliente com retry
     try {
-      await executeWithRetry(() =>
+      await executeDb(() =>
         db.insert(messages).values({
           conversationId: conversation.id,
           content: message,
@@ -316,7 +335,7 @@ async function processIncomingMessage(data: {
     // Buscar histórico da conversa com retry
     let conversationHistory: DbMessage[] = []
     try {
-      conversationHistory = await executeWithRetry(() =>
+      conversationHistory = await executeDb(() =>
         db
           .select()
           .from(messages)
@@ -352,7 +371,7 @@ async function processIncomingMessage(data: {
     // Salvar e enviar a resposta da IA
     if (aiResponse.message) {
       try {
-        await executeWithRetry(() =>
+        await executeDb(() =>
           db.insert(messages).values({
             conversationId: conversation.id,
             content: aiResponse.message,
@@ -391,7 +410,7 @@ async function processIncomingMessage(data: {
     console.log(`🔄 [DEBUG] Tentando atualizar última interação...`)
     // Atualizar a conversa com a última interação
     try {
-      await executeWithRetry(() =>
+      await executeDb(() =>
         db
           .update(conversations)
           .set({ ultimaInteracao: new Date() })
