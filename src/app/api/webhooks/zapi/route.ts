@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     console.log(`📨 [WEBHOOK] Recebido:`, JSON.stringify(body, null, 2))
     console.log(`[ENV] DATABASE_URL: ${process.env.DATABASE_URL ?? 'undefined'}`)
 
-    // Verificar se é uma mensagem de callback de recebimento
+    // Verificar se é uma mensagem de cllback de recebimento
     if (body.type !== "ReceivedCallback") {
       console.log(`🔄 [WEBHOOK] Ignorando evento que não é ReceivedCallback: ${body.type}`)
       return NextResponse.json({ success: true, ignored: true })
