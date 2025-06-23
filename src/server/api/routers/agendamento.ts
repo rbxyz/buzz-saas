@@ -271,11 +271,33 @@ export const agendamentoRouter = createTRPCRouter({
       return novoAgendamento[0]!;
     }),
 
-  getServicos: protectedProcedure.query(async ({ ctx }) => {
+
+    getServicos: protectedProcedure.query(async ({ ctx }) => {
     try {
       const userId = ctx.user.id;
       const servicosUsuario = await db.query.servicos.findMany({
         where: and(eq(servicos.userId, userId), eq(servicos.ativo, true)),
+        orderBy: (servicos, { asc }) => [asc(servicos.nome)],
+      });
+
+      const servicosFormatados = servicosUsuario.map((servico) => {
+        return {
+          nome: servico.nome,
+          preco: Number.parseFloat(servico.preco?.toString() ?? "0"),
+          duracaoMinutos: servico.duracao,
+        };
+      });
+
+      return servicosFormatados;
+    } catch {
+      return [];
+    }
+  }),
+
+  getLandingServicos: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const servicosUsuario = await db.query.servicos.findMany({
+        where: eq(servicos.ativo, true),
         orderBy: (servicos, { asc }) => [asc(servicos.nome)],
       });
 
