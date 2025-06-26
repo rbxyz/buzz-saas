@@ -1257,64 +1257,21 @@ Obrigado pela preferência! 💈✨`;
       return { temConflito: false };
     }),
 
-  // Otimizada com cache de 10 minutos
   getRecents: protectedProcedure.query(async ({ ctx }) => {
-    const agendamentos = await ctx.db
+    const agendamentosRecentes = await ctx.db
       .select({
         id: agendamentos.id,
         dataHora: agendamentos.dataHora,
         servico: agendamentos.servico,
         status: agendamentos.status,
-        clienteId: agendamentos.clienteId,
-      })
-      .from(agendamentos)
-      .where(eq(agendamentos.userId, ctx.user.id))
-      .orderBy(desc(agendamentos.dataHora))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (!agendamentos) {
-      throw new Error("Agendamento não encontrado");
-    }
-
-    const { dataHora, servico, status, clienteId } = agendamentos;
-    const data = dayjs(dataHora).format("YYYY-MM-DD");
-
-    const agendamentosDoDia = await ctx.db
-      .select({
-        id: agendamentos.id,
-        dataHora: agendamentos.dataHora,
-        servico: agendamentos.servico,
-        status: agendamentos.status,
-        cliente: {
-          nome: clientes.nome,
-        },
+        clienteNome: clientes.nome,
       })
       .from(agendamentos)
       .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-      .where(eq(agendamentos.userId, ctx.user.id));
+      .where(eq(agendamentos.userId, ctx.user.id))
+      .orderBy(desc(agendamentos.dataHora))
+      .limit(5)
 
-    const config = await ctx.db
-      .select({
-        diasIndisponiveis: intervalosTrabalho.diasIndisponiveis,
-        diasFuncionamento: intervalosTrabalho.diasFuncionamento,
-      })
-      .from(intervalosTrabalho)
-      .where(eq(intervalosTrabalho.userId, ctx.user.id))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (!config) {
-      throw new Error("Configuração não encontrada");
-    }
-    const { diasIndisponiveis, diasFuncionamento } = config;
-    const horarios = gerarHorariosDisponiveis(
-      input.data,
-      diasFuncionamento,
-      diasIndisponiveis,
-      agendamentosDoDia.map((a) => a.data),
-    );
-
-    return horarios;
+    return agendamentosRecentes
   }),
 });

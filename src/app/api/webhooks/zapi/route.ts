@@ -88,7 +88,7 @@ const executeDb = <T>(operation: () => Promise<T>) =>
   withTimeout(executeWithRetry(operation), DB_OP_TIMEOUT_MS)
 
 // Garantir que o Route Handler seja executado como Serverless Function (Node.js) e não Edge
-export const runtime = "nodejs" as const
+export const runtime = "nodejs"
 
 export const dynamic = "force-dynamic"
 // Vercel permite sobrescrever o tempo máximo (segundos) em Serverless; ajustamos para 15 s
