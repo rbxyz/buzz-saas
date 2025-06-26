@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db, executeWithRetry } from "@/server/db"
-import { conversations, messages, clientes, configuracoes } from "@/server/db/schema"
+import { conversations, messages, clientes, configuracoes, users } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
@@ -177,11 +177,15 @@ async function processIncomingMessage(data: {
 
     console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message)
 
-    // Por enquanto, obter dinamicamente o primeiro usuário configurado
-    const configRow = await executeDb(() =>
-      db.select({ userId: configuracoes.userId }).from(configuracoes).limit(1).then(rows => rows[0] ?? null)
+    // Determinar userId dono da instância: usar primeiro usuário cadastrado
+    const userRow = await executeDb(() =>
+      db.select({ id: users.id }).from(users).limit(1).then(rows => rows[0] ?? null)
     )
-    const userId = configRow?.userId ?? 1
+    if (!userRow) {
+      console.error("❌ [WEBHOOK] Nenhum usuário encontrado no banco. Abortando processamento.")
+      return // encerra processamento se não houver usuário
+    }
+    const userId = userRow.id
     console.log(`👤 [DEBUG] userId definido como: ${userId}`)
 
     // Limpar telefone (remover caracteres especiais)
