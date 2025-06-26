@@ -1,4 +1,4 @@
-import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc"
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "@/server/api/trpc"
 import { z } from "zod"
 import { agents } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
@@ -26,6 +26,11 @@ export const agentsRouter = createTRPCRouter({
   getAll: protectedProcedure.query(async ({ ctx }) => {
     const allAgents = await ctx.db.select().from(agents)
     return allAgents
+  }),
+
+  getActivePublic: publicProcedure.query(async ({ ctx }) => {
+    const activeAgents = await ctx.db.select().from(agents).where(eq(agents.ativo, true))
+    return activeAgents
   }),
 
   getActive: protectedProcedure.query(async ({ ctx }) => {
