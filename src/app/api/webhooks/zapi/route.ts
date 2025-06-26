@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db, executeWithRetry } from "@/server/db"
-import { conversations, messages, clientes } from "@/server/db/schema"
+import { conversations, messages, clientes, configuracoes } from "@/server/db/schema"
 import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
@@ -177,10 +177,11 @@ async function processIncomingMessage(data: {
 
     console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message)
 
-    // Adicionar no início da função processIncomingMessage, após os logs
-    // Por enquanto, usar userId = 1 (primeiro usuário).
-    // TODO: Implementar lógica para identificar o usuário correto baseado na instância Z-API
-    const userId = 1 // Temporário - usar o primeiro usuário
+    // Por enquanto, obter dinamicamente o primeiro usuário configurado
+    const configRow = await executeDb(() =>
+      db.select({ userId: configuracoes.userId }).from(configuracoes).limit(1).then(rows => rows[0] ?? null)
+    )
+    const userId = configRow?.userId ?? 1
     console.log(`👤 [DEBUG] userId definido como: ${userId}`)
 
     // Limpar telefone (remover caracteres especiais)
