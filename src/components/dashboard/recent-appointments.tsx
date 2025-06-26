@@ -1,7 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/trpc/react";
-import type { Agendamento } from "@/server/db/schema";
+import type { agendamentos } from "@/server/db/schema";
+import type { InferSelectModel } from "drizzle-orm";
+
+type Agendamento = InferSelectModel<typeof agendamentos> & {
+  clienteNome?: string | null;
+  clienteImagem?: string | null;
+};
 
 // Ajuste da tipagem para aceitar string ou Date
 function formatDate(dateInput: string | Date): string {
@@ -81,7 +87,7 @@ export function RecentAppointments() {
 
   return (
     <div className="space-y-8">
-      {agendamentos.map((appointment) => {
+      {agendamentos.map((appointment: Agendamento) => {
         const clientName = appointment.clienteNome ?? "Cliente";
         const initials = getInitials(clientName);
 
