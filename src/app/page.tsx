@@ -95,7 +95,7 @@ export default function LandingPage() {
   const { data: configs } = api.configuracao.listar.useQuery();
 
   // Queries para agendamento
-  const { data: servicosDisponiveis } = api.agendamento.getServicos.useQuery();
+  const { data: servicosDisponiveis } = api.agendamento.getLandingServicos.useQuery();
 
   // Função para adicionar prefixo 55 ao telefone
   const adicionarPrefixo55 = (telefone: string): string => {
