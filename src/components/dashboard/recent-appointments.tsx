@@ -1,9 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { trpc } from "@/utils/trpc";
-
-// Tipos específicos para o status (mantido para possível uso futuro)
-type AppointmentStatus = "agendado" | "cancelado" | "concluido" | "pendente";
+import { api } from "@/trpc/react";
+import type { Agendamento } from "@/server/db/schema";
 
 // Ajuste da tipagem para aceitar string ou Date
 function formatDate(dateInput: string | Date): string {
@@ -56,14 +54,7 @@ function getInitials(name: string): string {
 }
 
 export function RecentAppointments() {
-  // Query otimizada com cache de 1 minuto
-  const { data, isLoading, error, isStale } =
-    trpc.dashboard.getUltimosAgendamentos.useQuery(undefined, {
-      staleTime: 60 * 1000, // 1 minuto
-      gcTime: 5 * 60 * 1000, // 5 minutos
-      refetchOnWindowFocus: false,
-      refetchInterval: 2 * 60 * 1000, // Atualiza a cada 2 minutos
-    });
+  const { data: agendamentos, isLoading } = api.agendamento.getRecents.useQuery();
 
   // Loading skeleton - usando Array.from para evitar spread inseguro
   if (isLoading) {
@@ -86,17 +77,11 @@ export function RecentAppointments() {
     );
   }
 
-  if (error) return <div>Erro ao carregar agendamentos: {error.message}</div>;
-  if (!data || data.length === 0) return <div>Nenhum agendamento recente.</div>;
+  if (!agendamentos || agendamentos.length === 0) return <div>Nenhum agendamento recente.</div>;
 
   return (
-    <div className={`space-y-8 ${isStale ? "opacity-75" : ""}`}>
-      {isStale && (
-        <div className="text-muted-foreground mb-4 text-center text-xs">
-          Atualizando dados...
-        </div>
-      )}
-      {data.map((appointment) => {
+    <div className="space-y-8">
+      {agendamentos.map((appointment) => {
         const clientName = appointment.clienteNome ?? "Cliente";
         const initials = getInitials(clientName);
 

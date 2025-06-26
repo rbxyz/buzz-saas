@@ -2,7 +2,7 @@ import { z } from "zod"
 import { createTRPCRouter, protectedProcedure } from "@/server/api/trpc"
 import { db } from "@/server/db"
 import { configuracoes, servicos } from "@/server/db/schema"
-import { eq, and } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { TRPCError } from "@trpc/server"
 
 export const configuracaoRouter = createTRPCRouter({

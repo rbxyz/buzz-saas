@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db, executeWithRetry } from "@/server/db"
 import { conversations, messages, clientes } from "@/server/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 
