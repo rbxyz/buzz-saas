@@ -1,13 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/trpc/react";
-import type { agendamentos } from "@/server/db/schema";
-import type { InferSelectModel } from "drizzle-orm";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "@/server/api/root";
 
-type Agendamento = InferSelectModel<typeof agendamentos> & {
-  clienteNome?: string | null;
-  clienteImagem?: string | null;
-};
+type RouterOutput = inferRouterOutputs<AppRouter>;
+type Agendamento = RouterOutput["agendamento"]["getRecents"][0];
 
 // Ajuste da tipagem para aceitar string ou Date
 function formatDate(dateInput: string | Date): string {
@@ -87,32 +85,24 @@ export function RecentAppointments() {
 
   return (
     <div className="space-y-8">
-      {agendamentos.map((appointment: Agendamento) => {
+      {agendamentos.map((appointment) => {
         const clientName = appointment.clienteNome ?? "Cliente";
         const initials = getInitials(clientName);
 
         return (
           <div key={appointment.id} className="flex items-center">
             <Avatar className="h-9 w-9">
-              <AvatarImage src={"/placeholder.svg"} alt={clientName} />
+              <AvatarImage src={"/avatars/01.png"} alt="Avatar" />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div className="ml-4 space-y-1">
-              <p className="text-sm leading-none font-medium">{clientName}</p>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-sm font-medium leading-none">{clientName}</p>
+              <p className="text-sm text-muted-foreground">
                 {appointment.servico}
               </p>
             </div>
-            <div className="ml-auto text-right">
-              <p className="text-sm">{formatDate(appointment.dataHora)}</p>
-              <Badge
-                variant={
-                  appointment.status === "agendado" ? "default" : "outline"
-                }
-                className="mt-1 capitalize"
-              >
-                {formatStatus(appointment.status)}
-              </Badge>
+            <div className="ml-auto font-medium">
+              <Badge variant="outline">{appointment.status}</Badge>
             </div>
           </div>
         );
