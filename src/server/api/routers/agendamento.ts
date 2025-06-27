@@ -578,15 +578,15 @@ Se precisar reagendar ou cancelar, responda esta mensagem que nosso assistente v
 
 Obrigado pela preferência! 💈✨`;
 
-          const resultado = await enviarMensagemWhatsApp(
+          const enviado = await enviarMensagemWhatsApp(
             input.telefone,
             mensagemConfirmacao,
           );
 
-          if (resultado.success) {
+          if (enviado) {
             whatsappEnviado = true;
           } else {
-            whatsappError = resultado.error ?? "Erro desconhecido no envio";
+            whatsappError = "Falha no envio via WhatsApp";
           }
         }
       } catch (error) {
