@@ -29,12 +29,8 @@ export const configuracaoRouter = createTRPCRouter({
           logoUrl: "",
           corPrimaria: "#3B82F6",
           corSecundaria: "#1E40AF",
-          zapiInstanceId: "",
-          zapiToken: "",
-          zapiClientToken: "",
           aiEnabled: false,
           whatsappAgentEnabled: false,
-          groqApiKey: "",
           contextoIA: "",
           dadosIA: "",
           servicos: [],
@@ -94,12 +90,8 @@ export const configuracaoRouter = createTRPCRouter({
           logoUrl: "",
           corPrimaria: "#3B82F6",
           corSecundaria: "#1E40AF",
-          zapiInstanceId: "",
-          zapiToken: "",
-          zapiClientToken: "",
           aiEnabled: false,
           whatsappAgentEnabled: false,
-          groqApiKey: "",
           contextoIA: "",
           dadosIA: "",
           servicos: [],
@@ -170,9 +162,6 @@ export const configuracaoRouter = createTRPCRouter({
   atualizarWhatsapp: protectedProcedure
     .input(
       z.object({
-        zapiInstanceId: z.string().optional(),
-        zapiToken: z.string().optional(),
-        zapiClientToken: z.string().optional(),
         whatsappAgentEnabled: z.boolean().optional(),
       }),
     )
@@ -192,14 +181,13 @@ export const configuracaoRouter = createTRPCRouter({
         await db.insert(configuracoes).values({ ...input, userId })
       }
 
-      return { success: true, message: "Configurações do WhatsApp salvas." }
+      return { success: true, message: "Status do WhatsApp atualizado." }
     }),
 
   atualizarIA: protectedProcedure
     .input(
       z.object({
         aiEnabled: z.boolean().optional(),
-        groqApiKey: z.string().optional(),
         contextoIA: z.string().optional(),
         dadosIA: z.string().optional(),
       }),

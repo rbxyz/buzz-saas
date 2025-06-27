@@ -17,6 +17,11 @@ export const env = createEnv({
   client: {
     // Variáveis expostas ao cliente
     NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+    // Variáveis para exibição mascarada (apenas para mostrar se estão configuradas)
+    NEXT_PUBLIC_ZAPI_INSTANCE_ID: z.string().optional(),
+    NEXT_PUBLIC_ZAPI_TOKEN: z.string().optional(),
+    NEXT_PUBLIC_ZAPI_CLIENT_TOKEN: z.string().optional(),
+    NEXT_PUBLIC_GROQ_API_KEY: z.string().optional(),
   },
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
@@ -29,6 +34,10 @@ export const env = createEnv({
     VERCEL_URL: process.env.VERCEL_URL,
     APP_URL: process.env.APP_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_ZAPI_INSTANCE_ID: process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID,
+    NEXT_PUBLIC_ZAPI_TOKEN: process.env.NEXT_PUBLIC_ZAPI_TOKEN,
+    NEXT_PUBLIC_ZAPI_CLIENT_TOKEN: process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN,
+    NEXT_PUBLIC_GROQ_API_KEY: process.env.NEXT_PUBLIC_GROQ_API_KEY,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

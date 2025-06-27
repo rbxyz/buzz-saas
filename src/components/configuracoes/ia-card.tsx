@@ -14,13 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { api } from "@/trpc/react";
-import { Brain, Zap, Key } from "lucide-react";
+import { Brain, Zap, Key, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 export function IACard() {
   const [aiEnabled, setAiEnabled] = useState(false);
-  const [groqApiKey, setGroqApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [contextoIA, setContextoIA] = useState("");
   const [dadosIA, setDadosIA] = useState("");
 
@@ -45,30 +45,30 @@ export function IACard() {
   });
 
   function handleSalvarIA() {
-    if (!groqApiKey.trim()) {
-      toast({
-        title: "Erro!",
-        description: "A chave da API Groq é obrigatória.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     atualizarIAMutation.mutate({
       aiEnabled,
-      groqApiKey,
       contextoIA,
       dadosIA,
     });
   }
 
+  function handleToggleAI() {
+    setAiEnabled(!aiEnabled);
+  }
+
   useEffect(() => {
     if (!configs) return;
     setAiEnabled(configs.aiEnabled ?? false);
-    setGroqApiKey(configs.groqApiKey ?? "");
     setContextoIA(configs.contextoIA ?? "");
     setDadosIA(configs.dadosIA ?? "");
   }, [configs]);
+
+  // Função para mascarar valores sensíveis
+  const maskValue = (value: string, show: boolean) => {
+    if (!value) return "Não configurado";
+    if (show) return value;
+    return "●".repeat(Math.min(value.length, 30));
+  };
 
   return (
     <Card
@@ -92,7 +92,7 @@ export function IACard() {
           Inteligência Artificial
         </CardTitle>
         <CardDescription className="text-sm">
-          Configure a API Groq e contexto para o assistente virtual
+          Configure contexto e dados para o assistente virtual
         </CardDescription>
       </CardHeader>
 
@@ -111,25 +111,35 @@ export function IACard() {
           </div>
           <Switch
             checked={aiEnabled}
-            onCheckedChange={setAiEnabled}
+            onCheckedChange={handleToggleAI}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="groqApiKey" className="text-sm font-medium flex items-center gap-2">
-            <Key className="h-4 w-4" />
-            Chave API Groq *
+          <Label className="text-sm font-medium flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              Chave API Groq
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowApiKey(!showApiKey)}
+              className="h-6 w-6 p-0"
+            >
+              {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
           </Label>
           <Input
-            id="groqApiKey"
-            type="password"
-            placeholder="Digite sua chave da API Groq"
-            value={groqApiKey}
-            onChange={(e) => setGroqApiKey(e.target.value)}
-            className="transition-all duration-200"
+            value={maskValue(process.env.NEXT_PUBLIC_GROQ_API_KEY ?? "GROQ_API_KEY", showApiKey)}
+            disabled
+            className="font-mono text-sm"
           />
           <p className="text-xs text-gray-500">
-            Obtenha sua chave em: <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">https://console.groq.com/keys</a>
+            Configurado via variável de ambiente GROQ_API_KEY •{" "}
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              Obter chave
+            </a>
           </p>
         </div>
 
@@ -146,6 +156,9 @@ export function IACard() {
               disabled={!aiEnabled}
               className="min-h-[100px] transition-all duration-200"
             />
+            <p className="text-xs text-gray-500">
+              Define como a IA deve se comportar e responder
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -160,17 +173,30 @@ export function IACard() {
               disabled={!aiEnabled}
               className="min-h-[80px] font-mono text-sm transition-all duration-200"
             />
+            <p className="text-xs text-gray-500">
+              Dados estruturados que a IA pode usar nas respostas
+            </p>
           </div>
         </div>
 
         <div className="pt-2">
           <Button
             onClick={handleSalvarIA}
-            disabled={atualizarIAMutation.isPending}
+            disabled={atualizarIAMutation.isPending || !aiEnabled}
             className="w-full sm:w-auto"
           >
-            {atualizarIAMutation.isPending ? "Salvando..." : "Salvar Configurações de IA"}
+            {atualizarIAMutation.isPending ? "Salvando..." : "Salvar Configurações"}
           </Button>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">
+            Como configurar as variáveis de ambiente:
+          </h4>
+          <div className="text-xs text-blue-800 space-y-1">
+            <p><strong>Desenvolvimento:</strong> Crie um arquivo .env.local</p>
+            <p><strong>Produção:</strong> Configure no painel do Vercel</p>
+          </div>
         </div>
       </CardContent>
     </Card>

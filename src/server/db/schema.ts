@@ -57,12 +57,8 @@ export const configuracoes = pgTable(
     logoUrl: text("logo_url"), // URL ou base64 string para logo
     corPrimaria: varchar("cor_primaria", { length: 255 }).default("#3B82F6"),
     corSecundaria: varchar("cor_secundaria", { length: 255 }).default("#1E40AF"),
-    zapiInstanceId: varchar("zapi_instance_id", { length: 255 }),
-    zapiToken: varchar("zapi_token", { length: 255 }),
-    zapiClientToken: varchar("zapi_client_token", { length: 255 }),
     aiEnabled: boolean("ai_enabled").default(false),
     whatsappAgentEnabled: boolean("whatsapp_agent_enabled").default(false),
-    groqApiKey: varchar("groq_api_key", { length: 255 }),
     contextoIA: text("contexto_ia"),
     dadosIA: text("dados_ia"),
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),

@@ -13,14 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
 import { api } from "@/trpc/react";
-import { MessageCircle, Smartphone } from "lucide-react";
+import { MessageCircle, Smartphone, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 export function WhatsappCard() {
-  const [instanceId, setInstanceId] = useState("");
-  const [token, setToken] = useState("");
-  const [clientToken, setClientToken] = useState("");
+  const [showInstanceId, setShowInstanceId] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [showClientToken, setShowClientToken] = useState(false);
   const [whatsappAtivo, setWhatsappAtivo] = useState(false);
   
   const { toast } = useToast();
@@ -30,44 +30,36 @@ export function WhatsappCard() {
     onSuccess: async () => {
       toast({
         title: "Sucesso!",
-        description: "Integração WhatsApp atualizada com sucesso!",
+        description: "Status do WhatsApp atualizado com sucesso!",
       });
       await refetch();
     },
     onError: (error) => {
       toast({
         title: "Erro!",
-        description: error.message || "Erro ao salvar integração do WhatsApp.",
+        description: error.message || "Erro ao atualizar status do WhatsApp.",
         variant: "destructive",
       });
     },
   });
 
-  function handleSalvarWhatsapp() {
-    if (!instanceId.trim() || !token.trim() || !clientToken.trim()) {
-      toast({
-        title: "Erro!",
-        description: "Todos os campos são obrigatórios.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  function handleToggleWhatsapp() {
     atualizarWhatsappMutation.mutate({
-      zapiInstanceId: instanceId,
-      zapiToken: token,
-      zapiClientToken: clientToken,
-      whatsappAgentEnabled: whatsappAtivo,
+      whatsappAgentEnabled: !whatsappAtivo,
     });
   }
 
   useEffect(() => {
     if (!configs) return;
-    setInstanceId(configs.zapiInstanceId ?? "");
-    setToken(configs.zapiToken ?? "");
-    setClientToken(configs.zapiClientToken ?? "");
     setWhatsappAtivo(configs.whatsappAgentEnabled ?? false);
   }, [configs]);
+
+  // Função para mascarar valores sensíveis
+  const maskValue = (value: string, show: boolean) => {
+    if (!value) return "Não configurado";
+    if (show) return value;
+    return "●".repeat(Math.min(value.length, 20));
+  };
 
   return (
     <Card
@@ -91,7 +83,7 @@ export function WhatsappCard() {
           Integração WhatsApp
         </CardTitle>
         <CardDescription className="text-sm">
-          Configure a API Z-API para automatizar mensagens via WhatsApp
+          Configurações Z-API via variáveis de ambiente
         </CardDescription>
       </CardHeader>
 
@@ -104,67 +96,93 @@ export function WhatsappCard() {
                 WhatsApp Ativo
               </Label>
               <p className="text-xs text-gray-500">
-                Ativar integração com WhatsApp
+                Ativar/desativar agente de WhatsApp
               </p>
             </div>
           </div>
           <Switch
             checked={whatsappAtivo}
-            onCheckedChange={setWhatsappAtivo}
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="instanceId" className="text-sm font-medium">
-              Instance ID *
-            </Label>
-            <Input
-              id="instanceId"
-              placeholder="Digite o Instance ID"
-              value={instanceId}
-              onChange={(e) => setInstanceId(e.target.value)}
-              className="transition-all duration-200"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="token" className="text-sm font-medium">
-              Token *
-            </Label>
-            <Input
-              id="token"
-              type="password"
-              placeholder="Digite o Token"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              className="transition-all duration-200"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="clientToken" className="text-sm font-medium">
-            Client Token *
-          </Label>
-          <Input
-            id="clientToken"
-            type="password"
-            placeholder="Digite o Client Token"
-            value={clientToken}
-            onChange={(e) => setClientToken(e.target.value)}
-            className="transition-all duration-200"
-          />
-        </div>
-
-        <div className="pt-2">
-          <Button
-            onClick={handleSalvarWhatsapp}
+            onCheckedChange={handleToggleWhatsapp}
             disabled={atualizarWhatsappMutation.isPending}
-            className="w-full sm:w-auto"
-          >
-            {atualizarWhatsappMutation.isPending ? "Salvando..." : "Salvar Integração WhatsApp"}
-          </Button>
+          />
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center justify-between">
+              ZAPI Instance ID
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInstanceId(!showInstanceId)}
+                className="h-6 w-6 p-0"
+              >
+                {showInstanceId ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </Label>
+            <Input
+              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID ?? "ZAPI_INSTANCE_ID", showInstanceId)}
+              disabled
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500">
+              Configurado via variável de ambiente ZAPI_INSTANCE_ID
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center justify-between">
+              ZAPI Token
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowToken(!showToken)}
+                className="h-6 w-6 p-0"
+              >
+                {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </Label>
+            <Input
+              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_TOKEN ?? "ZAPI_TOKEN", showToken)}
+              disabled
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500">
+              Configurado via variável de ambiente ZAPI_TOKEN
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium flex items-center justify-between">
+              ZAPI Client Token
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowClientToken(!showClientToken)}
+                className="h-6 w-6 p-0"
+              >
+                {showClientToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </Label>
+            <Input
+              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN ?? "ZAPI_CLIENT_TOKEN", showClientToken)}
+              disabled
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500">
+              Configurado via variável de ambiente ZAPI_CLIENT_TOKEN
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">
+            Como configurar as variáveis de ambiente:
+          </h4>
+          <div className="text-xs text-blue-800 space-y-1">
+            <p><strong>Desenvolvimento:</strong> Crie um arquivo .env.local</p>
+            <p><strong>Produção:</strong> Configure no painel do Vercel</p>
+          </div>
         </div>
       </CardContent>
     </Card>
