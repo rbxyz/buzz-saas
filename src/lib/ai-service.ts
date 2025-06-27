@@ -132,7 +132,7 @@ class AIService {
   private async getBusinessContext(): Promise<{ servicos: Array<{ id: number; nome: string; descricao: string | null; preco: number | null; duracao: number | null }>; horarios: Array<{ id: number; diaSemana: number; horaInicio: string; horaFim: string; ativo: boolean }> }> {
     try {
       // Buscar serviços disponíveis
-      const servicosDisponiveis = await db
+      const servicosRaw = await db
         .select({
           id: servicos.id,
           nome: servicos.nome,
@@ -142,6 +142,12 @@ class AIService {
         })
         .from(servicos)
         .where(eq(servicos.ativo, true))
+
+      // Converter preco de string para number
+      const servicosDisponiveis = servicosRaw.map(servico => ({
+        ...servico,
+        preco: servico.preco ? parseFloat(servico.preco.toString()) : null,
+      }))
 
       // Buscar horários de funcionamento
       const horariosTrabalho = await db.select().from(intervalosTrabalho).where(eq(intervalosTrabalho.ativo, true))
@@ -1128,7 +1134,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     servicos.forEach((servico, index) => {
       const emoji = index === 0 ? "✂️" : index === 1 ? "🪒" : "💫"
       texto += `${emoji} **${servico.nome}**\n`
-      texto += `   �� R$ ${servico.preco?.toFixed(2) ?? "R$ 0.00"}\n`
+      texto += `    R$ ${servico.preco?.toFixed(2) ?? "R$ 0.00"}\n`
       texto += `   ⏱️ ${servico.duracaoMinutos} minutos\n\n`
     })
     texto += "Qual serviço te interessa? 😊"
