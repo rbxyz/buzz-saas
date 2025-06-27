@@ -72,7 +72,7 @@ export async function enviarMensagemWhatsApp(telefone: string, mensagem: string)
       console.log(`✅ [ZAPI] Mensagem enviada com sucesso`)
       return true
     } else {
-      console.error(`❌ [ZAPI] Falha no envio:`, response.error || response.message)
+      console.error(`❌ [ZAPI] Falha no envio:`, response.error ?? response.message)
       return false
     }
   } catch (error) {
@@ -91,7 +91,7 @@ export async function verificarStatusInstancia(): Promise<boolean> {
       console.log(`✅ [ZAPI] Instância ativa`)
       return true
     } else {
-      console.error(`❌ [ZAPI] Instância inativa:`, response.error || response.message)
+      console.error(`❌ [ZAPI] Instância inativa:`, response.error ?? response.message)
       return false
     }
   } catch (error) {
@@ -114,7 +114,7 @@ export async function configurarWebhook(webhookUrl: string): Promise<boolean> {
       console.log(`✅ [ZAPI] Webhook configurado com sucesso`)
       return true
     } else {
-      console.error(`❌ [ZAPI] Falha na configuração do webhook:`, response.error || response.message)
+      console.error(`❌ [ZAPI] Falha na configuração do webhook:`, response.error ?? response.message)
       return false
     }
   } catch (error) {

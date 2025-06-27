@@ -178,7 +178,7 @@ export const clienteRouter = createTRPCRouter({
     try {
       const cliente = await db.select().from(clientes).where(eq(clientes.id, input.id)).limit(1)
       return cliente[0] ?? null
-    } catch (error) {
+    } catch {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Erro ao buscar cliente",
@@ -234,11 +234,8 @@ export const clienteRouter = createTRPCRouter({
       } else {
         return null
       }
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Erro ao buscar cliente por telefone",
-      })
+    } catch {
+      return null
     }
   }),
 
@@ -278,11 +275,8 @@ export const clienteRouter = createTRPCRouter({
 
         return clientesPorNome
       }
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Erro ao buscar clientes",
-      })
+    } catch {
+      return []
     }
   }),
 })

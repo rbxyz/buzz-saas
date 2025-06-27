@@ -294,7 +294,7 @@ export const agendamentoRouter = createTRPCRouter({
     }
   }),
 
-  getLandingServicos: protectedProcedure.query(async ({ ctx }) => {
+  getLandingServicos: protectedProcedure.query(async ({ ctx: _ctx }) => {
     try {
       const servicosUsuario = await db.query.servicos.findMany({
         where: eq(servicos.ativo, true),

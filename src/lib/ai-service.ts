@@ -104,7 +104,7 @@ class AIService {
 
       const result = await generateText({
         model: this.model,
-        messages: messages as any,
+        messages: messages as Parameters<typeof generateText>[0]['messages'],
         temperature: 0.7,
         maxTokens: 500,
       })
@@ -129,7 +129,7 @@ class AIService {
     }
   }
 
-  private async getBusinessContext(): Promise<any> {
+  private async getBusinessContext(): Promise<{ servicos: Array<{ id: number; nome: string; descricao: string | null; preco: number | null; duracao: number | null }>; horarios: Array<{ id: number; diaSemana: number; horaInicio: string; horaFim: string; ativo: boolean }> }> {
     try {
       // Buscar serviços disponíveis
       const servicosDisponiveis = await db
@@ -156,16 +156,16 @@ class AIService {
     }
   }
 
-  private buildSystemPrompt(context: any): string {
+  private buildSystemPrompt(context: { servicos: Array<{ nome: string; descricao: string | null; preco: number | null; duracao: number | null }>; horarios: Array<{ diaSemana: number; horaInicio: string; horaFim: string }> }): string {
     const servicosText =
       context.servicos.length > 0
-        ? context.servicos.map((s: any) => `- ${s.nome}: ${s.descricao} (R$ ${s.preco}, ${s.duracao} min)`).join("\n")
+        ? context.servicos.map((s) => `- ${s.nome}: ${s.descricao ?? 'Sem descrição'} (R$ ${s.preco ?? 0}, ${s.duracao ?? 0} min)`).join("\n")
         : "Nenhum serviço cadastrado no momento."
 
     const horariosText =
       context.horarios.length > 0
         ? context.horarios
-          .map((h: any) => `${this.getDayName(h.diaSemana)}: ${h.horaInicio} às ${h.horaFim}`)
+          .map((h) => `${this.getDayName(h.diaSemana)}: ${h.horaInicio} às ${h.horaFim}`)
           .join("\n")
         : "Horários não definidos."
 
@@ -196,7 +196,7 @@ EXEMPLOS DE RESPOSTAS:
 Responda sempre em português brasileiro de forma natural e amigável.`
   }
 
-  private detectAction(userMessage: string, aiResponse: string): { type: string; data?: any } | null {
+  private detectAction(userMessage: string, _aiResponse: string): { type: string; data?: unknown } | null {
     const message = userMessage.toLowerCase()
 
     // Detectar intenções de agendamento
@@ -234,7 +234,7 @@ Responda sempre em português brasileiro de forma natural e amigável.`
 
   private getDayName(dayNumber: number): string {
     const days = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
-    return days[dayNumber] || "Dia inválido"
+    return days[dayNumber] ?? "Dia inválido"
   }
 
   private async processMessageOld(
@@ -458,7 +458,7 @@ Responda sempre em português brasileiro de forma natural e amigável.`
     // Formatar serviços disponíveis
     const servicosTexto =
       servicos.length > 0
-        ? servicos.map((s) => `• ${s.nome}: R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`).join("\n")
+        ? servicos.map((s) => `• ${s.nome}: R$ ${s.preco?.toFixed(2) ?? "R$ 0.00"} (${s.duracaoMinutos} min)`).join("\n")
         : "• Corte de cabelo masculino\n• Barba\n• Corte + Barba"
 
     // Informações do cliente atual
@@ -1128,7 +1128,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     servicos.forEach((servico, index) => {
       const emoji = index === 0 ? "✂️" : index === 1 ? "🪒" : "💫"
       texto += `${emoji} **${servico.nome}**\n`
-      texto += `   💰 R$ ${servico.preco.toFixed(2).replace(".", ",")}\n`
+      texto += `   �� R$ ${servico.preco?.toFixed(2) ?? "R$ 0.00"}\n`
       texto += `   ⏱️ ${servico.duracaoMinutos} minutos\n\n`
     })
     texto += "Qual serviço te interessa? 😊"
@@ -1421,7 +1421,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     if (context.servicos.length > 0) {
       infoEmpresa += `\n💈 **Nossos serviços:**\n`
       infoEmpresa += context.servicos
-        .map((s) => `• ${s.nome} - R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`)
+        .map((s) => `• ${s.nome} - R$ ${s.preco?.toFixed(2) ?? "R$ 0.00"} (${s.duracaoMinutos} min)`)
         .join("\n")
     }
 

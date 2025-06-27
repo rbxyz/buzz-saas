@@ -61,16 +61,6 @@ interface ConversationData {
   updatedAt: Date | null
 }
 
-interface MessageData {
-  id: number
-  conversationId: number
-  content: string
-  role: "user" | "assistant" | "system" | "bot"
-  timestamp: Date
-  messageId?: string | null
-  createdAt: Date
-}
-
 // Função para executar operações do banco com timeout
 async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = 8000): Promise<T> {
   return Promise.race([
@@ -96,7 +86,7 @@ export async function POST(request: NextRequest) {
         phone: body.phone,
         fromMe: body.fromMe,
         isGroup: body.isGroup,
-        messagePreview: body.text?.message?.substring(0, 50) || body.body?.substring(0, 50),
+        messagePreview: body.text?.message?.substring(0, 50) ?? body.body?.substring(0, 50),
       })
     } catch (error) {
       console.error("❌ [WEBHOOK] Erro ao fazer parse do JSON:", error)
@@ -120,11 +110,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Extrair dados da mensagem
-    const phone = body.phone?.replace(/\D/g, "") || ""
-    const messageText = body.text?.message || body.body || ""
-    const messageId = body.messageId || `${Date.now()}-${Math.random()}`
-    const timestamp = body.momment || body.timestamp || Date.now()
-    const senderName = body.senderName || body.chatName || ""
+    const phone = body.phone?.replace(/\D/g, "") ?? ""
+    const messageText = body.text?.message ?? body.body ?? ""
+    const messageId = body.messageId ?? `${Date.now()}-${Math.random()}`
+    const timestamp = body.momment ?? body.timestamp ?? Date.now()
+    const senderName = body.senderName ?? body.chatName ?? ""
 
     if (!phone || !messageText.trim()) {
       console.log(`❌ [WEBHOOK] Dados insuficientes - phone: ${phone}, message: ${messageText}`)

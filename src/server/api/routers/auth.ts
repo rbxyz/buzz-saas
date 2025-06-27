@@ -299,7 +299,7 @@ export const authRouter = createTRPCRouter({
           funcao: user.role,
         },
       }
-    } catch (error) {
+    } catch {
       return { valid: false, user: null }
     }
   }),
