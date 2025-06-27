@@ -553,10 +553,14 @@ export const agendamentoRouter = createTRPCRouter({
       let whatsappError = null;
 
       try {
-        const whatsappAtivo = configuracao.whatsappAgentEnabled;
+        // Verificar se as variáveis de ambiente do WhatsApp estão configuradas
+        const zapiInstanceId = process.env.ZAPI_INSTANCE_ID;
+        const zapiToken = process.env.ZAPI_TOKEN;
+        const zapiClientToken = process.env.ZAPI_CLIENT_TOKEN;
+        const whatsappAtivo = !!(zapiInstanceId && zapiToken && zapiClientToken);
 
         if (!whatsappAtivo) {
-          whatsappError = "WhatsApp inativo nas configurações";
+          whatsappError = "WhatsApp não configurado (variáveis de ambiente ausentes)";
         } else {
           const dataFormatada = dataHora.format("DD/MM/YYYY");
           const mensagemConfirmacao = `🎉 *Agendamento Confirmado!*

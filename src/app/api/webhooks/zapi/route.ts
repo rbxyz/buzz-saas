@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages, clientes, users, configuracoes } from "@/server/db/schema"
+import { conversations, messages, clientes, users } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
@@ -132,32 +132,29 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [WEBHOOK] Mensagem válida de ${phone}: "${messageText.substring(0, 100)}..."`)
 
-    // Verificar se o agente WhatsApp está habilitado
-    console.log(`🔍 [WEBHOOK] Verificando se agente WhatsApp está habilitado...`)
-    try {
-      const config = await executeWithTimeout(() =>
-        db.select({ whatsappAgentEnabled: configuracoes.whatsappAgentEnabled })
-          .from(configuracoes)
-          .limit(1)
-      )
+    // Verificar se as variáveis de ambiente estão configuradas
+    console.log(`🔍 [WEBHOOK] Verificando configuração via variáveis de ambiente...`)
 
-      if (!config || config.length === 0 || !config[0]?.whatsappAgentEnabled) {
-        console.log(`❌ [WEBHOOK] Agente WhatsApp desabilitado`)
-        return NextResponse.json({
-          success: true,
-          ignored: true,
-          reason: "whatsapp_agent_disabled"
-        })
-      }
+    const groqApiKey = process.env.GROQ_API_KEY
+    const zapiInstanceId = process.env.ZAPI_INSTANCE_ID
+    const zapiToken = process.env.ZAPI_TOKEN
+    const zapiClientToken = process.env.ZAPI_CLIENT_TOKEN
 
-      console.log(`✅ [WEBHOOK] Agente WhatsApp habilitado`)
-    } catch (configError) {
-      console.error(`💥 [WEBHOOK] Erro ao verificar configuração:`, configError)
+    if (!groqApiKey || !zapiInstanceId || !zapiToken || !zapiClientToken) {
+      console.log(`❌ [WEBHOOK] Variáveis de ambiente não configuradas:`, {
+        groq: !!groqApiKey,
+        instance: !!zapiInstanceId,
+        token: !!zapiToken,
+        clientToken: !!zapiClientToken
+      })
       return NextResponse.json({
-        error: "Erro ao verificar configuração",
-        details: configError instanceof Error ? configError.message : "Erro desconhecido"
-      }, { status: 500 })
+        success: true,
+        ignored: true,
+        reason: "environment_variables_missing"
+      })
     }
+
+    console.log(`✅ [WEBHOOK] Todas as variáveis de ambiente configuradas`)
 
     // Processar mensagem de forma assíncrona (não bloquear resposta)
     processMessage({

@@ -10,49 +10,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { useEffect, useState } from "react";
-import { api } from "@/trpc/react";
-import { MessageCircle, Smartphone, Eye, EyeOff } from "lucide-react";
+import { MessageCircle, Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 
 export function WhatsappCard() {
   const [showInstanceId, setShowInstanceId] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [showClientToken, setShowClientToken] = useState(false);
-  const [whatsappAtivo, setWhatsappAtivo] = useState(false);
-  
-  const { toast } = useToast();
-  const { data: configs, refetch } = api.configuracao.listar.useQuery();
-
-  const atualizarWhatsappMutation = api.configuracao.atualizarWhatsapp.useMutation({
-    onSuccess: async () => {
-      toast({
-        title: "Sucesso!",
-        description: "Status do WhatsApp atualizado com sucesso!",
-      });
-      await refetch();
-    },
-    onError: (error) => {
-      toast({
-        title: "Erro!",
-        description: error.message || "Erro ao atualizar status do WhatsApp.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  function handleToggleWhatsapp() {
-    atualizarWhatsappMutation.mutate({
-      whatsappAgentEnabled: !whatsappAtivo,
-    });
-  }
-
-  useEffect(() => {
-    if (!configs) return;
-    setWhatsappAtivo(configs.whatsappAgentEnabled ?? false);
-  }, [configs]);
 
   // Função para mascarar valores sensíveis
   const maskValue = (value: string, show: boolean) => {
@@ -61,11 +26,18 @@ export function WhatsappCard() {
     return "●".repeat(Math.min(value.length, 20));
   };
 
+  // Verificar se todas as variáveis estão configuradas
+  const instanceId = process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID ?? "";
+  const token = process.env.NEXT_PUBLIC_ZAPI_TOKEN ?? "";
+  const clientToken = process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN ?? "";
+  
+  const isFullyConfigured = instanceId && token && clientToken;
+
   return (
     <Card
       className={cn(
         "w-full transition-all duration-200",
-        whatsappAtivo && "border-green-200 ring-2 ring-green-500/20",
+        isFullyConfigured && "border-green-200 ring-2 ring-green-500/20",
       )}
     >
       <CardHeader className="pb-4">
@@ -73,7 +45,7 @@ export function WhatsappCard() {
           <div
             className={cn(
               "rounded-lg p-2",
-              whatsappAtivo
+              isFullyConfigured
                 ? "bg-green-100 text-green-600"
                 : "bg-gray-100 text-gray-600",
             )}
@@ -83,28 +55,30 @@ export function WhatsappCard() {
           Integração WhatsApp
         </CardTitle>
         <CardDescription className="text-sm">
-          Configurações Z-API via variáveis de ambiente
+          Status das configurações Z-API via variáveis de ambiente
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
           <div className="flex items-center gap-3">
-            <Smartphone className="h-5 w-5 text-gray-600" />
+            {isFullyConfigured ? (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            ) : (
+              <XCircle className="h-5 w-5 text-red-600" />
+            )}
             <div>
               <Label className="text-sm font-medium text-black">
-                WhatsApp Ativo
+                Status da Configuração
               </Label>
               <p className="text-xs text-gray-500">
-                Ativar/desativar agente de WhatsApp
+                {isFullyConfigured 
+                  ? "Todas as variáveis configuradas ✅" 
+                  : "Variáveis faltando ❌"
+                }
               </p>
             </div>
           </div>
-          <Switch
-            checked={whatsappAtivo}
-            onCheckedChange={handleToggleWhatsapp}
-            disabled={atualizarWhatsappMutation.isPending}
-          />
         </div>
 
         <div className="space-y-4">
@@ -121,7 +95,7 @@ export function WhatsappCard() {
               </Button>
             </Label>
             <Input
-              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID ?? "ZAPI_INSTANCE_ID", showInstanceId)}
+              value={maskValue(instanceId, showInstanceId)}
               disabled
               className="font-mono text-sm"
             />
@@ -143,7 +117,7 @@ export function WhatsappCard() {
               </Button>
             </Label>
             <Input
-              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_TOKEN ?? "ZAPI_TOKEN", showToken)}
+              value={maskValue(token, showToken)}
               disabled
               className="font-mono text-sm"
             />
@@ -165,13 +139,24 @@ export function WhatsappCard() {
               </Button>
             </Label>
             <Input
-              value={maskValue(process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN ?? "ZAPI_CLIENT_TOKEN", showClientToken)}
+              value={maskValue(clientToken, showClientToken)}
               disabled
               className="font-mono text-sm"
             />
             <p className="text-xs text-gray-500">
               Configurado via variável de ambiente ZAPI_CLIENT_TOKEN
             </p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">
+            📋 Status do Agente WhatsApp
+          </h4>
+          <div className="text-xs text-blue-800 space-y-1">
+            <p>• O agente é ativado automaticamente quando as variáveis estão configuradas</p>
+            <p>• Não é necessário toggle manual - tudo é baseado nas variáveis de ambiente</p>
+            <p>• Status atual: <strong>{isFullyConfigured ? "Ativo" : "Inativo"}</strong></p>
           </div>
         </div>
 

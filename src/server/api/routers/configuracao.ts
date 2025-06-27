@@ -29,10 +29,6 @@ export const configuracaoRouter = createTRPCRouter({
           logoUrl: "",
           corPrimaria: "#3B82F6",
           corSecundaria: "#1E40AF",
-          aiEnabled: false,
-          whatsappAgentEnabled: false,
-          contextoIA: "",
-          dadosIA: "",
           servicos: [],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -90,10 +86,6 @@ export const configuracaoRouter = createTRPCRouter({
           logoUrl: "",
           corPrimaria: "#3B82F6",
           corSecundaria: "#1E40AF",
-          aiEnabled: false,
-          whatsappAgentEnabled: false,
-          contextoIA: "",
-          dadosIA: "",
           servicos: [],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -159,57 +151,7 @@ export const configuracaoRouter = createTRPCRouter({
       return { success: true, message: "Configurações da conta salvas." }
     }),
 
-  atualizarWhatsapp: protectedProcedure
-    .input(
-      z.object({
-        whatsappAgentEnabled: z.boolean().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.user.id
 
-      const existingConfig = await db.query.configuracoes.findFirst({
-        where: eq(configuracoes.userId, userId),
-      })
-
-      if (existingConfig) {
-        await db
-          .update(configuracoes)
-          .set({ ...input, updatedAt: new Date() })
-          .where(eq(configuracoes.userId, userId))
-      } else {
-        await db.insert(configuracoes).values({ ...input, userId })
-      }
-
-      return { success: true, message: "Status do WhatsApp atualizado." }
-    }),
-
-  atualizarIA: protectedProcedure
-    .input(
-      z.object({
-        aiEnabled: z.boolean().optional(),
-        contextoIA: z.string().optional(),
-        dadosIA: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.user.id
-
-      const existingConfig = await db.query.configuracoes.findFirst({
-        where: eq(configuracoes.userId, userId),
-      })
-
-      if (existingConfig) {
-        await db
-          .update(configuracoes)
-          .set({ ...input, updatedAt: new Date() })
-          .where(eq(configuracoes.userId, userId))
-      } else {
-        await db.insert(configuracoes).values({ ...input, userId })
-      }
-
-      return { success: true, message: "Configurações de IA salvas." }
-    }),
 
   updateServicos: protectedProcedure
     .input(

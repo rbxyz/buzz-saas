@@ -537,7 +537,7 @@ export default function LandingPage() {
             {/* Status do WhatsApp */}
             {configs && (
               <div className="mt-2 flex items-center justify-center gap-2">
-                {configs.whatsappAgentEnabled ? (
+                {process.env.NEXT_PUBLIC_ZAPI_INSTANCE_ID && process.env.NEXT_PUBLIC_ZAPI_TOKEN && process.env.NEXT_PUBLIC_ZAPI_CLIENT_TOKEN ? (
                   <Badge
                     variant="outline"
                     className="border-green-500 text-green-700"
