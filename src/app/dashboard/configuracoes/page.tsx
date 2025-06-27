@@ -5,6 +5,8 @@ import { ServicosCard } from "@/components/configuracoes/servicos-card";
 import { IntervalosCard } from "@/components/configuracoes/intervalos-card";
 import { ContaCard } from "@/components/configuracoes/conta-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
+import { WhatsappCard } from "@/components/configuracoes/whatsapp-card";
+import { IACard } from "@/components/configuracoes/ia-card";
 
 export default function Configuracoes() {
   return (

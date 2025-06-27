@@ -7,110 +7,74 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
-import { trpc } from "@/utils/trpc";
-import { Brain, Zap } from "lucide-react";
+import { api } from "@/trpc/react";
+import { Brain, Zap, Key } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export function IACard() {
-  const [modoTreinoAtivo] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [groqApiKey, setGroqApiKey] = useState("");
   const [contextoIA, setContextoIA] = useState("");
   const [dadosIA, setDadosIA] = useState("");
 
-  const { data: configs } = trpc.configuracao.listar.useQuery();
+  const { toast } = useToast();
+  const { data: configs, refetch } = api.configuracao.listar.useQuery();
 
-  /*
-  const atualizarIAMutation = trpc.configuracao.atualizarIA.useMutation({
-    onSuccess: () => {
+  const atualizarIAMutation = api.configuracao.atualizarIA.useMutation({
+    onSuccess: async () => {
       toast({
         title: "Sucesso!",
         description: "Configurações de IA atualizadas com sucesso!",
       });
-      void refetch();
+      await refetch();
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Erro!",
-        description: "Erro ao salvar configurações de IA.",
+        description: error.message || "Erro ao salvar configurações de IA.",
         variant: "destructive",
       });
     },
   });
 
-  const atualizarModoTreinoMutation =
-    trpc.configuracao.atualizarModoTreino.useMutation({
-      onSuccess: () => {
-        toast({
-          title: "Sucesso!",
-          description: "Modo treino atualizado com sucesso!",
-        });
-        void refetch();
-      },
-      onError: () => {
-        toast({
-          title: "Erro!",
-          description: "Erro ao atualizar modo treino.",
-          variant: "destructive",
-        });
-      },
-    });
-    */
-
   function handleSalvarIA() {
-    /*
-    if (!configs?.id) {
+    if (!groqApiKey.trim()) {
       toast({
         title: "Erro!",
-        description: "Configuração não carregada.",
+        description: "A chave da API Groq é obrigatória.",
         variant: "destructive",
       });
       return;
     }
+
     atualizarIAMutation.mutate({
-      id: configs.id,
+      aiEnabled,
+      groqApiKey,
       contextoIA,
       dadosIA,
     });
-    */
-  }
-
-  function handleToggleModoTreino() {
-    /*
-    if (!configs?.id) {
-      toast({
-        title: "Erro!",
-        description: "Configuração não carregada.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const novoModo = !modoTreinoAtivo;
-    setModoTreinoAtivo(novoModo);
-    atualizarModoTreinoMutation.mutate({
-      id: configs.id,
-      modoTreinoAtivo: novoModo,
-    });
-    */
   }
 
   useEffect(() => {
-    /*
     if (!configs) return;
-    setModoTreinoAtivo(configs.modoTreinoAtivo ?? false);
+    setAiEnabled(configs.aiEnabled ?? false);
+    setGroqApiKey(configs.groqApiKey ?? "");
     setContextoIA(configs.contextoIA ?? "");
     setDadosIA(configs.dadosIA ?? "");
-    */
   }, [configs]);
 
   return (
     <Card
       className={cn(
         "w-full transition-all duration-200",
-        modoTreinoAtivo && "border-blue-200 ring-2 ring-blue-500/20",
+        aiEnabled && "border-blue-200 ring-2 ring-blue-500/20",
       )}
     >
       <CardHeader className="pb-4">
@@ -118,7 +82,7 @@ export function IACard() {
           <div
             className={cn(
               "rounded-lg p-2",
-              modoTreinoAtivo
+              aiEnabled
                 ? "bg-blue-100 text-blue-600"
                 : "bg-gray-100 text-gray-600",
             )}
@@ -127,29 +91,46 @@ export function IACard() {
           </div>
           Inteligência Artificial
         </CardTitle>
-        <CardDescription className="text-sm text-white">
-          Configure o contexto e dados para o assistente virtual
+        <CardDescription className="text-sm">
+          Configure a API Groq e contexto para o assistente virtual
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
           <div className="flex items-center gap-3">
-            <Zap className="h-5 w-5 text-black" />
+            <Zap className="h-5 w-5 text-gray-600" />
             <div>
               <Label className="text-sm font-medium text-black">
-                Modo Treino Inativo
+                IA Habilitada
               </Label>
               <p className="text-xs text-gray-500">
-                Ativar configurações de IA
+                Ativar assistente de inteligência artificial
               </p>
             </div>
           </div>
           <Switch
-            checked={modoTreinoAtivo}
-            onCheckedChange={handleToggleModoTreino}
-            disabled={true}
+            checked={aiEnabled}
+            onCheckedChange={setAiEnabled}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="groqApiKey" className="text-sm font-medium flex items-center gap-2">
+            <Key className="h-4 w-4" />
+            Chave API Groq *
+          </Label>
+          <Input
+            id="groqApiKey"
+            type="password"
+            placeholder="Digite sua chave da API Groq"
+            value={groqApiKey}
+            onChange={(e) => setGroqApiKey(e.target.value)}
+            className="transition-all duration-200"
+          />
+          <p className="text-xs text-gray-500">
+            Obtenha sua chave em: <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">https://console.groq.com/keys</a>
+          </p>
         </div>
 
         <div className="space-y-4">
@@ -162,7 +143,7 @@ export function IACard() {
               value={contextoIA}
               onChange={(e) => setContextoIA(e.target.value)}
               placeholder="Ex: Você é um atendente virtual da Barbearia do João. Seja sempre educado e prestativo..."
-              disabled={true || !modoTreinoAtivo}
+              disabled={!aiEnabled}
               className="min-h-[100px] transition-all duration-200"
             />
           </div>
@@ -176,7 +157,7 @@ export function IACard() {
               value={dadosIA}
               onChange={(e) => setDadosIA(e.target.value)}
               placeholder='Ex: {"barbeiros": ["João", "Carlos"], "estilos": ["Degradê", "Navalhado"]}'
-              disabled={true || !modoTreinoAtivo}
+              disabled={!aiEnabled}
               className="min-h-[80px] font-mono text-sm transition-all duration-200"
             />
           </div>
@@ -185,10 +166,10 @@ export function IACard() {
         <div className="pt-2">
           <Button
             onClick={handleSalvarIA}
-            disabled={true}
+            disabled={atualizarIAMutation.isPending}
             className="w-full sm:w-auto"
           >
-            Salvar Configurações de IA
+            {atualizarIAMutation.isPending ? "Salvando..." : "Salvar Configurações de IA"}
           </Button>
         </div>
       </CardContent>

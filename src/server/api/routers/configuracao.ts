@@ -34,6 +34,9 @@ export const configuracaoRouter = createTRPCRouter({
           zapiClientToken: "",
           aiEnabled: false,
           whatsappAgentEnabled: false,
+          groqApiKey: "",
+          contextoIA: "",
+          dadosIA: "",
           servicos: [],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -96,6 +99,9 @@ export const configuracaoRouter = createTRPCRouter({
           zapiClientToken: "",
           aiEnabled: false,
           whatsappAgentEnabled: false,
+          groqApiKey: "",
+          contextoIA: "",
+          dadosIA: "",
           servicos: [],
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -193,6 +199,9 @@ export const configuracaoRouter = createTRPCRouter({
     .input(
       z.object({
         aiEnabled: z.boolean().optional(),
+        groqApiKey: z.string().optional(),
+        contextoIA: z.string().optional(),
+        dadosIA: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

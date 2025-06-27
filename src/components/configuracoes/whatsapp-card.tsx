@@ -12,63 +12,61 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useEffect, useState } from "react";
-import { trpc } from "@/utils/trpc";
+import { api } from "@/trpc/react";
 import { MessageCircle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export function WhatsappCard() {
   const [instanceId, setInstanceId] = useState("");
   const [token, setToken] = useState("");
+  const [clientToken, setClientToken] = useState("");
   const [whatsappAtivo, setWhatsappAtivo] = useState(false);
+  
+  const { toast } = useToast();
+  const { data: configs, refetch } = api.configuracao.listar.useQuery();
 
-  const { data: configs } = trpc.configuracao.listar.useQuery();
-
-  /*
-  const atualizarWhatsappMutation =
-    trpc.configuracao.atualizarIntegracaoWhatsapp.useMutation({
-      onSuccess: async () => {
-        toast({
-          title: "Sucesso!",
-          description: "Integração WhatsApp atualizada com sucesso!",
-        });
-        await refetch();
-      },
-      onError: () => {
-        toast({
-          title: "Erro!",
-          description: "Erro ao salvar integração do WhatsApp.",
-          variant: "destructive",
-        });
-      },
-    });
-    */
-
-  function handleSalvarWhatsapp() {
-    /*
-    if (!configs?.id) {
+  const atualizarWhatsappMutation = api.configuracao.atualizarWhatsapp.useMutation({
+    onSuccess: async () => {
+      toast({
+        title: "Sucesso!",
+        description: "Integração WhatsApp atualizada com sucesso!",
+      });
+      await refetch();
+    },
+    onError: (error) => {
       toast({
         title: "Erro!",
-        description: "Configuração não carregada.",
+        description: error.message || "Erro ao salvar integração do WhatsApp.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  function handleSalvarWhatsapp() {
+    if (!instanceId.trim() || !token.trim() || !clientToken.trim()) {
+      toast({
+        title: "Erro!",
+        description: "Todos os campos são obrigatórios.",
         variant: "destructive",
       });
       return;
     }
+
     atualizarWhatsappMutation.mutate({
-      id: configs.id,
-      instanceId,
-      token,
-      whatsappAtivo,
+      zapiInstanceId: instanceId,
+      zapiToken: token,
+      zapiClientToken: clientToken,
+      whatsappAgentEnabled: whatsappAtivo,
     });
-    */
   }
 
   useEffect(() => {
-    /*
     if (!configs) return;
-    setInstanceId(configs.instanceId || "");
-    setToken(configs.token || "");
-    setWhatsappAtivo(configs.whatsappAtivo || false);
-    */
+    setInstanceId(configs.zapiInstanceId ?? "");
+    setToken(configs.zapiToken ?? "");
+    setClientToken(configs.zapiClientToken ?? "");
+    setWhatsappAtivo(configs.whatsappAgentEnabled ?? false);
   }, [configs]);
 
   return (
@@ -92,7 +90,7 @@ export function WhatsappCard() {
           </div>
           Integração WhatsApp
         </CardTitle>
-        <CardDescription className="text-sm text-white">
+        <CardDescription className="text-sm">
           Configure a API Z-API para automatizar mensagens via WhatsApp
         </CardDescription>
       </CardHeader>
@@ -113,28 +111,26 @@ export function WhatsappCard() {
           <Switch
             checked={whatsappAtivo}
             onCheckedChange={setWhatsappAtivo}
-            disabled={true}
           />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="instanceId" className="text-sm font-medium">
-              Instance ID
+              Instance ID *
             </Label>
             <Input
               id="instanceId"
               placeholder="Digite o Instance ID"
               value={instanceId}
               onChange={(e) => setInstanceId(e.target.value)}
-              disabled={true}
               className="transition-all duration-200"
             />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="token" className="text-sm font-medium">
-              Token
+              Token *
             </Label>
             <Input
               id="token"
@@ -142,19 +138,32 @@ export function WhatsappCard() {
               placeholder="Digite o Token"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              disabled={true}
               className="transition-all duration-200"
             />
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="clientToken" className="text-sm font-medium">
+            Client Token *
+          </Label>
+          <Input
+            id="clientToken"
+            type="password"
+            placeholder="Digite o Client Token"
+            value={clientToken}
+            onChange={(e) => setClientToken(e.target.value)}
+            className="transition-all duration-200"
+          />
+        </div>
+
         <div className="pt-2">
           <Button
             onClick={handleSalvarWhatsapp}
-            disabled={true}
+            disabled={atualizarWhatsappMutation.isPending}
             className="w-full sm:w-auto"
           >
-            Salvar Integração WhatsApp
+            {atualizarWhatsappMutation.isPending ? "Salvando..." : "Salvar Integração WhatsApp"}
           </Button>
         </div>
       </CardContent>
