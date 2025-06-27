@@ -1,8 +1,8 @@
+import { generateText } from "ai"
 import { groq } from "@ai-sdk/groq"
-import { generateText, type CoreMessage } from "ai"
 import { db } from "@/server/db"
-import { conversations, messages } from "@/server/db/schema"
-import type { clientes, agendamentos, configuracoes } from "@/server/db/schema"
+import { servicos, intervalosTrabalho, conversations, messages as messagesTable } from "@/server/db/schema"
+import type { clientes as clientesType, agendamentos as agendamentosType, configuracoes } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import dayjs from "dayjs"
 import "dayjs/locale/pt-br"
@@ -10,8 +10,8 @@ import type { InferSelectModel } from "drizzle-orm"
 
 dayjs.locale("pt-br")
 
-type Clientes = InferSelectModel<typeof clientes>
-type Agendamentos = InferSelectModel<typeof agendamentos>
+type Clientes = InferSelectModel<typeof clientesType>
+type Agendamentos = InferSelectModel<typeof agendamentosType>
 type Configuracoes = InferSelectModel<typeof configuracoes>
 
 interface ServicoConfigurado {
@@ -36,19 +36,7 @@ interface AgendamentoContext {
 
 interface AIResponse {
   message: string
-  action?:
-  | "agendar_direto"
-  | "verificar_horario"
-  | "listar_servicos"
-  | "listar_horarios"
-  | "cancelar"
-  | "reagendar"
-  | "consultar_agendamentos"
-  | "criar_cliente"
-  | "consultar_empresa"
-  | "verificar_funcionamento"
-  | "buscar_endereco"
-  | "encaminhar_humano"
+  action?: string
   data?: unknown
 }
 
@@ -61,9 +49,21 @@ interface DadosAgendamentoExtraidos {
   completo?: boolean
 }
 
-export class AIService {
-  private model = groq("llama-3.1-8b-instant")
-  private baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://buzz-saas.vercel.app/"
+interface ConversationMessage {
+  role: string
+  content: string
+}
+
+interface CoreMessage {
+  role: "user" | "assistant" | "system"
+  content: string
+}
+
+class AIService {
+  private readonly model = groq("llama-3.1-70b-versatile")
+  private baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000")
 
   // Armazenar contexto de agendamento entre  mensagens
   private agendamentoContexto: Record<
@@ -80,6 +80,164 @@ export class AIService {
   private saudacoesFeitas = new Set<string>()
 
   async processMessage(
+    userMessage: string,
+    phoneNumber: string,
+    conversationHistory: ConversationMessage[] = [],
+  ): Promise<AIResponse> {
+    try {
+      console.log(`🤖 [AI] Processando mensagem: "${userMessage.substring(0, 50)}..."`)
+
+      // Buscar dados do contexto
+      const context = await this.getBusinessContext()
+
+      // Construir prompt do sistema
+      const systemPrompt = this.buildSystemPrompt(context)
+
+      // Construir histórico da conversa
+      const messages = [
+        { role: "system", content: systemPrompt },
+        ...conversationHistory.slice(-8), // Últimas 8 mensagens
+        { role: "user", content: userMessage },
+      ]
+
+      console.log(`🧠 [AI] Gerando resposta com ${messages.length} mensagens no contexto`)
+
+      const result = await generateText({
+        model: this.model,
+        messages: messages as any,
+        temperature: 0.7,
+        maxTokens: 500,
+      })
+
+      const response = result.text.trim()
+      console.log(`✅ [AI] Resposta gerada: "${response.substring(0, 100)}..."`)
+
+      // Detectar ações especiais
+      const action = this.detectAction(userMessage, response)
+
+      return {
+        message: response,
+        action: action?.type,
+        data: action?.data,
+      }
+    } catch (error) {
+      console.error(`💥 [AI] Erro no processamento:`, error)
+
+      return {
+        message: "Desculpe, estou com dificuldades técnicas no momento. Pode repetir sua mensagem? 🤖",
+      }
+    }
+  }
+
+  private async getBusinessContext(): Promise<any> {
+    try {
+      // Buscar serviços disponíveis
+      const servicosDisponiveis = await db
+        .select({
+          id: servicos.id,
+          nome: servicos.nome,
+          descricao: servicos.descricao,
+          preco: servicos.preco,
+          duracao: servicos.duracao,
+        })
+        .from(servicos)
+        .where(eq(servicos.ativo, true))
+
+      // Buscar horários de funcionamento
+      const horariosTrabalho = await db.select().from(intervalosTrabalho).where(eq(intervalosTrabalho.ativo, true))
+
+      return {
+        servicos: servicosDisponiveis,
+        horarios: horariosTrabalho,
+      }
+    } catch (error) {
+      console.error(`💥 [AI] Erro ao buscar contexto:`, error)
+      return { servicos: [], horarios: [] }
+    }
+  }
+
+  private buildSystemPrompt(context: any): string {
+    const servicosText =
+      context.servicos.length > 0
+        ? context.servicos.map((s: any) => `- ${s.nome}: ${s.descricao} (R$ ${s.preco}, ${s.duracao} min)`).join("\n")
+        : "Nenhum serviço cadastrado no momento."
+
+    const horariosText =
+      context.horarios.length > 0
+        ? context.horarios
+          .map((h: any) => `${this.getDayName(h.diaSemana)}: ${h.horaInicio} às ${h.horaFim}`)
+          .join("\n")
+        : "Horários não definidos."
+
+    return `Você é um assistente virtual de agendamentos para um salão de beleza/barbearia.
+
+INFORMAÇÕES DO NEGÓCIO:
+Serviços disponíveis:
+${servicosText}
+
+Horários de funcionamento:
+${horariosText}
+
+INSTRUÇÕES:
+1. Seja sempre cordial, profissional e prestativo
+2. Use emojis para deixar as conversas mais amigáveis
+3. Ajude com agendamentos, informações sobre serviços e horários
+4. Se não souber algo específico, seja honesto e ofereça alternativas
+5. Mantenha respostas concisas (máximo 2-3 frases)
+6. Para agendamentos, sempre confirme: serviço, data, horário e dados do cliente
+7. Se o cliente quiser cancelar ou reagendar, seja compreensivo e ajude
+
+EXEMPLOS DE RESPOSTAS:
+- "Olá! 👋 Como posso ajudar você hoje?"
+- "Temos estes serviços disponíveis: [lista]. Qual te interessa?"
+- "Perfeito! Para confirmar seu agendamento, preciso de: nome completo, serviço desejado, data e horário preferido."
+- "Nosso horário de funcionamento é: [horários]. Qual dia seria melhor para você?"
+
+Responda sempre em português brasileiro de forma natural e amigável.`
+  }
+
+  private detectAction(userMessage: string, aiResponse: string): { type: string; data?: any } | null {
+    const message = userMessage.toLowerCase()
+
+    // Detectar intenções de agendamento
+    if (message.includes("agendar") || message.includes("marcar") || message.includes("horário")) {
+      return { type: "agendar_direto" }
+    }
+
+    // Detectar pedidos de informação sobre serviços
+    if (message.includes("serviço") || message.includes("preço") || message.includes("valor")) {
+      return { type: "listar_servicos" }
+    }
+
+    // Detectar pedidos de horários disponíveis
+    if (message.includes("disponível") || message.includes("livre") || message.includes("vago")) {
+      return { type: "listar_horarios" }
+    }
+
+    // Detectar consulta de agendamentos
+    if (message.includes("meu agendamento") || message.includes("minha consulta")) {
+      return { type: "consultar_agendamentos" }
+    }
+
+    // Detectar cancelamentos
+    if (message.includes("cancelar") || message.includes("desmarcar")) {
+      return { type: "cancelar" }
+    }
+
+    // Detectar reagendamentos
+    if (message.includes("reagendar") || message.includes("remarcar") || message.includes("mudar")) {
+      return { type: "reagendar" }
+    }
+
+    return null
+  }
+
+  private getDayName(dayNumber: number): string {
+    const days = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
+    return days[dayNumber] || "Dia inválido"
+  }
+
+  private async processMessageOld(
     message: string,
     telefone: string,
     conversationHistory: Array<{ role: string; content?: string }> = [],
@@ -93,7 +251,7 @@ export class AIService {
       console.log(`👋 [AI-SERVICE] É primeira mensagem? ${isPrimeiraMensagem}`)
 
       // Buscar contexto completo via webhooks
-      const context = await this.getBusinessContext(telefone)
+      const context = await this.getBusinessContextOld(telefone)
 
       if (!context) {
         console.error("❌ [AI-SERVICE] Contexto de negócio não pôde ser carregado.")
@@ -154,7 +312,11 @@ export class AIService {
       console.log(`🧹 [AI-SERVICE] Mensagens válidas para o histórico: ${validHistory.length}`)
 
       // Preparar mensagens para a IA
-      const messagesForAI: CoreMessage[] = [{ role: "system", content: systemPrompt }, ...validHistory, { role: "user", content: message }]
+      const messagesForAI: CoreMessage[] = [
+        { role: "system", content: systemPrompt },
+        ...validHistory,
+        { role: "user", content: message },
+      ]
 
       console.log(`🤖 [AI-SERVICE] Enviando para IA: ${messagesForAI.length} mensagens`)
 
@@ -183,18 +345,35 @@ export class AIService {
     }
   }
 
-  private async getBusinessContext(telefone: string): Promise<AgendamentoContext | null> {
+  private async getBusinessContextOld(telefone: string): Promise<AgendamentoContext | null> {
     try {
-      console.log(`🔍 [AI-SERVICE] Buscando contexto via webhooks para: ${telefone}`)
+      console.log(`🔍 [AI-SERVICE] Buscando contexto para: ${telefone.substring(0, 8)}***`)
 
-      // Limpar telefone
       const telefoneClean = telefone.replace(/\D/g, "")
+      const timeoutMs = 5000 // 5 segundos timeout
+
+      // Helper para fetch com timeout
+      const fetchWithTimeout = async (url: string, options?: RequestInit) => {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          })
+          clearTimeout(timeoutId)
+          return response
+        } catch (error) {
+          clearTimeout(timeoutId)
+          throw error
+        }
+      }
 
       // 1. Buscar serviços e configuração
-      const servicosResponse = await fetch(`${this.baseUrl}/api/webhooks/listar-servicos`)
+      const servicosResponse = await fetchWithTimeout(`${this.baseUrl}/api/webhooks/listar-servicos`)
       if (!servicosResponse.ok) {
-        const errorText = await servicosResponse.text()
-        throw new Error(`Erro ao buscar serviços: ${servicosResponse.statusText} - ${errorText}`)
+        throw new Error(`Erro ao buscar serviços: ${servicosResponse.status}`)
       }
       const servicosData = (await servicosResponse.json()) as {
         success: boolean
@@ -204,15 +383,15 @@ export class AIService {
       }
 
       if (!servicosData.success) {
-        throw new Error(`Erro ao buscar serviços: ${servicosData.error ?? "Erro desconhecido"}`)
+        throw new Error(`Erro nos serviços: ${servicosData.error}`)
       }
-      console.log("✅ [AI-SERVICE] Contexto de serviços carregado.")
 
       // 2. Buscar cliente e agendamentos
-      const clienteResponse = await fetch(`${this.baseUrl}/api/webhooks/buscar-cliente?telefone=${telefoneClean}`)
+      const clienteResponse = await fetchWithTimeout(
+        `${this.baseUrl}/api/webhooks/buscar-cliente?telefone=${telefoneClean}`,
+      )
       if (!clienteResponse.ok) {
-        const errorText = await clienteResponse.text()
-        throw new Error(`Erro ao buscar cliente: ${clienteResponse.statusText} - ${errorText}`)
+        throw new Error(`Erro ao buscar cliente: ${clienteResponse.status}`)
       }
       const clienteData = (await clienteResponse.json()) as {
         success: boolean
@@ -222,9 +401,8 @@ export class AIService {
       }
 
       if (!clienteData.success) {
-        throw new Error(`Erro ao buscar cliente: ${clienteData.error ?? "Erro desconhecido"}`)
+        throw new Error(`Erro no cliente: ${clienteData.error}`)
       }
-      console.log("✅ [AI-SERVICE] Contexto de cliente e agendamentos carregado.")
 
       // 3. Buscar histórico da conversa
       const conversation = await db
@@ -239,29 +417,23 @@ export class AIService {
       if (conversation) {
         const dbMessages = await db
           .select()
-          .from(messages)
-          .where(eq(messages.conversationId, conversation.id))
-          .orderBy(desc(messages.createdAt))
-          .limit(20)
+          .from(messagesTable)
+          .where(eq(messagesTable.conversationId, conversation.id))
+          .orderBy(desc(messagesTable.createdAt))
+          .limit(10) // Reduzido para melhor performance
 
-        // CORREÇÃO: Garantir que todas as mensagens têm content
         conversationHistory = dbMessages
           .filter((msg) => msg.content?.trim())
           .reverse()
           .map((msg) => ({
             role: msg.role === "user" ? "user" : "assistant",
-            content: msg.content ?? "", // Garantir que content nunca é undefined
+            content: msg.content ?? "",
           }))
       }
 
-      console.log("✅ [AI-SERVICE] Histórico da conversa carregado.")
-
-      console.log(`✅ [AI-SERVICE] Contexto carregado via webhooks:`, {
-        servicos: servicosData.servicos.length,
-        cliente: clienteData.cliente?.nome ?? "Não encontrado",
-        agendamentos: clienteData.agendamentos?.length ?? 0,
-        historico: conversationHistory.length,
-      })
+      console.log(
+        `✅ [AI-SERVICE] Contexto carregado: ${servicosData.servicos.length} serviços, cliente: ${clienteData.cliente?.nome ?? "N/A"}`,
+      )
 
       return {
         servicos: servicosData.servicos,
@@ -284,21 +456,24 @@ export class AIService {
     const enderecoEmpresa = configuracao?.endereco ?? ""
 
     // Formatar serviços disponíveis
-    const servicosTexto = servicos.length > 0
-      ? servicos.map(s => `• ${s.nome}: R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`).join('\n')
-      : "• Corte de cabelo masculino\n• Barba\n• Corte + Barba"
+    const servicosTexto =
+      servicos.length > 0
+        ? servicos.map((s) => `• ${s.nome}: R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`).join("\n")
+        : "• Corte de cabelo masculino\n• Barba\n• Corte + Barba"
 
     // Informações do cliente atual
     const infoCliente = cliente
-      ? `CLIENTE ATUAL: ${cliente.nome} (Telefone: ${cliente.telefone}${cliente.email ? `, Email: ${cliente.email}` : ''})`
+      ? `CLIENTE ATUAL: ${cliente.nome} (Telefone: ${cliente.telefone}${cliente.email ? `, Email: ${cliente.email}` : ""})`
       : "Cliente não cadastrado - precisará criar cadastro para agendar"
 
     // Histórico de agendamentos do cliente
-    const historicoAgendamentos = agendamentos && agendamentos.length > 0
-      ? `HISTÓRICO: ${agendamentos.slice(0, 3).map(a =>
-        `${dayjs(a.dataHora).format('DD/MM/YYYY HH:mm')} - ${a.servico} (${a.status})`
-      ).join(', ')}`
-      : "Primeiro agendamento do cliente"
+    const historicoAgendamentos =
+      agendamentos && agendamentos.length > 0
+        ? `HISTÓRICO: ${agendamentos
+          .slice(0, 3)
+          .map((a) => `${dayjs(a.dataHora).format("DD/MM/YYYY HH:mm")} - ${a.servico} (${a.status})`)
+          .join(", ")}`
+        : "Primeiro agendamento do cliente"
 
     // Contexto de agendamento em andamento
     const contextoAgendamento = agendamentoEmAndamento
@@ -317,8 +492,8 @@ Você é o assistente virtual oficial da ${nomeEmpresa}. Seja sempre:
 
 ## INFORMAÇÕES DA EMPRESA
 - **Nome**: ${nomeEmpresa}
-- **Telefone**: ${telefoneEmpresa || 'Consulte diretamente na barbearia'}
-- **Endereço**: ${enderecoEmpresa || 'Consulte diretamente na barbearia'}
+- **Telefone**: ${telefoneEmpresa || "Consulte diretamente na barbearia"}
+- **Endereço**: ${enderecoEmpresa || "Consulte diretamente na barbearia"}
 
 ## SERVIÇOS DISPONÍVEIS
 ${servicosTexto}
@@ -395,7 +570,7 @@ Para estas situações, SEMPRE encaminhe para atendimento humano:
 "Entendo que precisa cancelar. Vou conectar você com nossa equipe para resolver isso rapidinho."
 
 **Não sei uma informação:**
-"Deixa eu consultar essa informação para você!" [usar webhook apropriado]
+"Deixa eu consultar essa informação para ter certeza!" [usar webhook apropriado]
 
 ## PERSONALIZAÇÃO POR TIPO DE MENSAGEM
 
@@ -478,7 +653,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
           case "listar_servicos": {
             return {
               message: this.formatarServicosNatural(context.servicos),
-              action: undefined // Remove action para não processar novamente
+              action: undefined, // Remove action para não processar novamente
             }
           }
 
@@ -525,7 +700,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
           console.warn(`⚠️ [AI-SERVICE] Possível informação falsa detectada: ${textoLimpo.substring(0, 100)}`)
           return {
             message: "Deixa eu consultar essa informação para ter certeza! Um momento...",
-            action: "consultar_empresa"
+            action: "consultar_empresa",
           }
         }
 
@@ -533,7 +708,6 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
       }
 
       return { message: "Não entendi bem. Pode repetir o que você precisa?" }
-
     } catch (error) {
       console.error("💥 [AI-SERVICE] Erro ao analisar resposta da IA:", error)
       return { message: "Tive um problema ao processar sua resposta. Pode tentar novamente?" }
@@ -567,7 +741,10 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     if (dados.data) contexto.data = dados.data
     if (dados.horario) contexto.horario = dados.horario
     contexto.ultimaAtualizacao = new Date()
-    console.log(`💾 [AI-SERVICE] Contexto de agendamento atualizado para ${telefone}:`, this.agendamentoContexto[telefone])
+    console.log(
+      `💾 [AI-SERVICE] Contexto de agendamento atualizado para ${telefone}:`,
+      this.agendamentoContexto[telefone],
+    )
   }
 
   private combinarDadosComContexto(dadosExtraidos: DadosAgendamentoExtraidos, telefone: string) {
@@ -704,7 +881,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     const patterns = [
       /(?:meu nome é|me chamo|sou o|sou a|pode registrar como|pode anotar como)\s+([A-Za-zÀ-ÿ\s]{2,50})/i,
       /(?:nome:|nome)\s+([A-Za-zÀ-ÿ\s]{2,50})/i,
-      /^([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)+)$/i // Nome completo direto
+      /^([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)+)$/i, // Nome completo direto
     ]
 
     for (const pattern of patterns) {
@@ -715,12 +892,12 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
         // Validações básicas
         if (nome.length < 2 || nome.length > 50) continue
         if (!/^[A-Za-zÀ-ÿ\s]+$/.test(nome)) continue // Apenas letras e espaços
-        if (nome.split(' ').length < 2) continue // Pelo menos nome e sobrenome
+        if (nome.split(" ").length < 2) continue // Pelo menos nome e sobrenome
 
         const nomeFormatado = nome
-          .split(' ')
-          .map(palavra => palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase())
-          .join(' ')
+          .split(" ")
+          .map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase())
+          .join(" ")
 
         console.log(`✅ [AI-SERVICE] Nome extraído: ${nomeFormatado}`)
         return nomeFormatado
@@ -735,7 +912,10 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     const lowerMessage = message.toLowerCase()
 
     console.log(`🔍 [AI-SERVICE] Extraindo serviço de: "${message}"`)
-    console.log(`🔍 [AI-SERVICE] Serviços disponíveis:`, servicos.map(s => s.nome))
+    console.log(
+      `🔍 [AI-SERVICE] Serviços disponíveis:`,
+      servicos.map((s) => s.nome),
+    )
 
     // Primeiro, tentar match exato
     for (const servico of servicos) {
@@ -747,21 +927,21 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     // Mapeamento de palavras-chave para tipos de serviço
     const palavrasChave = {
-      corte: ['corte', 'cabelo', 'cortei', 'cortar', 'aparar'],
-      barba: ['barba', 'barbeado', 'barbear', 'bigode'],
-      'corte + barba': ['completo', 'tudo', 'corte e barba', 'corte + barba', 'cabelo e barba'],
-      sobrancelha: ['sobrancelha', 'sombrancelha', 'cílios'],
-      hidratacao: ['hidratação', 'hidratacao', 'tratamento'],
-      lavagem: ['lavagem', 'lavar', 'shampoo']
+      corte: ["corte", "cabelo", "cortei", "cortar", "aparar"],
+      barba: ["barba", "barbeado", "barbear", "bigode"],
+      "corte + barba": ["completo", "tudo", "corte e barba", "corte + barba", "cabelo e barba"],
+      sobrancelha: ["sobrancelha", "sombrancelha", "cílios"],
+      hidratacao: ["hidratação", "hidratacao", "tratamento"],
+      lavagem: ["lavagem", "lavar", "shampoo"],
     }
 
     // Procurar por palavras-chave
     for (const [tipo, palavras] of Object.entries(palavrasChave)) {
-      if (palavras.some(palavra => lowerMessage.includes(palavra))) {
+      if (palavras.some((palavra) => lowerMessage.includes(palavra))) {
         // Encontrar serviço correspondente
-        const servicoEncontrado = servicos.find(s =>
-          s.nome.toLowerCase().includes(tipo.toLowerCase()) ||
-          palavras.some(p => s.nome.toLowerCase().includes(p))
+        const servicoEncontrado = servicos.find(
+          (s) =>
+            s.nome.toLowerCase().includes(tipo.toLowerCase()) || palavras.some((p) => s.nome.toLowerCase().includes(p)),
         )
 
         if (servicoEncontrado) {
@@ -782,62 +962,70 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     console.log(`🔍 [AI-SERVICE] Extraindo data de: "${message}"`)
 
     // Palavras-chave para datas relativas
-    if (lowerMessage.includes('hoje')) {
-      console.log(`✅ [AI-SERVICE] Data encontrada: hoje (${hoje.format('DD/MM/YYYY')})`)
-      return hoje.format('YYYY-MM-DD')
+    if (lowerMessage.includes("hoje")) {
+      console.log(`✅ [AI-SERVICE] Data encontrada: hoje (${hoje.format("DD/MM/YYYY")})`)
+      return hoje.format("YYYY-MM-DD")
     }
 
-    if (lowerMessage.includes('amanhã') || lowerMessage.includes('amanha')) {
-      const amanha = hoje.add(1, 'day')
-      console.log(`✅ [AI-SERVICE] Data encontrada: amanhã (${amanha.format('DD/MM/YYYY')})`)
-      return amanha.format('YYYY-MM-DD')
+    if (lowerMessage.includes("amanhã") || lowerMessage.includes("amanha")) {
+      const amanha = hoje.add(1, "day")
+      console.log(`✅ [AI-SERVICE] Data encontrada: amanhã (${amanha.format("DD/MM/YYYY")})`)
+      return amanha.format("YYYY-MM-DD")
     }
 
-    if (lowerMessage.includes('depois de amanhã') || lowerMessage.includes('depois de amanha')) {
-      const depoisAmanha = hoje.add(2, 'day')
-      console.log(`✅ [AI-SERVICE] Data encontrada: depois de amanhã (${depoisAmanha.format('DD/MM/YYYY')})`)
-      return depoisAmanha.format('YYYY-MM-DD')
+    if (lowerMessage.includes("depois de amanhã") || lowerMessage.includes("depois de amanha")) {
+      const depoisAmanha = hoje.add(2, "day")
+      console.log(`✅ [AI-SERVICE] Data encontrada: depois de amanhã (${depoisAmanha.format("DD/MM/YYYY")})`)
+      return depoisAmanha.format("YYYY-MM-DD")
     }
 
     // Dias da semana
     const diasSemana = {
-      'segunda': 1, 'segunda-feira': 1,
-      'terça': 2, 'terca': 2, 'terça-feira': 2, 'terca-feira': 2,
-      'quarta': 3, 'quarta-feira': 3,
-      'quinta': 4, 'quinta-feira': 4,
-      'sexta': 5, 'sexta-feira': 5,
-      'sábado': 6, 'sabado': 6,
-      'domingo': 0
+      segunda: 1,
+      "segunda-feira": 1,
+      terça: 2,
+      terca: 2,
+      "terça-feira": 2,
+      "terca-feira": 2,
+      quarta: 3,
+      "quarta-feira": 3,
+      quinta: 4,
+      "quinta-feira": 4,
+      sexta: 5,
+      "sexta-feira": 5,
+      sábado: 6,
+      sabado: 6,
+      domingo: 0,
     }
 
     for (const [dia, num] of Object.entries(diasSemana)) {
       if (lowerMessage.includes(dia)) {
         const proximoDia = hoje.day(num)
-        if (proximoDia.isBefore(hoje) || proximoDia.isSame(hoje, 'day')) {
-          proximoDia.add(1, 'week')
+        if (proximoDia.isBefore(hoje) || proximoDia.isSame(hoje, "day")) {
+          proximoDia.add(1, "week")
         }
-        console.log(`✅ [AI-SERVICE] Data encontrada: ${dia} (${proximoDia.format('DD/MM/YYYY')})`)
-        return proximoDia.format('YYYY-MM-DD')
+        console.log(`✅ [AI-SERVICE] Data encontrada: ${dia} (${proximoDia.format("DD/MM/YYYY")})`)
+        return proximoDia.format("YYYY-MM-DD")
       }
     }
 
     // Formatos de data: DD/MM, DD-MM, DD.MM
-    const regexData = /(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/
+    const regexData = /(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/
     const match = regexData.exec(message)
     if (match) {
-      const dia = parseInt(match[1]!)
-      const mes = parseInt(match[2]!)
-      const ano = match[3] ? parseInt(match[3]) : hoje.year()
+      const dia = Number.parseInt(match[1]!)
+      const mes = Number.parseInt(match[2]!)
+      const ano = match[3] ? Number.parseInt(match[3]) : hoje.year()
 
       // Ajustar ano se for formato de 2 dígitos
       const anoCompleto = ano < 100 ? 2000 + ano : ano
 
       try {
-        const data = dayjs(`${anoCompleto}-${mes.toString().padStart(2, '0')}-${dia.toString().padStart(2, '0')}`)
+        const data = dayjs(`${anoCompleto}-${mes.toString().padStart(2, "0")}-${dia.toString().padStart(2, "0")}`)
 
-        if (data.isValid() && data.isAfter(hoje.subtract(1, 'day')) && data.isBefore(hoje.add(3, 'month'))) {
-          console.log(`✅ [AI-SERVICE] Data encontrada: ${data.format('DD/MM/YYYY')}`)
-          return data.format('YYYY-MM-DD')
+        if (data.isValid() && data.isAfter(hoje.subtract(1, "day")) && data.isBefore(hoje.add(3, "month"))) {
+          console.log(`✅ [AI-SERVICE] Data encontrada: ${data.format("DD/MM/YYYY")}`)
+          return data.format("YYYY-MM-DD")
         }
       } catch {
         console.log(`❌ [AI-SERVICE] Data inválida: ${dia}/${mes}/${anoCompleto}`)
@@ -854,30 +1042,30 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     console.log(`🔍 [AI-SERVICE] Extraindo horário de: "${message}"`)
 
     // Períodos genéricos
-    if (lowerMessage.includes('manhã')) {
+    if (lowerMessage.includes("manhã")) {
       console.log(`✅ [AI-SERVICE] Período encontrado: manhã`)
-      return '09:00' // Horário padrão da manhã
+      return "09:00" // Horário padrão da manhã
     }
-    if (lowerMessage.includes('tarde')) {
+    if (lowerMessage.includes("tarde")) {
       console.log(`✅ [AI-SERVICE] Período encontrado: tarde`)
-      return '14:00' // Horário padrão da tarde
+      return "14:00" // Horário padrão da tarde
     }
-    if (lowerMessage.includes('noite')) {
+    if (lowerMessage.includes("noite")) {
       console.log(`✅ [AI-SERVICE] Período encontrado: noite`)
-      return '18:00' // Horário padrão da noite
+      return "18:00" // Horário padrão da noite
     }
 
     // Formatos de horário: HH:MM, HH.MM, HHhMM, HH h MM
-    const regexHorario = /(\d{1,2})[:\.h](\d{2})|(\d{1,2})\s*h\s*(\d{2})?|(\d{1,2})\s+e\s+(\d{2})/i
+    const regexHorario = /(\d{1,2})[:.h](\d{2})|(\d{1,2})\s*h\s*(\d{2})?|(\d{1,2})\s+e\s+(\d{2})/i
     const match = regexHorario.exec(message)
 
     if (match) {
-      const hora = parseInt(match[1] ?? match[3] ?? match[5] ?? '0')
-      const minuto = parseInt(match[2] ?? match[4] ?? match[6] ?? '0')
+      const hora = Number.parseInt(match[1] ?? match[3] ?? match[5] ?? "0")
+      const minuto = Number.parseInt(match[2] ?? match[4] ?? match[6] ?? "0")
 
       // Validar horário
       if (hora >= 0 && hora <= 23 && minuto >= 0 && minuto <= 59) {
-        const horarioFormatado = `${hora.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}`
+        const horarioFormatado = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
         console.log(`✅ [AI-SERVICE] Horário encontrado: ${horarioFormatado}`)
         return horarioFormatado
       }
@@ -885,10 +1073,20 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     // Horários por extenso
     const horariosExtenso = {
-      'oito': '08:00', 'nove': '09:00', 'dez': '10:00', 'onze': '11:00',
-      'meio-dia': '12:00', 'meio dia': '12:00',
-      'uma': '13:00', 'duas': '14:00', 'três': '15:00', 'tres': '15:00',
-      'quatro': '16:00', 'cinco': '17:00', 'seis': '18:00', 'sete': '19:00'
+      oito: "08:00",
+      nove: "09:00",
+      dez: "10:00",
+      onze: "11:00",
+      "meio-dia": "12:00",
+      "meio dia": "12:00",
+      uma: "13:00",
+      duas: "14:00",
+      três: "15:00",
+      tres: "15:00",
+      quatro: "16:00",
+      cinco: "17:00",
+      seis: "18:00",
+      sete: "19:00",
     }
 
     for (const [extenso, horario] of Object.entries(horariosExtenso)) {
@@ -930,7 +1128,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     servicos.forEach((servico, index) => {
       const emoji = index === 0 ? "✂️" : index === 1 ? "🪒" : "💫"
       texto += `${emoji} **${servico.nome}**\n`
-      texto += `   💰 R$ ${servico.preco.toFixed(2).replace('.', ',')}\n`
+      texto += `   💰 R$ ${servico.preco.toFixed(2).replace(".", ",")}\n`
       texto += `   ⏱️ ${servico.duracaoMinutos} minutos\n\n`
     })
     texto += "Qual serviço te interessa? 😊"
@@ -945,20 +1143,20 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     let texto = "📅 **Seus agendamentos:**\n\n"
 
     // Separar agendamentos por status
-    const agendamentosAtivos = agendamentos.filter(a => a.status === 'confirmado' || a.status === 'agendado')
-    const agendamentosPassados = agendamentos.filter(a => a.status === 'concluido')
+    const agendamentosAtivos = agendamentos.filter((a) => a.status === "confirmado" || a.status === "agendado")
+    const agendamentosPassados = agendamentos.filter((a) => a.status === "concluido")
 
     if (agendamentosAtivos.length > 0) {
       texto += "🟢 **Próximos agendamentos:**\n"
-      agendamentosAtivos.slice(0, 3).forEach(agendamento => {
+      agendamentosAtivos.slice(0, 3).forEach((agendamento) => {
         const data = dayjs(agendamento.dataHora)
-        const status = agendamento.status === 'confirmado' ? '✅' : '🕐'
+        const status = agendamento.status === "confirmado" ? "✅" : "🕐"
         texto += `${status} ${agendamento.servico}\n`
-        texto += `   📅 ${data.format('DD/MM/YYYY')} às ${data.format('HH:mm')}\n`
+        texto += `   📅 ${data.format("DD/MM/YYYY")} às ${data.format("HH:mm")}\n`
         if (agendamento.valorCobrado) {
           const valor = Number(agendamento.valorCobrado)
           if (!isNaN(valor)) {
-            texto += `   💰 R$ ${valor.toFixed(2).replace('.', ',')}\n`
+            texto += `   💰 R$ ${valor.toFixed(2).replace(".", ",")}\n`
           }
         }
         texto += "\n"
@@ -967,9 +1165,9 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     if (agendamentosPassados.length > 0) {
       texto += "\n📚 **Histórico recente:**\n"
-      agendamentosPassados.slice(0, 2).forEach(agendamento => {
+      agendamentosPassados.slice(0, 2).forEach((agendamento) => {
         const data = dayjs(agendamento.dataHora)
-        texto += `✅ ${agendamento.servico} - ${data.format('DD/MM/YYYY')}\n`
+        texto += `✅ ${agendamento.servico} - ${data.format("DD/MM/YYYY")}\n`
       })
     }
 
@@ -1047,10 +1245,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     return "casual"
   }
 
-  private gerarSaudacaoComNome(
-    primeiroNome: string,
-    tipo: "formal" | "casual" | "urgente" | "servico",
-  ): string {
+  private gerarSaudacaoComNome(primeiroNome: string, tipo: "formal" | "casual" | "urgente" | "servico"): string {
     const frases = {
       formal: [
         `Olá ${primeiroNome}! Tudo bem? 😊`,
@@ -1059,7 +1254,10 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
       ],
       casual: [`E aí ${primeiroNome}! Tudo certo? 😄`, `Opa ${primeiroNome}! Beleza?`, `Olá ${primeiroNome}!`],
       urgente: [`Oi ${primeiroNome}! Vou te ajudar rapidinho! 🚀`, `${primeiroNome}! Estou aqui pra te atender! 😊`],
-      servico: [`Olá ${primeiroNome}! Vamos agendar seu horário? 💈`, `Oi ${primeiroNome}! Que bom que você voltou! 😊`],
+      servico: [
+        `Olá ${primeiroNome}! Vamos agendar seu horário? 💈`,
+        `Oi ${primeiroNome}! Que bom que você voltou! 😊`,
+      ],
     }
 
     const opcoes = frases[tipo]
@@ -1084,7 +1282,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   private async processVerificarHorario(
     data: unknown,
     telefone: string,
-    _context: AgendamentoContext
+    _context: AgendamentoContext,
   ): Promise<AIResponse> {
     console.log("🔄 [AI-ACTION] Processando verificação de horário:", data)
     try {
@@ -1103,7 +1301,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
       } else {
         let resposta = `❌ O horário das ${horario} de ${dayjs(dataAg).format("DD/MM")} não está mais disponível. ${disponibilidade.motivo ?? ""}`
         if (disponibilidade.horariosAlternativos?.length) {
-          resposta += `\n\n💡 Que tal um desses horários próximos:\n${disponibilidade.horariosAlternativos.map(h => `• ${h}`).join('\n')}`
+          resposta += `\n\n💡 Que tal um desses horários próximos:\n${disponibilidade.horariosAlternativos.map((h) => `• ${h}`).join("\n")}`
         }
         return { message: resposta }
       }
@@ -1117,7 +1315,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     data: unknown,
     telefone: string,
     context: AgendamentoContext,
-    _userMessage: string
+    _userMessage: string,
   ): Promise<AIResponse> {
     console.log("🔄 [AI-ACTION] Processando agendamento direto:", data)
     try {
@@ -1136,18 +1334,18 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
       const dadosCompletos = {
         ...dadosAgendamento,
-        telefone: telefone
+        telefone: telefone,
       }
 
       const resultado = await this.criarAgendamentoViaWebhook(dadosCompletos)
       if (resultado.success) {
         delete this.agendamentoContexto[telefone] // Limpa o contexto após sucesso
         return {
-          message: `🎉 ${resultado.message ?? "Agendamento confirmado com sucesso!"}\n\nEm caso de imprevisto, entre em contato conosco. Até lá! 💈`
+          message: `🎉 ${resultado.message ?? "Agendamento confirmado com sucesso!"}\n\nEm caso de imprevisto, entre em contato conosco. Até lá! 💈`,
         }
       } else {
         return {
-          message: `❌ ${resultado.message ?? "Não foi possível confirmar o agendamento."}\n\nVamos tentar novamente ou prefere falar com nossa equipe?`
+          message: `❌ ${resultado.message ?? "Não foi possível confirmar o agendamento."}\n\nVamos tentar novamente ou prefere falar com nossa equipe?`,
         }
       }
     } catch (error) {
@@ -1160,7 +1358,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     data: unknown,
     telefone: string,
     context: AgendamentoContext,
-    userMessage: string
+    userMessage: string,
   ): Promise<AIResponse> {
     try {
       const dadosCliente = this.combinarDadosComContexto(data as DadosAgendamentoExtraidos, telefone)
@@ -1210,7 +1408,7 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
   private async processConsultarEmpresa(context: AgendamentoContext): Promise<AIResponse> {
     const { configuracao } = context
 
-    let infoEmpresa = `📍 **Informações da ${configuracao?.nomeEmpresa ?? 'barbearia'}:**\n\n`
+    let infoEmpresa = `📍 **Informações da ${configuracao?.nomeEmpresa ?? "barbearia"}:**\n\n`
 
     if (configuracao?.telefone) {
       infoEmpresa += `📞 **Telefone:** ${configuracao.telefone}\n`
@@ -1222,9 +1420,9 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     if (context.servicos.length > 0) {
       infoEmpresa += `\n💈 **Nossos serviços:**\n`
-      infoEmpresa += context.servicos.map(s =>
-        `• ${s.nome} - R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`
-      ).join('\n')
+      infoEmpresa += context.servicos
+        .map((s) => `• ${s.nome} - R$ ${s.preco.toFixed(2)} (${s.duracaoMinutos} min)`)
+        .join("\n")
     }
 
     if (!configuracao?.telefone && !configuracao?.endereco) {
@@ -1238,7 +1436,8 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
     // Aqui poderia consultar um webhook específico para horários de funcionamento
     // Por enquanto, retorna uma resposta padrão
     return {
-      message: "Para consultar nossos horários de funcionamento, por favor entre em contato diretamente conosco. Nossos horários podem variar conforme o dia da semana."
+      message:
+        "Para consultar nossos horários de funcionamento, por favor entre em contato diretamente conosco. Nossos horários podem variar conforme o dia da semana.",
     }
   }
 
@@ -1247,12 +1446,13 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     if (configuracao?.endereco) {
       return {
-        message: `📍 **Nossa localização:**\n${configuracao.endereco}\n\nPrecisa de mais alguma informação sobre como chegar?`
+        message: `📍 **Nossa localização:**\n${configuracao.endereco}\n\nPrecisa de mais alguma informação sobre como chegar?`,
       }
     }
 
     return {
-      message: "Para informações sobre nossa localização, entre em contato diretamente conosco que te passamos todos os detalhes!"
+      message:
+        "Para informações sobre nossa localização, entre em contato diretamente conosco que te passamos todos os detalhes!",
     }
   }
 
@@ -1290,22 +1490,22 @@ Lembre-se: Sua função é agendar horários e fornecer informações precisas. 
 
     // Palavras-chave que podem indicar informações inventadas
     const palavrasRisco = [
-      'horário de funcionamento',
-      'funcionamos das',
-      'abrimos às',
-      'fechamos às',
-      'segunda à sexta',
-      'fins de semana',
-      'feriados',
-      'promocão',
-      'desconto',
-      'preço especial',
-      'valor promocional',
-      'grátis',
-      'cortesia'
+      "horário de funcionamento",
+      "funcionamos das",
+      "abrimos às",
+      "fechamos às",
+      "segunda à sexta",
+      "fins de semana",
+      "feriados",
+      "promocão",
+      "desconto",
+      "preço especial",
+      "valor promocional",
+      "grátis",
+      "cortesia",
     ]
 
-    return palavrasRisco.some(palavra => texto_lower.includes(palavra))
+    return palavrasRisco.some((palavra) => texto_lower.includes(palavra))
   }
 }
 

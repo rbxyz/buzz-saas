@@ -1,9 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db, executeWithRetry } from "@/server/db"
-import { conversations, messages, clientes, configuracoes, users } from "@/server/db/schema"
-import { eq } from "drizzle-orm"
+import { db } from "@/server/db"
+import { conversations, messages, clientes, users } from "@/server/db/schema"
+import { eq, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
+
+// Configurações do runtime
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const maxDuration = 25
 
 // Tipos para o webhook da Z-API
 interface WebhookBody {
@@ -27,8 +32,6 @@ interface WebhookBody {
   }
   event?: string
   data?: unknown
-
-  // Novos campos específicos do Z-API
   isStatusReply?: boolean
   chatLid?: string | null
   connectedPhone?: string
@@ -45,7 +48,7 @@ interface WebhookBody {
   fromApi?: boolean
 }
 
-interface Conversation {
+interface ConversationData {
   id: number
   userId: number
   clienteId: number | null
@@ -58,7 +61,7 @@ interface Conversation {
   updatedAt: Date | null
 }
 
-interface DbMessage {
+interface MessageData {
   id: number
   conversationId: number
   content: string
@@ -68,430 +71,321 @@ interface DbMessage {
   createdAt: Date
 }
 
-// +++ Adição: helper para limitar tempo das operações de BD +++
-
-// Tempo máximo (ms) que esperamos por qualquer operação de banco
-const DB_OP_TIMEOUT_MS = 7_000
-
-// Envolve uma Promise com timeout; rejeita se extrapolar o limite
-function withTimeout<T>(promise: Promise<T>, ms = DB_OP_TIMEOUT_MS): Promise<T> {
+// Função para executar operações do banco com timeout
+async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = 8000): Promise<T> {
   return Promise.race([
-    promise,
+    operation(),
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`DB operation timed out after ${ms}ms`)), ms),
+      setTimeout(() => reject(new Error(`Operação do banco excedeu ${timeoutMs}ms`)), timeoutMs),
     ),
   ])
 }
 
-// Wrapper padrão para todas as chamadas ao banco neste arquivo
-const executeDb = <T>(operation: () => Promise<T>) =>
-  withTimeout(executeWithRetry(operation), DB_OP_TIMEOUT_MS)
-
-// Garantir que o Route Handler seja executado como Serverless Function (Node.js) e não Edge
-export const runtime = "nodejs"
-
-export const dynamic = "force-dynamic"
-// Vercel permite sobrescrever o tempo máximo (segundos) em Serverless; ajustamos para 15 s
-export const maxDuration = 15
-
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  console.log(`🚀 [WEBHOOK] Iniciando processamento do webhook Z-API`)
+
   try {
+    // Parse do JSON com timeout
     let body: WebhookBody
-
     try {
-      body = (await request.json()) as WebhookBody
+      const text = await request.text()
+      body = JSON.parse(text) as WebhookBody
+      console.log(`📨 [WEBHOOK] Dados recebidos:`, {
+        type: body.type,
+        phone: body.phone,
+        fromMe: body.fromMe,
+        isGroup: body.isGroup,
+        messagePreview: body.text?.message?.substring(0, 50) || body.body?.substring(0, 50),
+      })
     } catch (error) {
-      console.error("❌ [WEBHOOK] Erro ao analisar JSON:", error)
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+      console.error("❌ [WEBHOOK] Erro ao fazer parse do JSON:", error)
+      return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
     }
 
-    console.log(`📨 [WEBHOOK] Recebido:`, JSON.stringify(body, null, 2))
-    console.log(`[ENV] DATABASE_URL: ${process.env.DATABASE_URL ?? 'undefined'}`)
-
-    // Verificar se é uma mensagem de cllback de recebimento
+    // Validações básicas
     if (body.type !== "ReceivedCallback") {
-      console.log(`🔄 [WEBHOOK] Ignorando evento que não é ReceivedCallback: ${body.type}`)
-      return NextResponse.json({ success: true, ignored: true })
+      console.log(`🔄 [WEBHOOK] Ignorando evento: ${body.type}`)
+      return NextResponse.json({ success: true, ignored: true, reason: "not_received_callback" })
     }
 
-    // Ignorar mensagens enviadas pelo próprio sistema (fromMe: true)
     if (body.fromMe === true) {
-      console.log(`🔄 [WEBHOOK] Ignorando mensagem enviada pelo sistema`)
-      return NextResponse.json({ success: true, ignored: true })
+      console.log(`🔄 [WEBHOOK] Ignorando mensagem própria`)
+      return NextResponse.json({ success: true, ignored: true, reason: "from_me" })
     }
 
-    // Ignorar mensagens de grupos
     if (body.isGroup === true) {
       console.log(`🔄 [WEBHOOK] Ignorando mensagem de grupo`)
-      return NextResponse.json({ success: true, ignored: true })
+      return NextResponse.json({ success: true, ignored: true, reason: "group_message" })
     }
 
-    // Extrair informações da mensagem do formato Z-API
-    const phone = body.phone ?? ""
-    const messageText = body.text?.message ?? body.body ?? ""
-    const messageId = body.messageId ?? ""
-    const timestamp = body.momment ?? Date.now()
-    const senderName = body.senderName ?? ""
+    // Extrair dados da mensagem
+    const phone = body.phone?.replace(/\D/g, "") || ""
+    const messageText = body.text?.message || body.body || ""
+    const messageId = body.messageId || `${Date.now()}-${Math.random()}`
+    const timestamp = body.momment || body.timestamp || Date.now()
+    const senderName = body.senderName || body.chatName || ""
 
-    // Verificar se temos os dados mínimos necessários
-    if (!phone || !messageText) {
-      console.log(`❌ [WEBHOOK] Dados insuficientes: telefone=${phone}, mensagem=${messageText}`)
+    if (!phone || !messageText.trim()) {
+      console.log(`❌ [WEBHOOK] Dados insuficientes - phone: ${phone}, message: ${messageText}`)
       return NextResponse.json({ error: "Dados insuficientes" }, { status: 400 })
     }
 
-    console.log(`📱 [WEBHOOK] Processando mensagem válida de ${phone}: "${messageText}"`)
-    console.log(`👤 [WEBHOOK] Nome do remetente: ${senderName || "Não informado"}`)
+    console.log(`✅ [WEBHOOK] Mensagem válida de ${phone}: "${messageText.substring(0, 100)}..."`)
 
-    // Processar a mensagem recebida de forma assíncrona
-    // Não esperamos a conclusão para responder rapidamente ao webhook
-    processIncomingMessage({
+    // Processar mensagem de forma assíncrona (não bloquear resposta)
+    processMessage({
       phone,
-      message: messageText,
+      messageText,
       messageId,
       timestamp,
       senderName,
-    }).catch((err) => {
-      // Apenas logamos o erro, a resposta principal já foi enviada
-      console.error("💥 [WEBHOOK] Erro no processamento assíncrono:", err)
+    }).catch((error) => {
+      console.error(`💥 [WEBHOOK] Erro no processamento assíncrono:`, error)
     })
 
-    // Responder imediatamente para evitar timeout
-    return NextResponse.json({ success: true })
-  } catch (e) {
-    console.error("💥 [WEBHOOK] Erro principal:", e)
-    const message = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: "Erro interno do servidor", message }, { status: 500 })
+    // Responder imediatamente para evitar timeout do Z-API
+    const processingTime = Date.now() - startTime
+    console.log(`⚡ [WEBHOOK] Resposta enviada em ${processingTime}ms`)
+
+    return NextResponse.json({
+      success: true,
+      processingTime,
+      phone: phone.substring(0, 4) + "****", // Log parcial por segurança
+    })
+  } catch (error) {
+    const processingTime = Date.now() - startTime
+    console.error(`💥 [WEBHOOK] Erro principal (${processingTime}ms):`, error)
+
+    return NextResponse.json(
+      {
+        error: "Erro interno do servidor",
+        processingTime,
+      },
+      { status: 500 },
+    )
   }
 }
 
-async function processIncomingMessage(data: {
+async function processMessage(data: {
   phone: string
-  message: string
+  messageText: string
   messageId: string
   timestamp: number
-  senderName?: string
+  senderName: string
 }): Promise<void> {
-  console.log(`[PROCESS_START] Iniciando processamento para ${data.phone}.`)
+  const { phone, messageText, messageId, timestamp, senderName } = data
+  const processStart = Date.now()
+
+  console.log(`🔄 [PROCESS] Iniciando processamento para ${phone}`)
+
   try {
-    const { phone, message, messageId, timestamp, senderName } = data
+    // 1. Buscar usuário (assumir primeiro usuário como padrão)
+    console.log(`👤 [PROCESS] Buscando usuário...`)
+    const user = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1))
 
-    console.log(`📱 [WEBHOOK] Processando mensagem de ${phone}:`, message)
+    if (!user || user.length === 0) {
+      throw new Error("Nenhum usuário encontrado no sistema")
+    }
 
-    // Determinar userId dono da instância: usar primeiro usuário cadastrado
-    const userRow = await executeDb(() =>
-      db.select({ id: users.id }).from(users).limit(1).then(rows => rows[0] ?? null)
+    const userId = user[0]!.id
+    console.log(`✅ [PROCESS] Usuário encontrado: ${userId}`)
+
+    // 2. Buscar ou criar conversa
+    console.log(`💬 [PROCESS] Buscando conversa...`)
+    const conversation = await executeWithTimeout(() =>
+      db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1),
     )
-    if (!userRow) {
-      console.error("❌ [WEBHOOK] Nenhum usuário encontrado no banco. Abortando processamento.")
-      return // encerra processamento se não houver usuário
-    }
-    const userId = userRow.id
-    console.log(`👤 [DEBUG] userId definido como: ${userId}`)
 
-    // Limpar telefone (remover caracteres especiais)
-    const telefoneClean = phone.replace(/\D/g, "")
-    console.log(`📞 [DEBUG] Telefone limpo: ${telefoneClean}`)
-
-    console.log(`🔍 [DEBUG] Iniciando query de conversa (ping removido)...`)
-
-    // LOGS DETALHADOS ANTES DA CONEXÃO
-    console.log(`🔧 [DEBUG] Verificando configuração do banco...`)
-    console.log(`🔧 [DEBUG] NODE_ENV:`, process.env.NODE_ENV)
-    console.log(`🔧 [DEBUG] DATABASE_URL length:`, process.env.DATABASE_URL?.length ?? 0)
-    console.log(`🔧 [DEBUG] DATABASE_URL starts with:`, process.env.DATABASE_URL?.substring(0, 30) + '...')
-    console.log(`🔧 [DEBUG] DATABASE_URL contains pooler:`, process.env.DATABASE_URL?.includes('pooler') ?? false)
-    console.log(`🔧 [DEBUG] DATABASE_URL contains sslmode:`, process.env.DATABASE_URL?.includes('sslmode') ?? false)
-
-    // Buscar ou criar conversa com retry
-    let conversation: Conversation | null = null
-    try {
-      conversation = await executeDb(() =>
+    let conversationData: ConversationData
+    if (!conversation || conversation.length === 0) {
+      console.log(`🆕 [PROCESS] Criando nova conversa`)
+      const newConversation = await executeWithTimeout(() =>
         db
-          .select()
-          .from(conversations)
-          .where(eq(conversations.telefone, telefoneClean))
-          .limit(1)
-          .then((rows) => rows[0] ?? null),
+          .insert(conversations)
+          .values({
+            userId,
+            telefone: phone,
+            nomeContato: senderName || null,
+            ativa: true,
+            ultimaMensagem: messageText.substring(0, 500),
+            ultimaInteracao: new Date(),
+          })
+          .returning(),
       )
-      console.log(`✅ [DEBUG] Busca de conversa concluída. Resultado:`, conversation ? `Conversa encontrada (ID: ${conversation.id})` : 'Nenhuma conversa encontrada')
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO ao buscar conversa:`, error)
-      throw error
-    }
-
-    if (!conversation) {
-      console.log(`🆕 [DEBUG] Criando nova conversa para ${telefoneClean}`)
-      try {
-        conversation = await executeDb(() =>
-          db
-            .insert(conversations)
-            .values({
-              userId: userId,
-              telefone: telefoneClean,
-              ativa: true,
-              ultimaMensagem: null,
-            })
-            .returning()
-            .then((rows) => rows[0] ?? null),
-        )
-        console.log(`✅ [DEBUG] Nova conversa criada:`, conversation ? `ID: ${conversation.id}` : 'FALHA')
-      } catch (error) {
-        console.error(`❌ [DEBUG] ERRO ao criar conversa:`, error)
-        throw error
-      }
-    }
-
-    if (!conversation) {
-      throw new Error("ERRO CRÍTICO: Não foi possível criar ou encontrar conversa!")
-    }
-
-    console.log(`🔍 [DEBUG] Tentando buscar cliente pelo telefone...`)
-    // Buscar cliente pelo telefone com retry
-    let cliente: { id: number; nome: string; telefone: string } | null = null
-    try {
-      const clienteResult = await executeDb(() =>
-        db
-          .select()
-          .from(clientes)
-          .where(eq(clientes.telefone, telefoneClean))
-          .limit(1)
-          .then((rows) => rows[0] ?? null),
-      )
-      cliente = clienteResult as { id: number; nome: string; telefone: string } | null
-      console.log(`✅ [DEBUG] Busca de cliente concluída:`, cliente ? `Cliente encontrado: ${cliente.nome} (ID: ${cliente.id})` : 'Nenhum cliente encontrado')
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO ao buscar cliente:`, error)
-      throw error
-    }
-
-    // Se temos o nome do remetente e não temos cliente, criar um novo cliente
-    if (!cliente && senderName && senderName.trim() !== "") {
-      console.log(`🆕 [DEBUG] Criando novo cliente com nome do WhatsApp: ${senderName}`)
-      try {
-        const novoClienteResult = await executeDb(() =>
-          db
-            .insert(clientes)
-            .values({
-              userId: userId,
-              nome: senderName,
-              telefone: telefoneClean,
-            })
-            .returning()
-            .then((rows) => rows[0] ?? null),
-        )
-        cliente = novoClienteResult as { id: number; nome: string; telefone: string } | null
-        console.log(`✅ [DEBUG] Cliente criado:`, cliente ? `${cliente.nome} (ID: ${cliente.id})` : 'FALHA')
-
-        // Atualizar a conversa com o ID do cliente
-        if (cliente) {
-          try {
-            await executeDb(() =>
-              db.update(conversations).set({ clienteId: cliente!.id }).where(eq(conversations.id, conversation.id)),
-            )
-            console.log(`✅ [DEBUG] Cliente vinculado à conversa com sucesso`)
-          } catch (error) {
-            console.error(`❌ [DEBUG] ERRO ao vincular cliente à conversa:`, error)
-            throw error
-          }
-        }
-      } catch (error) {
-        console.error(`❌ [DEBUG] ERRO ao criar cliente:`, error)
-        throw error
-      }
-    }
-
-    console.log(`💾 [DEBUG] Tentando salvar mensagem do usuário...`)
-    // Salvar mensagem do cliente com retry
-    try {
-      await executeDb(() =>
-        db.insert(messages).values({
-          conversationId: conversation.id,
-          content: message,
-          role: "user", // Usar "user" em vez de "cliente"
-          timestamp: new Date(timestamp),
-          messageId: messageId,
-        }),
-      )
-      console.log(`✅ [DEBUG] Mensagem do usuário salva com sucesso`)
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO ao salvar mensagem do usuário:`, error)
-      throw error
-    }
-
-    console.log(`🗣️ [DEBUG] Tentando buscar histórico da conversa...`)
-    // Buscar histórico da conversa com retry
-    let conversationHistory: DbMessage[] = []
-    try {
-      conversationHistory = await executeDb(() =>
-        db
-          .select()
-          .from(messages)
-          .where(eq(messages.conversationId, conversation.id))
-          .orderBy(messages.createdAt)
-          .limit(20),
-      )
-      console.log(`✅ [DEBUG] Histórico da conversa obtido: ${conversationHistory.length} mensagens`)
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO ao buscar histórico:`, error)
-      throw error
-    }
-
-    console.log(`🤖 [DEBUG] Tentando chamar o serviço de IA...`)
-    // Chamar a IA para obter uma resposta
-    let aiResponse
-    try {
-      aiResponse = await aiService.processMessage(
-        message,
-        telefoneClean,
-        conversationHistory.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-      )
-      console.log(`✅ [DEBUG] Resposta da IA recebida:`, aiResponse)
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO no serviço de IA:`, error)
-      throw error
-    }
-
-    console.log(`💾 [DEBUG] Tentando salvar e enviar resposta da IA...`)
-    // Salvar e enviar a resposta da IA
-    if (aiResponse.message) {
-      try {
-        await executeDb(() =>
-          db.insert(messages).values({
-            conversationId: conversation.id,
-            content: aiResponse.message,
-            role: "assistant",
-            timestamp: new Date(),
-          }),
-        )
-        console.log(`✅ [DEBUG] Resposta da IA salva no banco`)
-      } catch (error) {
-        console.error(`❌ [DEBUG] ERRO ao salvar resposta da IA:`, error)
-        throw error
-      }
-
-      console.log(`📤 [DEBUG] Tentando enviar mensagem via WhatsApp...`)
-      try {
-        await enviarMensagemWhatsApp(phone, aiResponse.message)
-        console.log(`✅ [DEBUG] Mensagem enviada via WhatsApp com sucesso`)
-      } catch (error) {
-        console.error(`❌ [DEBUG] ERRO ao enviar mensagem via WhatsApp:`, error)
-        throw error
-      }
-    }
-
-    // Processar ação se houver
-    if (aiResponse.action) {
-      console.log(`🛠️ [DEBUG] Tentando processar ação da IA: ${aiResponse.action}`)
-      try {
-        await handleAIAction(aiResponse.action, aiResponse.data, conversation.id, phone, message)
-        console.log(`✅ [DEBUG] Ação da IA processada com sucesso`)
-      } catch (error) {
-        console.error(`❌ [DEBUG] ERRO ao processar ação da IA:`, error)
-        throw error
-      }
-    }
-
-    console.log(`🔄 [DEBUG] Tentando atualizar última interação...`)
-    // Atualizar a conversa com a última interação
-    try {
-      await executeDb(() =>
+      conversationData = newConversation[0]!
+    } else {
+      conversationData = conversation[0]!
+      // Atualizar última interação
+      await executeWithTimeout(() =>
         db
           .update(conversations)
-          .set({ ultimaInteracao: new Date() })
-          .where(eq(conversations.id, conversation.id)),
+          .set({
+            ultimaMensagem: messageText.substring(0, 500),
+            ultimaInteracao: new Date(),
+            nomeContato: senderName || conversationData.nomeContato,
+          })
+          .where(eq(conversations.id, conversationData.id)),
       )
-      console.log(`✅ [DEBUG] Última interação atualizada com sucesso`)
-    } catch (error) {
-      console.error(`❌ [DEBUG] ERRO ao atualizar última interação:`, error)
-      throw error
     }
 
-    console.log(`[PROCESS_END] ✅ Processamento concluído com SUCESSO para ${phone}.`)
-  } catch (error) {
-    console.error(`💥 [PROCESS_ERROR] ERRO CAPTURADO no processamento para ${data.phone}:`)
-    console.error(`💥 [PROCESS_ERROR] Tipo do erro:`, typeof error)
-    console.error(`💥 [PROCESS_ERROR] Erro completo:`, error)
-    console.error(`💥 [PROCESS_ERROR] Stack trace:`, error instanceof Error ? error.stack : 'N/A')
+    console.log(`✅ [PROCESS] Conversa: ${conversationData.id}`)
 
-    // Tentar enviar uma mensagem de erro para o usuário
+    // 3. Buscar ou criar cliente
+    console.log(`👥 [PROCESS] Buscando cliente...`)
+    const cliente = await executeWithTimeout(() =>
+      db.select().from(clientes).where(eq(clientes.telefone, phone)).limit(1),
+    )
+
+    if ((!cliente || cliente.length === 0) && senderName) {
+      console.log(`🆕 [PROCESS] Criando novo cliente`)
+      const newCliente = await executeWithTimeout(() =>
+        db
+          .insert(clientes)
+          .values({
+            userId,
+            nome: senderName,
+            telefone: phone,
+          })
+          .returning(),
+      )
+
+      if (newCliente && newCliente.length > 0) {
+        // Vincular cliente à conversa
+        await executeWithTimeout(() =>
+          db
+            .update(conversations)
+            .set({ clienteId: newCliente[0]!.id })
+            .where(eq(conversations.id, conversationData.id)),
+        )
+        console.log(`✅ [PROCESS] Cliente criado e vinculado: ${newCliente[0]!.id}`)
+      }
+    }
+
+    // 4. Salvar mensagem do usuário
+    console.log(`💾 [PROCESS] Salvando mensagem do usuário...`)
+    await executeWithTimeout(() =>
+      db.insert(messages).values({
+        conversationId: conversationData.id,
+        content: messageText,
+        role: "user",
+        timestamp: new Date(timestamp),
+        messageId,
+      }),
+    )
+
+    // 5. Buscar histórico da conversa
+    console.log(`📚 [PROCESS] Buscando histórico...`)
+    const history = await executeWithTimeout(() =>
+      db
+        .select({
+          content: messages.content,
+          role: messages.role,
+          timestamp: messages.timestamp,
+        })
+        .from(messages)
+        .where(eq(messages.conversationId, conversationData.id))
+        .orderBy(desc(messages.timestamp))
+        .limit(10),
+    )
+
+    const conversationHistory = history.reverse().map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }))
+
+    console.log(`✅ [PROCESS] Histórico obtido: ${conversationHistory.length} mensagens`)
+
+    // 6. Processar com IA
+    console.log(`🤖 [PROCESS] Chamando serviço de IA...`)
+    const aiResponse = await aiService.processMessage(messageText, phone, conversationHistory)
+
+    console.log(`✅ [PROCESS] Resposta da IA recebida`)
+
+    // 7. Salvar resposta da IA
+    if (aiResponse.message) {
+      console.log(`💾 [PROCESS] Salvando resposta da IA...`)
+      await executeWithTimeout(() =>
+        db.insert(messages).values({
+          conversationId: conversationData.id,
+          content: aiResponse.message,
+          role: "assistant",
+          timestamp: new Date(),
+        }),
+      )
+
+      // 8. Enviar mensagem via WhatsApp
+      console.log(`📤 [PROCESS] Enviando mensagem via WhatsApp...`)
+      await enviarMensagemWhatsApp(phone, aiResponse.message)
+      console.log(`✅ [PROCESS] Mensagem enviada com sucesso`)
+    }
+
+    // 9. Processar ações se houver
+    if (aiResponse.action) {
+      console.log(`🎬 [PROCESS] Processando ação: ${aiResponse.action}`)
+      await handleAction(aiResponse.action, aiResponse.data, conversationData.id, phone)
+    }
+
+    const totalTime = Date.now() - processStart
+    console.log(`🎉 [PROCESS] Processamento concluído em ${totalTime}ms para ${phone}`)
+  } catch (error) {
+    const totalTime = Date.now() - processStart
+    console.error(`💥 [PROCESS] Erro após ${totalTime}ms:`, error)
+
+    // Tentar enviar mensagem de erro
     try {
-      await enviarMensagemWhatsApp(data.phone, "Ops! Algo deu errado do nosso lado. Já estamos verificando o problema. Tente novamente em alguns minutos.")
+      await enviarMensagemWhatsApp(
+        phone,
+        "Desculpe, ocorreu um erro temporário. Tente novamente em alguns instantes. 🔧",
+      )
     } catch (sendError) {
-      console.error(`💥 [PROCESS_ERROR] Falha ao enviar mensagem de erro:`, sendError)
+      console.error(`💥 [PROCESS] Falha ao enviar mensagem de erro:`, sendError)
     }
   }
 }
 
-async function handleAIAction(
-  action: string,
-  data: unknown,
-  conversationId: number, // Alterado para number
-  phone: string,
-  _userMessage: string,
-): Promise<void> {
-  try {
-    console.log(`🎬 [WEBHOOK-ACTION] Iniciando ação ${action}`)
+async function handleAction(action: string, data: unknown, conversationId: number, phone: string): Promise<void> {
+  console.log(`🎬 [ACTION] Executando ação: ${action}`)
 
+  try {
     switch (action) {
       case "agendar_direto":
-        // Já processado na resposta da IA
-        console.log(`📅 [WEBHOOK-ACTION] Agendamento direto já processado`)
+        console.log(`📅 [ACTION] Agendamento processado pela IA`)
         break
       case "listar_servicos":
-        // Já processado na resposta da IA
-        console.log(`📋 [WEBHOOK-ACTION] Listando serviços (já processado na resposta da IA)`)
+        console.log(`📋 [ACTION] Serviços listados pela IA`)
         break
       case "listar_horarios":
-        // Já processado na resposta da IA
-        console.log(`⏰ [WEBHOOK-ACTION] Listando horários (já processado na resposta da IA)`)
+        console.log(`⏰ [ACTION] Horários listados pela IA`)
         break
       case "consultar_agendamentos":
-        // Já processado na resposta da IA
-        console.log(`🔍 [WEBHOOK-ACTION] Consultando agendamentos (já processado na resposta da IA)`)
+        console.log(`🔍 [ACTION] Agendamentos consultados pela IA`)
         break
       case "cancelar":
-        await processCancelamento(data, conversationId, phone)
+        await enviarMensagemWhatsApp(
+          phone,
+          "Para cancelar um agendamento, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
+        )
         break
       case "reagendar":
-        await processReagendamento(data, conversationId, phone)
+        await enviarMensagemWhatsApp(
+          phone,
+          "Para reagendar, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
+        )
         break
       default:
-        console.log(`❓ [WEBHOOK-ACTION] Ação desconhecida: ${action}`)
+        console.log(`❓ [ACTION] Ação desconhecida: ${action}`)
     }
-
-    console.log(`✅ [WEBHOOK-ACTION] Ação ${action} concluída`)
-  } catch (e) {
-    console.error(`💥 [ACTION] Erro ao executar ação ${action}:`, e)
-    const errorMessage = e instanceof Error ? e.message : String(e)
-    await enviarMensagemWhatsApp(phone, `Ocorreu um erro ao processar sua solicitação: ${errorMessage}`)
+  } catch (error) {
+    console.error(`💥 [ACTION] Erro na ação ${action}:`, error)
   }
 }
 
-async function processCancelamento(data: unknown, conversationId: number, phone: string): Promise<void> {
-  console.log("🔄 [WEBHOOK-CANCELAMENTO] Processando cancelamento:", data)
-
-  await enviarMensagemWhatsApp(
-    phone,
-    "Para cancelar um agendamento, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
-  )
-}
-
-async function processReagendamento(data: unknown, conversationId: number, phone: string): Promise<void> {
-  console.log("🔄 [WEBHOOK-REAGENDAMENTO] Processando reagendamento:", data)
-
-  await enviarMensagemWhatsApp(
-    phone,
-    "Para reagendar, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
-  )
-}
-
-// Endpoint para verificar status do webhook
+// Endpoint GET para verificar status
 export async function GET() {
   return NextResponse.json({
     status: "Webhook Z-API ativo",
     timestamp: new Date().toISOString(),
+    version: "2.0",
   })
 }
