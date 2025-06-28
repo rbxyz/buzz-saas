@@ -5,6 +5,8 @@ interface ZApiResponse {
   error?: string
   message?: string
   data?: unknown
+  zaapId?: string
+  messageId?: string
 }
 
 const ZAPI_BASE_URL = "https://api.z-api.io/instances"
@@ -15,7 +17,7 @@ async function makeZApiRequest(
   method: "GET" | "POST" = "GET",
   body?: unknown,
 ): Promise<ZApiResponse> {
-  const url = `${ZAPI_BASE_URL}/${env.ZAPI_INSTANCE_ID}/${endpoint}`
+  const url = `${ZAPI_BASE_URL}/${env.ZAPI_INSTANCE_ID}/token/${env.ZAPI_TOKEN}/${endpoint}`
 
   console.log(`🌐 [ZAPI] ${method} ${endpoint}`)
 
@@ -28,7 +30,6 @@ async function makeZApiRequest(
       headers: {
         "Content-Type": "application/json",
         "Client-Token": env.ZAPI_CLIENT_TOKEN,
-        Authorization: `Bearer ${env.ZAPI_TOKEN}`,
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
@@ -63,13 +64,13 @@ export async function enviarMensagemWhatsApp(telefone: string, mensagem: string)
   try {
     console.log(`📤 [ZAPI] Enviando mensagem para ${telefone.substring(0, 4)}****`)
 
-    const response = await makeZApiRequest("token/send-text", "POST", {
+    const response = await makeZApiRequest("send-text", "POST", {
       phone: telefone,
       message: mensagem,
     })
 
-    if (response.success) {
-      console.log(`✅ [ZAPI] Mensagem enviada com sucesso`)
+    if (response.zaapId) {
+      console.log(`✅ [ZAPI] Mensagem enviada com sucesso (ID: ${response.zaapId})`)
       return true
     } else {
       console.error(`❌ [ZAPI] Falha no envio:`, response.error ?? response.message)
@@ -85,7 +86,7 @@ export async function verificarStatusInstancia(): Promise<boolean> {
   try {
     console.log(`🔍 [ZAPI] Verificando status da instância`)
 
-    const response = await makeZApiRequest("token/status")
+    const response = await makeZApiRequest("status")
 
     if (response.success) {
       console.log(`✅ [ZAPI] Instância ativa`)
@@ -104,7 +105,7 @@ export async function configurarWebhook(webhookUrl: string): Promise<boolean> {
   try {
     console.log(`🔗 [ZAPI] Configurando webhook: ${webhookUrl}`)
 
-    const response = await makeZApiRequest("token/webhook", "POST", {
+    const response = await makeZApiRequest("webhook", "POST", {
       url: webhookUrl,
       enabled: true,
       webhookByEvents: false,

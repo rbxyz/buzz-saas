@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages, clientes, users } from "@/server/db/schema"
+import { conversations, messages, clientes, users, messageRoleEnum } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
+import { type CoreMessage } from "ai"
 
 // Configurações do runtime
 export const runtime = "nodejs"
@@ -323,10 +324,15 @@ async function processMessage(data: {
           .limit(10),
       )
 
-      const conversationHistory = history.reverse().map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }))
+      const conversationHistory: CoreMessage[] = history
+        .reverse()
+        .filter(
+          (msg) => msg.role === "user" || msg.role === "assistant",
+        )
+        .map((msg) => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        }))
 
       console.log(`✅ [PROCESS] Histórico obtido: ${conversationHistory.length} mensagens`)
 
@@ -335,7 +341,7 @@ async function processMessage(data: {
       const aiResponse = await aiService.processMessage(messageText, phone, conversationHistory)
       console.log(`✅ [PROCESS] Resposta da IA recebida: "${aiResponse.message?.substring(0, 50)}..."`)
 
-      // 7. Salvar resposta da IA
+      // 7. Salvar resposta da IA e enviar
       if (aiResponse.message) {
         console.log(`💾 [PROCESS] Salvando resposta da IA...`)
         await executeWithTimeout(() =>
@@ -348,16 +354,9 @@ async function processMessage(data: {
         )
         console.log(`✅ [PROCESS] Resposta da IA salva`)
 
-        // 8. Enviar mensagem via WhatsApp
         console.log(`📤 [PROCESS] Enviando mensagem via WhatsApp...`)
         const enviado = await enviarMensagemWhatsApp(phone, aiResponse.message)
         console.log(`${enviado ? '✅' : '❌'} [PROCESS] Mensagem WhatsApp: ${enviado ? 'enviada' : 'falhou'}`)
-      }
-
-      // 9. Processar ações se houver
-      if (aiResponse.action) {
-        console.log(`🎬 [PROCESS] Processando ação: ${aiResponse.action}`)
-        await handleAction(aiResponse.action, aiResponse.data, conversationData.id, phone)
       }
 
       const totalTime = Date.now() - processStart
@@ -380,43 +379,6 @@ async function processMessage(data: {
     } catch (sendError) {
       console.error(`💥 [PROCESS] Falha ao enviar mensagem de erro:`, sendError)
     }
-  }
-}
-
-async function handleAction(action: string, data: unknown, conversationId: number, phone: string): Promise<void> {
-  console.log(`🎬 [ACTION] Executando ação: ${action}`)
-
-  try {
-    switch (action) {
-      case "agendar_direto":
-        console.log(`📅 [ACTION] Agendamento processado pela IA`)
-        break
-      case "listar_servicos":
-        console.log(`📋 [ACTION] Serviços listados pela IA`)
-        break
-      case "listar_horarios":
-        console.log(`⏰ [ACTION] Horários listados pela IA`)
-        break
-      case "consultar_agendamentos":
-        console.log(`🔍 [ACTION] Agendamentos consultados pela IA`)
-        break
-      case "cancelar":
-        await enviarMensagemWhatsApp(
-          phone,
-          "Para cancelar um agendamento, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
-        )
-        break
-      case "reagendar":
-        await enviarMensagemWhatsApp(
-          phone,
-          "Para reagendar, entre em contato conosco diretamente. Em breve teremos essa funcionalidade automatizada! 📞",
-        )
-        break
-      default:
-        console.log(`❓ [ACTION] Ação desconhecida: ${action}`)
-    }
-  } catch (error) {
-    console.error(`💥 [ACTION] Erro na ação ${action}:`, error)
   }
 }
 
