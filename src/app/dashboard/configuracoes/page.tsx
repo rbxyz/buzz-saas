@@ -5,8 +5,6 @@ import { ServicosCard } from "@/components/configuracoes/servicos-card";
 import { IntervalosCard } from "@/components/configuracoes/intervalos-card";
 import { ContaCard } from "@/components/configuracoes/conta-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
-import { WhatsappCard } from "@/components/configuracoes/whatsapp-card";
-import { IaCard } from "@/components/configuracoes/ia-card";
 
 export default function Configuracoes() {
   return (
@@ -37,12 +35,6 @@ export default function Configuracoes() {
             {/* Segunda linha - Intervalos ocupando largura total */}
             <div className="w-full">
               <IntervalosCard />
-            </div>
-
-            {/* Terceira linha - Integrações WhatsApp e IA */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <WhatsappCard />
-              <IaCard />
             </div>
 
             {/* Quarta linha - Gerenciamento de Usuários */}

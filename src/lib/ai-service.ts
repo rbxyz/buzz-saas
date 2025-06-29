@@ -25,9 +25,9 @@ dayjs.extend(weekday)
 dayjs.extend(isoWeek)
 dayjs.locale('pt-br')
 
-const model = groq("llama-3.3-70b-versatile")
+const model = groq("gemma2-9b-it")
+// qwen-qwq-32b
 // gemma2-9b-it
-// llama-3.1-8b-instant
 interface AIResponse {
   message: string
 }
