@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages, clientes, users, messageRoleEnum, servicos } from "@/server/db/schema"
-import { eq, desc } from "drizzle-orm"
+import { conversations, messages, users, servicos } from "@/server/db/schema"
+import { eq } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
-import { type CoreMessage } from "ai"
 import { env } from "@/env"
 import dayjs from "dayjs"
 
@@ -203,12 +202,15 @@ export async function POST(request: NextRequest) {
 
     } catch (processingError) {
       console.error(`💥 [WEBHOOK] Erro durante o processamento da mensagem:`, processingError)
+
+      const errorMessage = processingError instanceof Error ? processingError.message : "Erro desconhecido durante o processamento";
+
       // Mesmo com erro no processamento, retornamos 200 para o Z-API não reenviar.
       // O erro já foi logado.
       return NextResponse.json({
         success: false,
         status: "error_during_processing",
-        error: processingError instanceof Error ? processingError.message : "Erro desconhecido",
+        error: errorMessage,
       })
     }
   } catch (error) {
@@ -407,7 +409,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             telefone: conversation.telefone,
-            nome: conversation.nomeContato,
+            nome: conversation.nomeContato ?? "Cliente",
             servico: memoria.servicoNome,
             data: memoria.data,
             horario: memoria.horario,
