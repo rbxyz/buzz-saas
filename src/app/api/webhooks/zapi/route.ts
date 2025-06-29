@@ -63,8 +63,11 @@ interface ConversationData {
   updatedAt: Date | null
 }
 
+// Timeout configurável: PROCESS_TIMEOUT_MS (ms) – default 15000
+const DEFAULT_TIMEOUT = Number(process.env.PROCESS_TIMEOUT_MS) || 15000
+
 // Função para executar operações do banco com timeout
-async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = 8000): Promise<T> {
+async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = DEFAULT_TIMEOUT): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => {
     console.error(`⏰ [TIMEOUT] Operação cancelada após ${timeoutMs}ms`)
