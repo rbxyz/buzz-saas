@@ -54,7 +54,7 @@ export default function LinktreePage() {
   const [titulo, setTitulo] = useState("");
   const [url, setUrl] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [tipo, setTipo] = useState<"cliente" | "parceria" | "">("");
+  const [tipo, setTipo] = useState<"parceria" | "">("");
   const [imagem, setImagem] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -170,7 +170,7 @@ export default function LinktreePage() {
     setTitulo(link.titulo);
     setUrl(link.url ?? "");
     setDescricao(link.descricao ?? "");
-    setTipo(link.tipo);
+    setTipo(link.tipo === "parceria" ? "parceria" : "");
 
     if (link.imagem && link.mimeType) {
       setImagem(`data:${link.mimeType};base64,${link.imagem}`);
@@ -289,7 +289,6 @@ export default function LinktreePage() {
     );
   }
 
-  const clientes = links?.filter((link) => link.tipo === "cliente") ?? [];
   const parcerias = links?.filter((link) => link.tipo === "parceria") ?? [];
 
   return (
@@ -311,8 +310,7 @@ export default function LinktreePage() {
           <div>
             <CardTitle>Gerenciar Links</CardTitle>
             <CardDescription>
-              Adicione seus clientes e parceiros que aparecerão na sua página
-              pública.
+              Adicione seus parceiros que aparecerão na sua página pública.
             </CardDescription>
           </div>
 
@@ -351,30 +349,23 @@ export default function LinktreePage() {
                   <Select
                     value={tipo}
                     onValueChange={(value) =>
-                      setTipo(value as "cliente" | "parceria")
+                      setTipo(value as "parceria")
                     }
                   >
                     <SelectTrigger className="cursor-pointer">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent className="cursor-pointer bg-black/40 backdrop-blur-sm">
-                      <SelectItem value="cliente">Cliente</SelectItem>
                       <SelectItem value="parceria">Parceria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <Label htmlFor="titulo">
-                    {tipo === "cliente" ? "Nome do cliente" : "Título"}
-                  </Label>
+                  <Label htmlFor="titulo">Título</Label>
                   <Input
                     id="titulo"
-                    placeholder={
-                      tipo === "cliente"
-                        ? "Nome do cliente aqui"
-                        : "Ex: Loja Exemplo"
-                    }
+                    placeholder="Ex: Loja Exemplo"
                     value={titulo}
                     onChange={(e) => setTitulo(e.target.value)}
                   />
@@ -451,18 +442,13 @@ export default function LinktreePage() {
           </Dialog>
         </CardHeader>
 
-        <CardContent className="grid w-full gap-6 overflow-hidden md:grid-cols-2">
-          {[
-            { titulo: "Clientes", lista: clientes },
-            { titulo: "Parcerias", lista: parcerias },
-          ].map(({ titulo, lista }) => (
-            <section key={titulo} className="w-full min-w-0 overflow-hidden">
-              <h2 className="text-foreground mb-4 text-lg font-semibold">
-                {titulo}
-              </h2>
-              {renderSecaoConteudo(titulo, lista, isLoading)}
-            </section>
-          ))}
+        <CardContent className="w-full overflow-hidden">
+          <section className="w-full min-w-0 overflow-hidden">
+            <h2 className="text-foreground mb-4 text-lg font-semibold">
+              Parcerias
+            </h2>
+            {renderSecaoConteudo("Parcerias", parcerias, isLoading)}
+          </section>
         </CardContent>
 
         {/* Modal de confirmação de exclusão */}

@@ -5,6 +5,8 @@ import { ServicosCard } from "@/components/configuracoes/servicos-card";
 import { IntervalosCard } from "@/components/configuracoes/intervalos-card";
 import { ContaCard } from "@/components/configuracoes/conta-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
+import { CoresCard } from "@/components/configuracoes/cores-card";
+import { EstabelecimentoCard } from "@/components/configuracoes/estabelecimento-card";
 
 export default function Configuracoes() {
   return (
@@ -26,18 +28,28 @@ export default function Configuracoes() {
 
           {/* Layout responsivo dos cards */}
           <div className="space-y-8">
-            {/* Primeira linha - Conta e Serviços dividindo espaço igualmente */}
+            {/* Primeira linha - Conta e Estabelecimento */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <ContaCard />
+              <EstabelecimentoCard />
+            </div>
+
+            {/* Segunda linha - Serviços */}
+            <div className="w-full">
               <ServicosCard />
             </div>
 
-            {/* Segunda linha - Intervalos ocupando largura total */}
+            {/* Terceira linha - Intervalos */}
             <div className="w-full">
               <IntervalosCard />
             </div>
 
-            {/* Quarta linha - Gerenciamento de Usuários */}
+            {/* Quarta linha - Configuração de Cores */}
+            <div className="w-full">
+              <CoresCard />
+            </div>
+
+            {/* Quinta linha - Gerenciamento de Usuários */}
             <div className="w-full">
               <UsuariosCard />
             </div>

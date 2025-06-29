@@ -1,40 +1,31 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect, type ElementType } from "react";
-import { useTheme } from "next-themes";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context";
 import {
+  Home,
   Calendar,
   Users,
-  MessageSquare,
   Settings,
   LinkIcon,
-  Home,
+  MessageSquare,
   LogOut,
-  X,
-  Menu,
+  ChevronRight,
+  PanelLeft,
 } from "lucide-react";
-
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "next-themes";
+import Image from "next/image";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/contexts/auth-context";
+import { useSidebar } from "@/contexts/sidebar-context";
 
 interface Route {
   title: string;
   href: string;
-  icon: ElementType;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   blocked?: boolean;
 }
 
@@ -55,7 +46,7 @@ const routes: Route[] = [
 export function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setIsOpen } = useSidebar();
   const isMobile = useIsMobile();
 
   const { theme, systemTheme } = useTheme();
@@ -104,216 +95,104 @@ export function DashboardSidebar() {
     if (isMobile) {
       setIsOpen(false);
     }
-  }, [pathname, isMobile]);
+  }, [pathname, isMobile, setIsOpen]);
 
-  // Fechar sidebar quando clicar fora em dispositivos móveis
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isMobile &&
-        isOpen &&
-        (event.target as HTMLElement).closest('[data-sidebar="mobile"]') ===
-          null &&
-        (event.target as HTMLElement).closest("[data-sidebar-toggle]") === null
-      ) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, isMobile]);
+  const handleLogout = () => {
+    try {
+      logout();
+      router.push("/");
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível sair. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <>
-      {/* Botão toggle mobile */}
-      <Button
-        variant="ghost"
-        className="fixed top-4 left-4 z-50 p-2 md:hidden"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
-        data-sidebar-toggle
-      >
-        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-      </Button>
-
-      {/* Sidebar desktop */}
-      <Sidebar
-        className="hidden w-64 flex-col md:flex"
-        style={{
-          backgroundColor: "hsl(var(--sidebar-background))",
-          color: "hsl(var(--sidebar-foreground))",
-        }}
-      >
-        <SidebarContent className="mt-20 flex-1 overflow-y-auto">
-          <SidebarMenu>
-            {routes.map((route, index) => {
-              const isActive = pathname === route.href;
-              const isLastBeforeHome = index === routes.length - 2;
-
-              return (
-                <SidebarMenuItem
-                  key={route.href + index}
-                  className={cn(
-                    isLastBeforeHome ? "mb-10" : "", // adiciona margem antes da "Página Inicial"
-                  )}
-                >
-                  <SidebarMenuButton
-                    onClick={() => {
-                      if (typeof route.href === "string") {
-                        handleNavigation(route.href, route.blocked);
-                      }
-                    }}
-                    className={cn(
-                      "mx-auto flex max-w-[280px] cursor-pointer items-center gap-4 rounded-md px-5 py-2 font-semibold transition-all select-none",
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground text-[20px]"
-                        : "text-sidebar-foreground hover:bg-sidebar-border hover:text-accent-foreground w-60 text-[18px]",
-                      route.blocked && "opacity-70",
-                    )}
-                  >
-                    <route.icon className="h-6 w-6" />
-                    <span>{route.title}</span>
-                    {route.blocked && (
-                      <span className="ml-auto rounded bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-300">
-                        Em breve
-                      </span>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        </SidebarContent>
-
-        <SidebarFooter className="px-4 py-3">
-          <SidebarHeader
-            className="flex items-center gap-3 px-4 py-3"
-            style={{ justifyContent: "flex-start", paddingLeft: 0 }}
-          >
-            <div
-              style={{
-                transition: "opacity 0.3s",
-                opacity: logoVisible ? 1 : 0,
-              }}
-            >
-              <Image
-                src={logoPath || "/placeholder.svg"}
-                alt="Logo"
-                width={160}
-                height={160}
-                priority
-                className="select-none"
-              />
-            </div>
-          </SidebarHeader>
-          <Button
-            variant="outline"
-            className="w-full justify-start"
-            size="sm"
-            onClick={() => logout()}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Sair
-          </Button>
-        </SidebarFooter>
-      </Sidebar>
-
-      {/* Sidebar mobile - melhorada */}
-      {isOpen && (
-        <>
-          <div
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm"
-          />
-
-          <aside
-            data-sidebar="mobile"
-            className="fixed top-0 left-0 z-40 flex h-full w-[85%] max-w-[280px] flex-col shadow-lg transition-transform duration-300 ease-in-out"
-            style={{
-              backgroundColor: "hsl(var(--sidebar-background))",
-              color: "hsl(var(--sidebar-foreground))",
-              transform: isOpen ? "translateX(0)" : "translateX(-100%)",
-            }}
-          >
-            <SidebarHeader className="flex items-center justify-between gap-3 border-b px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div
-                  style={{
-                    transition: "opacity 0.3s",
-                    opacity: logoVisible ? 1 : 0,
-                  }}
-                >
-                  <Image
-                    src={logoPath || "/placeholder.svg"}
-                    alt="Logo"
-                    width={32}
-                    height={32}
-                    priority
-                    className="select-none"
-                  />
-                </div>
-                <span className="text-lg font-semibold">Buzz</span>
-              </div>
-            </SidebarHeader>
-
-            <SidebarContent className="flex-1 overflow-y-auto">
-              <SidebarMenu>
-                {routes.map((route, index) => {
-                  const isActive = pathname === route.href;
-                  const isLastBeforeHome = index === routes.length - 2;
-
-                  return (
-                    <SidebarMenuItem
-                      key={route.href + index}
-                      className={cn(isLastBeforeHome ? "mt-6" : "")}
-                    >
-                      <SidebarMenuButton
-                        onClick={() => {
-                          handleNavigation(route.href, route.blocked);
-                          setIsOpen(false);
-                        }}
-                        className={cn(
-                          "flex items-center gap-4 rounded-md px-4 py-3 font-medium transition-all",
-                          isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "hover:bg-muted text-foreground",
-                          route.blocked && "opacity-70",
-                        )}
-                      >
-                        <route.icon className="h-5 w-5" />
-                        <span>{route.title}</span>
-                        {route.blocked && (
-                          <span className="ml-auto rounded bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-300">
-                            Em breve
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarContent>
-
-            <SidebarFooter className="border-t px-4 py-3">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                size="sm"
-                onClick={() => {
-                  setIsOpen(false);
-                  logout();
-                }}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Sair
-              </Button>
-            </SidebarFooter>
-          </aside>
-        </>
+      {/* Overlay mobile */}
+      {isMobile && isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm animate-fade-in"
+          onClick={() => setIsOpen(false)}
+        />
       )}
+
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "fixed left-0 top-0 z-50 h-full w-64 bg-sidebar-background border-r border-sidebar-border transition-transform duration-300 ease-smooth",
+          isMobile && !isOpen && "-translate-x-full",
+          "md:translate-x-0"
+        )}
+      >
+        <div className="flex h-full flex-col">
+          {/* Header com logo */}
+          <div className="relative flex h-16 items-center justify-center border-b border-sidebar-border/50 px-6">
+            {logoVisible && (
+              <Image
+                src={logoPath}
+                alt="Buzz-SaaS Logo"
+                width={120}
+                height={32}
+                className="object-contain transition-opacity duration-300"
+                priority
+              />
+            )}
+          </div>
+
+          {/* Navegação */}
+          <nav className="flex-1 overflow-y-auto py-6">
+            <div className="space-y-1 px-3">
+              {routes.map((route) => {
+                const isActive = pathname === route.href;
+                const Icon = route.icon;
+
+                return (
+                  <Button
+                    key={route.href}
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start gap-3 h-11 px-3 rounded-lg transition-all duration-200 ease-smooth",
+                      "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-border/30",
+                      isActive && 
+                        "bg-brand-light/20 text-brand-primary hover:bg-brand-light/30 hover:text-brand-primary border border-brand-primary/10 shadow-minimal",
+                      route.blocked && "opacity-50"
+                    )}
+                    onClick={() => handleNavigation(route.href, route.blocked)}
+                  >
+                    <Icon className={cn(
+                      "h-4 w-4 transition-colors",
+                      isActive ? "text-brand-primary" : "text-current"
+                    )} />
+                    <span className="text-body-small font-medium">
+                      {route.title}
+                    </span>
+                    {isActive && (
+                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-primary" />
+                    )}
+                  </Button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Footer com logout */}
+          <div className="p-3 border-t border-sidebar-border/50">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 h-11 px-3 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="text-body-small font-medium">Sair</span>
+            </Button>
+          </div>
+        </div>
+      </div>
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MessageSquare, TrendingUp, Users } from "lucide-react";
 import { api } from "@/trpc/react";
+import { cn } from "@/lib/utils";
 
 export function DashboardStats() {
   // Query otimizada com cache de 30 segundos
@@ -46,16 +47,16 @@ export function DashboardStats() {
   // Loading skeleton
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="animate-pulse">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div className="bg-muted h-4 w-24 rounded"></div>
-              <div className="bg-muted h-4 w-4 rounded"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <div className="h-4 w-24 bg-muted rounded-md"></div>
+              <div className="h-5 w-5 bg-muted rounded"></div>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted mb-2 h-8 w-16 rounded"></div>
-              <div className="bg-muted h-3 w-32 rounded"></div>
+              <div className="h-8 w-16 bg-muted rounded-md mb-2"></div>
+              <div className="h-3 w-32 bg-muted rounded-md"></div>
             </CardContent>
           </Card>
         ))}
@@ -65,76 +66,94 @@ export function DashboardStats() {
 
   if (error) return <div>Erro ao carregar estatísticas: {error.message}</div>;
 
+  const stats = [
+    {
+      title: "Agendamentos Hoje",
+      value: agendamentosHoje,
+      change: variacaoAgendamentos,
+      changeLabel: "vs ontem",
+      icon: Calendar,
+      iconColor: "text-brand-primary",
+      iconBg: "bg-brand-light/50",
+    },
+    {
+      title: "Novos Clientes",
+      value: `+${novosClientes}`,
+      change: variacaoNovosClientes,
+      changeLabel: "vs semana passada",
+      icon: Users,
+      iconColor: "text-success",
+      iconBg: "bg-success/10",
+    },
+    {
+      title: "Mensagens WhatsApp",
+      value: mensagensWhatsApp,
+      change: variacaoMensagens,
+      changeLabel: "vs ontem",
+      icon: MessageSquare,
+      iconColor: "text-info",
+      iconBg: "bg-info/10",
+    },
+    {
+      title: "Faturamento Estimado",
+      value: `R$ ${faturamentoEstimado.toLocaleString("pt-BR")}`,
+      change: variacaoFaturamento,
+      changeLabel: "vs semana passada",
+      icon: TrendingUp,
+      iconColor: "text-warning",
+      iconBg: "bg-warning/10",
+    },
+  ];
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card className={isStale ? "opacity-75" : ""}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Agendamentos Hoje
-            {isStale && (
-              <span className="text-muted-foreground ml-1 text-xs">
-                (atualizando...)
-              </span>
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {stats.map((stat, index) => {
+        const Icon = stat.icon;
+        const isPositive = stat.change >= 0;
+        
+        return (
+          <Card 
+            key={index} 
+            className={cn(
+              "interactive-hover",
+              isStale && "opacity-75"
             )}
-          </CardTitle>
-          <Calendar className="text-muted-foreground h-4 w-4" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{agendamentosHoje}</div>
-          <p className="text-muted-foreground text-xs">
-            {variacaoAgendamentos >= 0 ? "+" : ""}
-            {variacaoAgendamentos.toFixed(1)}% vs ontem
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className={isStale ? "opacity-75" : ""}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Novos Clientes</CardTitle>
-          <Users className="text-muted-foreground h-4 w-4" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">+{novosClientes}</div>
-          <p className="text-muted-foreground text-xs">
-            {variacaoNovosClientes >= 0 ? "+" : ""}
-            {variacaoNovosClientes.toFixed(1)}% vs semana passada
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className={isStale ? "opacity-75" : ""}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Mensagens WhatsApp
-          </CardTitle>
-          <MessageSquare className="text-muted-foreground h-4 w-4" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{mensagensWhatsApp}</div>
-          <p className="text-muted-foreground text-xs">
-            {variacaoMensagens >= 0 ? "+" : ""}
-            {variacaoMensagens.toFixed(1)}% vs ontem
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className={isStale ? "opacity-75" : ""}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
-            Faturamento Estimado
-          </CardTitle>
-          <TrendingUp className="text-muted-foreground h-4 w-4" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            R$ {faturamentoEstimado.toLocaleString("pt-BR")}
-          </div>
-          <p className="text-muted-foreground text-xs">
-            {variacaoFaturamento >= 0 ? "+" : ""}
-            {variacaoFaturamento.toFixed(1)}% vs semana passada
-          </p>
-        </CardContent>
-      </Card>
+          >
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-body-small font-medium text-muted-foreground">
+                {stat.title}
+                {isStale && (
+                  <span className="ml-2 text-caption text-muted-foreground/60">
+                    (atualizando...)
+                  </span>
+                )}
+              </CardTitle>
+              <div className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-lg",
+                stat.iconBg
+              )}>
+                <Icon className={cn("h-4 w-4", stat.iconColor)} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-heading-2 font-bold text-foreground mb-2">
+                {stat.value}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className={cn(
+                  "text-caption font-medium",
+                  isPositive ? "text-success" : "text-destructive"
+                )}>
+                  {isPositive ? "+" : ""}{stat.change.toFixed(1)}%
+                </span>
+                <span className="text-caption text-muted-foreground">
+                  {stat.changeLabel}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

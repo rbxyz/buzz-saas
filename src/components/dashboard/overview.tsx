@@ -1,135 +1,164 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { api } from "@/trpc/react";
 import {
-  Bar,
-  BarChart,
   ResponsiveContainer,
+  BarChart,
   XAxis,
   YAxis,
   Tooltip,
+  Bar,
 } from "recharts";
-import { trpc } from "@/utils/trpc";
+import { cn } from "@/lib/utils";
 
-type OverviewDataItem = {
-  date: string;
+interface ChartData {
+  name: string;
   total: number;
-};
-
-type ChartPayloadItem = {
-  value: number;
-  payload: {
-    name: string;
-    total: number;
-  };
-};
+}
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: ChartPayloadItem[];
+  payload?: Array<{ value: number }>;
   label?: string;
 }
 
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
-  if (active && Array.isArray(payload) && payload.length > 0) {
-    const firstItem = payload[0];
-    if (firstItem?.value !== undefined) {
-      return (
-        <div className="bg-primary-foreground text-accent border-sidebar-border rounded border p-2 shadow-lg">
-          <p className="text-sm font-semibold">{label}</p>
-          <p className="text-accent">{firstItem.value} agendamentos</p>
-        </div>
-      );
-    }
+  if (active && payload?.length) {
+    return (
+      <div className="rounded-lg border border-subtle bg-background/95 backdrop-blur-sm p-3 shadow-medium">
+        <p className="text-body-small font-medium text-foreground">
+          {label}
+        </p>
+        <p className="text-body-small text-brand-primary">
+          <span className="font-medium">Agendamentos: </span>
+          {payload[0]?.value}
+        </p>
+      </div>
+    );
   }
-
   return null;
 }
 
 export function Overview() {
-  // Query otimizada com cache de 2 minutos
-  const { data, isLoading, error, isStale } =
-    trpc.dashboard.getOverviewData.useQuery(undefined, {
-      staleTime: 2 * 60 * 1000, // 2 minutos
-      gcTime: 10 * 60 * 1000, // 10 minutos
-      refetchOnWindowFocus: false,
-      refetchInterval: 5 * 60 * 1000, // Atualiza a cada 5 minutos
-    });
+  const [chartData, setChartData] = useState<ChartData[]>([]);
 
-  const [chartData, setChartData] = useState<{ name: string; total: number }[]>(
-    [],
+  // Query otimizada com cache de 30 segundos
+  const { data, isLoading, error, isStale } = api.dashboard.getOverviewData.useQuery(
+    undefined,
+    {
+      staleTime: 30 * 1000, // 30 segundos
+      gcTime: 5 * 60 * 1000, // 5 minutos
+      refetchOnWindowFocus: false,
+      refetchInterval: 60 * 1000, // Atualiza a cada minuto
+    },
   );
 
   useEffect(() => {
-    if (!data) return;
-
-    const formattedData = data.map((item: OverviewDataItem) => {
-      const date = new Date(item.date);
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-
-      return {
-        name: `${day}/${month}`,
-        total: item.total,
-      };
-    });
-
-    setChartData(formattedData);
+    if (data) {
+      // Transformar os dados do formato retornado pela API
+      const formattedData = data.map((item) => {
+        const date = new Date(item.date);
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        
+        return {
+          name: `${day}/${month}`,
+          total: item.total,
+        };
+      });
+      
+      setChartData(formattedData);
+    }
   }, [data]);
 
-  // Loading skeleton
   if (isLoading) {
     return (
-      <div className="text-muted p-4 text-center">
-        <div className="animate-pulse">
-          <div className="bg-muted mb-4 h-64 rounded"></div>
-          <div className="bg-muted mx-auto h-4 w-32 rounded"></div>
-        </div>
+      <div className="h-[350px] w-full rounded-xl border border-subtle bg-card p-6 animate-pulse">
+        <div className="h-6 w-32 bg-muted rounded-md mb-4"></div>
+        <div className="h-[280px] w-full bg-muted rounded-lg"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-destructive p-4 text-center">
-        Erro ao carregar gráfico: {error.message}
+      <div className="h-[350px] w-full rounded-xl border border-subtle bg-card p-6 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-body text-muted-foreground">
+            Erro ao carregar dados do gráfico
+          </p>
+          <p className="text-body-small text-muted-foreground/60 mt-1">
+            {error.message}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className={`bg-background text-foreground border-sidebar-border animate-fade-in rounded border p-4 shadow ${isStale ? "opacity-75" : ""}`}
+      className={cn(
+        "w-full rounded-xl border border-subtle bg-card p-6 shadow-minimal transition-all duration-200",
+        "hover:shadow-soft hover:border-border/80",
+        isStale && "opacity-75"
+      )}
     >
       {isStale && (
-        <div className="text-muted-foreground mb-2 text-center text-xs">
-          Atualizando dados...
+        <div className="mb-3 text-center">
+          <span className="text-caption text-muted-foreground/60">
+            Atualizando dados...
+          </span>
         </div>
       )}
-      <ResponsiveContainer width="100%" height={350}>
-        <BarChart data={chartData}>
+      
+      <div className="mb-4">
+        <h3 className="text-heading-3 font-semibold text-foreground">
+          Agendamentos por Dia
+        </h3>
+        <p className="text-body-small text-muted-foreground mt-1">
+          Últimos 7 dias
+        </p>
+      </div>
+
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={chartData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
           <XAxis
             dataKey="name"
-            stroke="hsl(var(--sidebar-foreground))"
+            stroke="hsl(var(--muted-foreground))"
             fontSize={12}
             tickLine={false}
             axisLine={false}
-            tick={{ fill: "hsl(var(--sidebar-foreground))" }}
+            tick={{ 
+              fill: "hsl(var(--muted-foreground))",
+              fontSize: 12,
+              fontWeight: 500
+            }}
           />
           <YAxis
-            stroke="hsl(var(--sidebar-foreground))"
+            stroke="hsl(var(--muted-foreground))"
             fontSize={12}
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => `${value}`}
-            tick={{ fill: "hsl(var(--sidebar-foreground))" }}
+            tick={{ 
+              fill: "hsl(var(--muted-foreground))",
+              fontSize: 12,
+              fontWeight: 500
+            }}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip 
+            content={<CustomTooltip />} 
+            cursor={{ 
+              fill: "hsl(var(--muted) / 0.3)",
+              radius: 4
+            }}
+          />
           <Bar
             dataKey="total"
-            radius={[4, 4, 0, 0]}
-            className="bg-primary"
-            fill="hsl(var(--primary))"
+            radius={[6, 6, 0, 0]}
+            fill="hsl(var(--brand-primary))"
+            className="transition-all duration-200"
           />
         </BarChart>
       </ResponsiveContainer>

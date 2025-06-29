@@ -1,158 +1,262 @@
 "use client";
 
-import type React from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-import { api } from "@/trpc/react";
-import { toast } from "sonner";
-import { Building2, Phone, MapPin, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { User, Mail, Key, Save, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const contaSchema = z.object({
+  nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  email: z.string().email("Email inválido"),
+  senhaAtual: z.string().optional(),
+  novaSenha: z.string().optional(),
+  confirmarSenha: z.string().optional(),
+}).refine((data) => {
+  if (data.novaSenha || data.confirmarSenha) {
+    return data.senhaAtual && data.novaSenha && data.confirmarSenha && 
+           data.novaSenha === data.confirmarSenha && data.novaSenha.length >= 6;
+  }
+  return true;
+}, {
+  message: "Para alterar a senha, preencha todos os campos de senha e certifique-se de que a nova senha tenha pelo menos 6 caracteres",
+  path: ["novaSenha"],
+});
+
+type ContaFormData = z.infer<typeof contaSchema>;
 
 export function ContaCard() {
-  const [nomeEmpresa, setNomeEmpresa] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [endereco, setEndereco] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const { toast } = useToast();
 
-  const utils = api.useContext();
-
-  // Buscando configs para preencher dados iniciais
-  const { data: configs, isLoading } = api.configuracao.listar.useQuery();
-
-  // Mutation para atualizar configuração geral
-  const mutation = api.configuracao.atualizarConfiguracao.useMutation({
-    onSuccess: () => {
-      toast.success("Informações da empresa atualizadas com sucesso!");
-      void utils.configuracao.listar.invalidate();
-    },
-    onError: (error) => {
-      toast.error("Erro ao atualizar informações", {
-        description: error.message,
-      });
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isDirty },
+    reset,
+  } = useForm<ContaFormData>({
+    resolver: zodResolver(contaSchema),
+    defaultValues: {
+      nome: "Administrador",
+      email: "admin@buzz-saas.com",
+      senhaAtual: "",
+      novaSenha: "",
+      confirmarSenha: "",
     },
   });
 
-  function handleSalvar() {
-    mutation.mutate({
-      nomeEmpresa,
-      telefone,
-      endereco,
-    });
-  }
+  const novaSenha = watch("novaSenha");
+  const confirmarSenha = watch("confirmarSenha");
 
-  function handleTelefoneChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const valor = e.target.value;
-    setTelefone(mascararTelefone(valor));
-  }
+  const onSubmit = async (data: ContaFormData) => {
+    setIsLoading(true);
+    
+    try {
+      // Simular chamada API
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast({
+        title: "Dados atualizados",
+        description: "Suas informações foram salvas com sucesso.",
+      });
 
-  function mascararTelefone(valor: string): string {
-    return valor
-      .replace(/\D/g, "")
-      .replace(/^(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2")
-      .slice(0, 15);
-  }
-
-  // Carregar dados do backend ao montar componente
-  useEffect(() => {
-    if (!configs) return;
-    setNomeEmpresa(configs.nomeEmpresa ?? "");
-    setTelefone(configs.telefone ?? "");
-    setEndereco(configs.endereco ?? "");
-  }, [configs]);
-
-  if (isLoading) {
-    return (
-      <Card className="flex h-full min-h-[300px] w-full items-center justify-center border-gray-200 shadow-sm">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </Card>
-    );
-  }
+      // Reset password fields
+      if (isChangingPassword) {
+        reset({
+          ...data,
+          senhaAtual: "",
+          novaSenha: "",
+          confirmarSenha: "",
+        });
+        setIsChangingPassword(false);
+      }
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Erro ao salvar",
+        description: "Não foi possível atualizar suas informações. Tente novamente.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <Card className="w-full border-gray-200 shadow-sm">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-foreground flex items-center gap-3 text-lg">
-          <Building2 className="h-5 w-5" />
-          Informações da Empresa
+    <Card className="interactive-hover">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-heading-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-light/30">
+            <User className="h-4 w-4 text-brand-primary" />
+          </div>
+          Informações da Conta
         </CardTitle>
         <CardDescription>
-          Gerencie as informações básicas da sua empresa.
+          Gerencie suas informações pessoais e preferências de segurança
         </CardDescription>
       </CardHeader>
+      
+      <CardContent>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Informações Básicas */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="nome" variant="required">
+                Nome Completo
+              </Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="nome"
+                  {...register("nome")}
+                  className="pl-10"
+                  placeholder="Digite seu nome completo"
+                />
+              </div>
+              {errors.nome && (
+                <p className="text-caption text-destructive">{errors.nome.message}</p>
+              )}
+            </div>
 
-      <CardContent className="space-y-6">
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label
-              htmlFor="nomeEmpresa"
-              className="flex items-center gap-2 text-sm font-medium"
-            >
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-              Nome da Empresa
-            </Label>
-            <Input
-              id="nomeEmpresa"
-              placeholder="Ex: Barbearia do João"
-              value={nomeEmpresa}
-              onChange={(e) => setNomeEmpresa(e.target.value)}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="email" variant="required">
+                Email
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  {...register("email")}
+                  className="pl-10"
+                  placeholder="seu@email.com"
+                />
+              </div>
+              {errors.email && (
+                <p className="text-caption text-destructive">{errors.email.message}</p>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label
-              htmlFor="telefone"
-              className="flex items-center gap-2 text-sm font-medium"
-            >
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              Telefone
-            </Label>
-            <Input
-              id="telefone"
-              placeholder="(11) 91234-5678"
-              value={telefone}
-              onChange={handleTelefoneChange}
-            />
-          </div>
-        </div>
+          {/* Seção de Senha */}
+          <div className="space-y-4 border-t border-subtle pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-body font-medium text-foreground">Alterar Senha</h4>
+                <p className="text-body-small text-muted-foreground mt-1">
+                  {isChangingPassword ? "Preencha os campos abaixo para alterar sua senha" : "Manter sua senha sempre atualizada é importante para a segurança"}
+                </p>
+              </div>
+              {!isChangingPassword && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsChangingPassword(true)}
+                  className="shrink-0"
+                >
+                  <Key className="h-4 w-4 mr-2" />
+                  Alterar Senha
+                </Button>
+              )}
+            </div>
 
-        <div className="space-y-2">
-          <Label
-            htmlFor="endereco"
-            className="flex items-center gap-2 text-sm font-medium"
-          >
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-            Endereço
-          </Label>
-          <Textarea
-            id="endereco"
-            placeholder="Rua Exemplo, 123 - Bairro - Cidade"
-            value={endereco}
-            onChange={(e) => setEndereco(e.target.value)}
-            className="min-h-[80px]"
-          />
-        </div>
+            {isChangingPassword && (
+              <div className="space-y-4 rounded-lg border border-subtle bg-muted/30 p-4">
+                <div className="space-y-2">
+                  <Label htmlFor="senhaAtual" variant="required">
+                    Senha Atual
+                  </Label>
+                  <Input
+                    id="senhaAtual"
+                    type="password"
+                    {...register("senhaAtual")}
+                    placeholder="Digite sua senha atual"
+                  />
+                </div>
 
-        <div className="pt-2">
-          <Button
-            onClick={handleSalvar}
-            disabled={mutation.isPending}
-            className="w-full sm:w-auto"
-          >
-            {mutation.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="novaSenha" variant="required">
+                      Nova Senha
+                    </Label>
+                    <Input
+                      id="novaSenha"
+                      type="password"
+                      {...register("novaSenha")}
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmarSenha" variant="required">
+                      Confirmar Nova Senha
+                    </Label>
+                    <Input
+                      id="confirmarSenha"
+                      type="password"
+                      {...register("confirmarSenha")}
+                      placeholder="Confirme a nova senha"
+                      className={cn(
+                        novaSenha && confirmarSenha && novaSenha !== confirmarSenha && "border-destructive focus:ring-destructive"
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {errors.novaSenha && (
+                  <p className="text-caption text-destructive">{errors.novaSenha.message}</p>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsChangingPassword(false);
+                      reset();
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
             )}
-            Salvar Informações
-          </Button>
-        </div>
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex items-center justify-between pt-4 border-t border-subtle">
+            <p className="text-caption text-muted-foreground">
+              {isDirty ? "Você tem alterações não salvas" : "Todas as alterações foram salvas"}
+            </p>
+            
+            <Button 
+              type="submit" 
+              disabled={!isDirty || isLoading}
+              className="min-w-24"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar Alterações
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

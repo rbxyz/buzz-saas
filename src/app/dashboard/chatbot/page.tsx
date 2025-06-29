@@ -19,7 +19,6 @@ import {
   Info,
   Archive,
   MessageSquare,
-  Send,
   Bot,
   UserIcon,
 } from "lucide-react";
@@ -33,7 +32,7 @@ export default function ChatbotPage() {
   const [conversaSelecionada, setConversaSelecionada] = useState<string | null>(
     null,
   );
-  const [novaMensagem, setNovaMensagem] = useState("");
+
   const [autoRefresh] = useState(true);
 
   const [busca, setBusca] = useState("");
@@ -67,16 +66,6 @@ export default function ChatbotPage() {
   );
 
   // Mutations
-  const enviarMensagemMutation = api.messages.enviar.useMutation({
-    onSuccess: () => {
-      setNovaMensagem("");
-      void refetchMensagens();
-      void refetchConversas();
-    },
-    onError: (error) => {
-      console.error("Erro ao enviar mensagem:", error);
-    },
-  });
 
   const marcarComoLidaMutation = api.messages.marcarComoLida.useMutation({
     onSuccess: () => {
@@ -156,23 +145,7 @@ export default function ChatbotPage() {
     }
   };
 
-  const handleEnviarMensagem = () => {
-    if (!novaMensagem.trim() || !conversaSelecionada) return;
 
-    // Alterado para enviar como bot em vez de usuário
-    enviarMensagemMutation.mutate({
-      conversationId: conversaSelecionada,
-      conteudo: novaMensagem.trim(),
-      tipo: "enviada", // Isso será convertido para "bot" no backend
-    });
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleEnviarMensagem();
-    }
-  };
 
   const conversaSelecionadaData = conversas?.find(
     (c) => c.id === conversaSelecionada,
@@ -512,30 +485,7 @@ export default function ChatbotPage() {
                   </ScrollArea>
                 </div>
 
-                {/* Input de Nova Mensagem */}
-                <div className="border-t p-4">
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Digite sua mensagem..."
-                      value={novaMensagem}
-                      onChange={(e) => setNovaMensagem(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      disabled={enviarMensagemMutation.isPending}
-                    />
-                    <Button
-                      onClick={handleEnviarMensagem}
-                      disabled={
-                        !novaMensagem.trim() || enviarMensagemMutation.isPending
-                      }
-                    >
-                      {enviarMensagemMutation.isPending ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
+
               </>
             ) : (
               /* Estado quando nenhuma conversa está selecionada */

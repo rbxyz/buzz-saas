@@ -10,160 +10,234 @@
 
 @layer base {
   :root {
-    /* Cores principais da marca */
-    --primary: 274 100% 34%; /* #6700af - Roxo principal */
-    --primary-foreground: 0 0% 98%;
+    /* Cores principais da marca - Refinadas para melhor contraste */
+    --primary: 271 100% 42%;
+    /* #7c2ae8 - Roxo principal mais vibrante */
+    --primary-foreground: 0 0% 100%;
+    /* Branco puro para contraste */
 
-    --accent: 270 100% 20%; /* #390066 - Roxo escuro */
-    --accent-foreground: 0 0% 98%;
+    --accent: 268 100% 25%;
+    /* #420080 - Roxo escuro refinado */
+    --accent-foreground: 0 0% 100%;
 
-    /* Cores de fundo e texto */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 13%; /* #222222 - Preto suave */
+    /* Cores de fundo e texto - Cinzas suaves, não preto absoluto */
+    --background: 0 0% 99%;
+    /* #fcfcfc - Branco suave */
+    --foreground: 220 9% 15%;
+    /* #222831 - Cinza escuro suave */
 
-    /* Sidebar */
+    /* Sidebar com tons mais suaves */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 13%; /* #222222 */
-    --sidebar-primary: 274 100% 34%; /* #6700af */
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 270 100% 20%; /* #390066 */
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 270 100% 92%;
-    --sidebar-ring: 274 100% 34%; /* #6700af */
+    --sidebar-foreground: 220 9% 15%;
+    --sidebar-primary: 271 100% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 268 100% 25%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 13% 91%;
+    /* #e6e7ea - Bordas muito sutis */
+    --sidebar-ring: 271 100% 42%;
 
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    /* #db2c2c - Vermelho mais suave */
+    --destructive-foreground: 0 0% 100%;
 
-    --card: 0 0% 95%;
-    --card-foreground: 0 0% 13%; /* #222222 */
-    --card-background: 0 0% 20%;
+    /* Cards e superfícies elevadas */
+    --card: 0 0% 100%;
+    /* Branco puro para cards */
+    --card-foreground: 220 9% 15%;
+    --card-background: 220 13% 95%;
+    /* Fundo alternativo suave */
 
-    --muted: 0 0% 90%;
-    --muted-foreground: 0 0% 45%;
+    /* Elementos muted mais suaves */
+    --muted: 220 13% 95%;
+    /* #f1f2f4 - Cinza muito claro */
+    --muted-foreground: 220 9% 46%;
+    /* #6b7280 - Cinza médio */
 
-    --border: 0 0% 85%;
-    --input: 0 0% 90%;
-    --ring: 274 100% 34%; /* #6700af */
+    /* Bordas e inputs minimalistas */
+    --border: 220 13% 91%;
+    /* #e6e7ea - Bordas sutis */
+    --input: 220 13% 95%;
+    /* Inputs com fundo suave */
+    --ring: 271 100% 42%;
+    /* Foco roxo */
 
-    /* Cores personalizadas para a aplicação */
-    --brand-primary: 274 100% 34%; /* #6700af - Roxo principal */
-    --brand-secondary: 270 100% 20%; /* #390066 - Roxo escuro */
-    --brand-accent: 273 100% 45%; /* #8400df - Roxo mais claro */
-    --brand-light: 274 100% 90%; /* #f2d9ff - Roxo muito claro */
-    --brand-dark: 270 100% 15%; /* #2a004c - Roxo muito escuro */
+    /* Cores personalizadas da marca - Atualizadas */
+    --brand-primary: 271 100% 42%;
+    /* #7c2ae8 */
+    --brand-secondary: 268 100% 25%;
+    /* #420080 */
+    --secondary-foreground: 0 0% 100%;
+    /* Branco puro */
+    --brand-accent: 274 100% 55%;
+    /* #a855f7 - Roxo vibrante */
+    --brand-light: 271 100% 95%;
+    /* #f3e8ff - Roxo muito claro */
+    --brand-dark: 268 100% 15%;
+    /* #2a0040 - Roxo muito escuro */
 
-    /* Cores de estado */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 98%;
+    /* Cores de estado refinadas */
+    --success: 142 71% 45%;
+    /* #22c55e - Verde mais equilibrado */
+    --success-foreground: 0 0% 100%;
 
-    --warning: 48 96% 53%;
-    --warning-foreground: 0 0% 13%;
+    --warning: 38 92% 50%;
+    /* #f59e0b - Amarelo mais suave */
+    --warning-foreground: 220 9% 15%;
+    /* Texto escuro para contraste */
 
-    --error: 0 84% 60%;
-    --error-foreground: 0 0% 98%;
+    --error: 0 72% 51%;
+    /* #dc2626 - Vermelho equilibrado */
+    --error-foreground: 0 0% 100%;
 
-    --info: 221 83% 53%;
-    --info-foreground: 0 0% 98%;
+    --info: 217 91% 60%;
+    /* #3b82f6 - Azul equilibrado */
+    --info-foreground: 0 0% 100%;
+
+    /* Border radius padrão */
+    --radius: 0.75rem;
+    /* 12px - Border radius padrão para componentes */
   }
 
   .dark {
-    --background: 0 0% 13%; /* #222222 */
-    --foreground: 0 0% 98%;
+    /* Modo escuro com cinzas suaves */
+    --background: 220 13% 9%;
+    /* #161820 - Cinza escuro suave */
+    --foreground: 0 0% 95%;
+    /* #f2f2f2 - Quase branco */
 
-    --primary: 274 100% 34%; /* #6700af */
-    --primary-foreground: 0 0% 98%;
+    --primary: 271 100% 50%;
+    /* #8b5cf6 - Roxo mais brilhante no escuro */
+    --primary-foreground: 0 0% 100%;
 
-    --accent: 270 100% 20%; /* #390066 */
-    --accent-foreground: 0 0% 98%;
+    --accent: 268 100% 35%;
+    /* #5d0099 - Roxo mais visível no escuro */
+    --accent-foreground: 0 0% 100%;
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 13%; /* #222222 */
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 274 100% 34%; /* #6700af */
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 270 100% 20%; /* #390066 */
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 270 100% 30%;
-    --sidebar-ring: 274 100% 34%; /* #6700af */
+    /* Sidebar no modo escuro */
+    --sidebar-background: 220 13% 9%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 271 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 268 100% 35%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 220 13% 15%;
+    /* #242730 - Bordas escuras sutis */
+    --sidebar-ring: 271 100% 50%;
 
-    --card: 0 0% 18%;
-    --card-foreground: 0 0% 98%;
-    --card-background: 0 0% 75%;
+    --card: 220 13% 11%;
+    /* #1a1d25 - Cards com contraste suave */
+    --card-foreground: 0 0% 95%;
+    --card-background: 220 13% 18%;
+    /* Alternativo mais claro */
 
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 220 13% 15%;
+    /* #242730 - Muted escuro suave */
+    --muted-foreground: 220 9% 65%;
+    /* #9ca3af - Cinza médio claro */
 
-    --border: 0 0% 25%;
-    --input: 0 0% 20%;
+    --border: 220 13% 15%;
+    /* Bordas escuras sutis */
+    --input: 220 13% 15%;
+    /* Inputs escuros */
 
     /* Cores personalizadas para modo escuro */
-    --brand-primary: 274 100% 50%; /* #8a00eb - Roxo principal mais brilhante no dark mode */
-    --brand-secondary: 270 100% 30%; /* #55009a - Roxo escuro mais visível */
-    --brand-accent: 273 100% 60%; /* #a64dff - Roxo mais claro e vibrante */
-    --brand-light: 274 100% 85%; /* #ebc2ff - Roxo claro ajustado */
-    --brand-dark: 270 100% 10%; /* #1c0033 - Roxo muito escuro */
+    --brand-primary: 271 100% 55%;
+    /* #9333ea - Roxo mais vibrante */
+    --brand-secondary: 268 100% 40%;
+    /* #6b0099 - Roxo escuro mais visível */
+    --secondary-foreground: 0 0% 100%;
+    /* Branco puro */
+    --brand-accent: 274 100% 65%;
+    /* #c084fc - Roxo claro vibrante */
+    --brand-light: 271 100% 85%;
+    /* #e4d4ff - Roxo claro ajustado */
+    --brand-dark: 268 100% 8%;
+    /* #140026 - Roxo muito escuro */
 
     /* Cores de estado para modo escuro */
-    --success: 142 71% 45%;
-    --success-foreground: 0 0% 98%;
+    --success: 142 71% 50%;
+    /* Verde mais vibrante */
+    --success-foreground: 0 0% 100%;
 
-    --warning: 48 96% 53%;
-    --warning-foreground: 0 0% 13%;
+    --warning: 38 92% 55%;
+    /* Amarelo mais vibrante */
+    --warning-foreground: 220 13% 9%;
+    /* Fundo escuro para contraste */
 
-    --error: 0 84% 60%;
-    --error-foreground: 0 0% 98%;
+    --error: 0 72% 56%;
+    /* Vermelho mais vibrante */
+    --error-foreground: 0 0% 100%;
 
-    --info: 221 83% 53%;
-    --info-foreground: 0 0% 98%;
+    --info: 217 91% 65%;
+    /* Azul mais vibrante */
+    --info-foreground: 0 0% 100%;
   }
 }
 
 @layer components {
+
+  /* Classes base de cores - mantidas para compatibilidade */
   .bg-primary {
     background-color: hsl(var(--primary));
   }
+
   .bg-primary-foreground {
     background-color: hsl(var(--primary-foreground));
   }
+
   .text-primary-foreground {
     color: hsl(var(--primary-foreground));
   }
+
   .text-accent {
     color: hsl(var(--accent));
   }
+
   .bg-accent {
     background-color: hsl(var(--accent));
   }
+
   .text-accent-foreground {
     color: hsl(var(--accent-foreground));
   }
+
   .bg-muted {
     background-color: hsl(var(--muted));
   }
+
   .text-muted {
     color: hsl(var(--muted-foreground));
   }
+
   .text-muted-foreground {
     color: hsl(var(--muted-foreground));
   }
+
   .ring-ring {
     --tw-ring-color: hsl(var(--ring));
   }
+
   .border-sidebar-border {
     border-color: hsl(var(--sidebar-border));
   }
+
   .border-border {
     border-color: hsl(var(--border));
   }
+
   .bg-card {
     background-color: hsl(var(--card));
   }
+
   .text-card-foreground {
     color: hsl(var(--card-foreground));
   }
+
   .bg-background {
     background-color: hsl(var(--background));
   }
+
   .text-foreground {
     color: hsl(var(--foreground));
   }
@@ -184,36 +258,47 @@
   .bg-brand-primary {
     background-color: hsl(var(--brand-primary));
   }
+
   .bg-brand-secondary {
     background-color: hsl(var(--brand-secondary));
   }
+
   .bg-brand-accent {
     background-color: hsl(var(--brand-accent));
   }
+
   .bg-brand-light {
     background-color: hsl(var(--brand-light));
   }
+
   .bg-brand-dark {
     background-color: hsl(var(--brand-dark));
   }
+
   .text-brand-primary {
     color: hsl(var(--brand-primary));
   }
+
   .text-brand-secondary {
     color: hsl(var(--brand-secondary));
   }
+
   .text-brand-accent {
     color: hsl(var(--brand-accent));
   }
+
   .text-brand-light {
     color: hsl(var(--brand-light));
   }
+
   .text-brand-dark {
     color: hsl(var(--brand-dark));
   }
+
   .border-brand-primary {
     border-color: hsl(var(--brand-primary));
   }
+
   .border-brand-secondary {
     border-color: hsl(var(--brand-secondary));
   }
@@ -222,52 +307,159 @@
   .bg-success {
     background-color: hsl(var(--success));
   }
+
   .text-success {
     color: hsl(var(--success));
   }
+
   .text-success-foreground {
     color: hsl(var(--success-foreground));
   }
+
   .bg-warning {
     background-color: hsl(var(--warning));
   }
+
   .text-warning {
     color: hsl(var(--warning));
   }
+
   .text-warning-foreground {
     color: hsl(var(--warning-foreground));
   }
+
   .bg-error {
     background-color: hsl(var(--error));
   }
+
   .text-error {
     color: hsl(var(--error));
   }
+
   .text-error-foreground {
     color: hsl(var(--error-foreground));
   }
+
   .bg-info {
     background-color: hsl(var(--info));
   }
+
   .text-info {
     color: hsl(var(--info));
   }
+
   .text-info-foreground {
     color: hsl(var(--info-foreground));
   }
 
-  /* Gradientes personalizados */
+  /* Gradientes refinados para design minimalista */
   .bg-gradient-brand {
-    background: linear-gradient(to right, hsl(var(--brand-primary)), hsl(var(--brand-secondary)));
+    background: linear-gradient(135deg, hsl(var(--brand-primary)) 0%, hsl(var(--brand-accent)) 100%);
   }
+
   .bg-gradient-brand-hover {
-    background: linear-gradient(to right, hsl(var(--brand-accent)), hsl(var(--brand-secondary)));
+    background: linear-gradient(135deg, hsl(var(--brand-accent)) 0%, hsl(var(--brand-primary)) 100%);
   }
+
   .bg-gradient-brand-light {
-    background: linear-gradient(to right, hsl(var(--brand-primary)), hsl(var(--brand-accent)));
+    background: linear-gradient(135deg, hsl(var(--brand-light)) 0%, hsl(var(--brand-accent) / 0.3) 100%);
   }
+
   .bg-gradient-brand-dark {
-    background: linear-gradient(to right, hsl(var(--brand-secondary)), hsl(var(--brand-dark)));
+    background: linear-gradient(135deg, hsl(var(--brand-secondary)) 0%, hsl(var(--brand-dark)) 100%);
+  }
+
+  /* Classes tipográficas refinadas */
+  .text-display {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .text-heading-1 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .text-heading-2 {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  .text-heading-3 {
+    font-size: 1.5rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .text-body-large {
+    font-size: 1.125rem;
+    font-weight: 400;
+    line-height: 1.6;
+  }
+
+  .text-body {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  .text-body-small {
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  .text-caption {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+  }
+
+  /* Sombras minimalistas */
+  .shadow-minimal {
+    box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.05);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 4px 6px -1px hsl(var(--foreground) / 0.05), 0 2px 4px -1px hsl(var(--foreground) / 0.03);
+  }
+
+  .shadow-medium {
+    box-shadow: 0 10px 15px -3px hsl(var(--foreground) / 0.08), 0 4px 6px -2px hsl(var(--foreground) / 0.05);
+  }
+
+  /* Estados hover e focus refinados */
+  .interactive-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .interactive-hover:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px 0 hsl(var(--foreground) / 0.08);
+  }
+
+  /* Bordas sutis */
+  .border-subtle {
+    border: 1px solid hsl(var(--border));
+  }
+
+  .border-minimal {
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .text-secondary-foreground {
+    color: hsl(var(--secondary-foreground));
+  }
+
+  .bg-secondary {
+    background-color: hsl(var(--brand-secondary));
   }
 }
 
@@ -276,86 +468,71 @@
     font-family: var(--font-sans);
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Melhorias de performance e suavidade */
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    color: hsl(var(--foreground));
+  }
+
+  /* Reset de foco para melhor acessibilidade */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
-/* Animações */
+/* Animações suaves para transições */
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: translateY(4px);
   }
+
   to {
     opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-in-out;
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.animate-slide-in {
+  animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Componente de calendário com cores atualizadas */
 .rdp {
-  background-color: var(--rdp-background-color);
-  color: var(--rdp-color);
-}
-
-/* Toast animations */
-@keyframes toast-fade-out {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
-@keyframes toast-fade-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.toast-fade-out {
-  animation: toast-fade-out 700ms ease-out forwards;
-}
-
-.toast-fade-in {
-  animation: toast-fade-in 300ms ease-out forwards;
-}
-
-/* Backdrop blur animation */
-@keyframes backdrop-fade-in {
-  from {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
-  to {
-    opacity: 1;
-    backdrop-filter: blur(4px);
-  }
-}
-
-@keyframes backdrop-fade-out {
-  from {
-    opacity: 1;
-    backdrop-filter: blur(4px);
-  }
-  to {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
-}
-
-.backdrop-fade-in {
-  animation: backdrop-fade-in 300ms ease-out forwards;
-}
-
-.backdrop-fade-out {
-  animation: backdrop-fade-out 700ms ease-out forwards;
+  --rdp-background-color: hsl(var(--background));
+  --rdp-accent-color: hsl(var(--brand-primary));
+  --rdp-accent-color-dark: hsl(var(--brand-secondary));
 }
