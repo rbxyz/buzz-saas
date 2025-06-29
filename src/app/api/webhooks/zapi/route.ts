@@ -88,6 +88,7 @@ async function executeWithTimeout<T>(operation: () => Promise<T>, timeoutMs = DE
 }
 
 export async function POST(request: NextRequest) {
+  console.log("🟢 [WEBHOOK_V2] Executando a versão corrigida do webhook.")
   const startTime = Date.now()
   console.log(`🚀 [WEBHOOK] Iniciando processamento do webhook Z-API`)
 
