@@ -13,10 +13,14 @@ export const conversationsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
+      console.log("🔍 [CONVERSAS] Listar – parâmetros recebidos:", input)
       const { status, busca, limite } = input;
       const userId = ctx.user.id;
 
-      const conditions: (SQL | undefined)[] = [eq(conversations.userId, userId)];
+      console.log("🔍 [CONVERSAS] userId da sessão:", userId)
+
+      // Queremos listar TODAS as conversas, independentemente do usuário que as criou
+      const conditions: (SQL | undefined)[] = [];
       if (status) {
         conditions.push(eq(conversations.ativa, status === "ativa"));
       }
@@ -29,6 +33,9 @@ export const conversationsRouter = createTRPCRouter({
           )
         );
       }
+
+      // Log das condições construídas (para inspeção no console do DB)
+      console.log("📝 [CONVERSAS] SQL Conditions:", conditions.map(String))
 
       const result = await ctx.db
         .select({
@@ -45,9 +52,11 @@ export const conversationsRouter = createTRPCRouter({
         })
         .from(conversations)
         .leftJoin(clientes, eq(conversations.clienteId, clientes.id))
-        .where(and(...conditions))
+        .where(conditions.length ? and(...conditions) : undefined)
         .orderBy(desc(conversations.ultimaInteracao))
         .limit(limite);
+
+      console.log(`✅ [CONVERSAS] ${result.length} registros retornados`)
 
       return result.map((conversa) => ({
         id: conversa.id.toString(),

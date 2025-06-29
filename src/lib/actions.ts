@@ -136,10 +136,12 @@ export async function listarHorariosDisponiveis(
         let slotAtual = dayjs.tz(
             `${dataString}T${intervalo.horaInicio}`,
             "YYYY-MM-DDTHH:mm",
+            "America/Sao_Paulo",
         )
         const fimIntervalo = dayjs.tz(
             `${dataString}T${intervalo.horaFim}`,
             "YYYY-MM-DDTHH:mm",
+            "America/Sao_Paulo",
         )
 
         while (slotAtual.add(duracaoServico, "minutes").isBefore(fimIntervalo)) {
@@ -214,7 +216,7 @@ export async function criarAgendamento(
 
     // 3. Criar data do agendamento
     const dataAgendamento = dayjs
-        .tz(`${dataString}T${horarioString}`, "YYYY-MM-DDTHH:mm")
+        .tz(`${dataString}T${horarioString}`, "YYYY-MM-DDTHH:mm", "America/Sao_Paulo")
         .toDate()
 
     // 4. Inserir agendamento

@@ -192,7 +192,6 @@ export const dashboardRouter = createTRPCRouter({
         .leftJoin(conversations, eq(messages.conversationId, conversations.id))
         .where(
           and(
-            eq(conversations.userId, userId),
             eq(messages.role, "user"), // Mensagens de clientes (não do sistema/bot)
             gte(messages.timestamp, hojeInicio),
             lte(messages.timestamp, hojeFim),
@@ -206,7 +205,6 @@ export const dashboardRouter = createTRPCRouter({
         .leftJoin(conversations, eq(messages.conversationId, conversations.id))
         .where(
           and(
-            eq(conversations.userId, userId),
             eq(messages.role, "user"),
             gte(messages.timestamp, ontemInicio),
             lte(messages.timestamp, ontemFim),

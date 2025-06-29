@@ -8,6 +8,13 @@
       "when": 1750365655855,
       "tag": "0000_free_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1751148393956,
+      "tag": "0001_wealthy_lifeguard",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { type CoreMessage } from "ai"
+import { env } from "@/env"
 
 // Configurações do runtime
 export const runtime = "nodejs"
@@ -208,7 +209,12 @@ async function processMessage(data: {
     // 1. Buscar usuário (assumir primeiro usuário como padrão)
     console.log(`👤 [PROCESS] Buscando usuário...`)
 
-    try {
+    let userId: number
+    const forcedId = Number(env.CHATBOT_USER_ID)
+    if (!Number.isNaN(forcedId) && forcedId > 0) {
+      userId = forcedId
+      console.log(`👤 [PROCESS] Usando CHATBOT_USER_ID=${userId}`)
+    } else {
       const user = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1))
       console.log(`👤 [PROCESS] Resultado da consulta de usuários:`, user)
 
@@ -216,169 +222,155 @@ async function processMessage(data: {
         console.error(`❌ [PROCESS] Nenhum usuário encontrado no sistema`)
         throw new Error("Nenhum usuário encontrado no sistema")
       }
+      userId = user[0]!.id
+    }
+    console.log(`✅ [PROCESS] Usuário encontrado: ${userId}`)
 
-      const userId = user[0]!.id
-      console.log(`✅ [PROCESS] Usuário encontrado: ${userId}`)
+    // 2. Buscar ou criar conversa
+    console.log(`💬 [PROCESS] Buscando conversa...`)
+    const conversation = await executeWithTimeout(() =>
+      db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1),
+    )
+    console.log(`💬 [PROCESS] Resultado da consulta de conversa:`, conversation?.length || 0, "registros")
 
-      // 2. Buscar ou criar conversa
-      console.log(`💬 [PROCESS] Buscando conversa...`)
-      const conversation = await executeWithTimeout(() =>
-        db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1),
+    let conversationData: ConversationData
+    if (!conversation || conversation.length === 0) {
+      console.log(`🆕 [PROCESS] Criando nova conversa`)
+      const newConversation = await executeWithTimeout(() =>
+        db
+          .insert(conversations)
+          .values({
+            userId,
+            telefone: phone,
+            nomeContato: senderName || null,
+            ativa: true,
+            ultimaMensagem: messageText.substring(0, 500),
+            ultimaInteracao: new Date(),
+          })
+          .returning(),
       )
-      console.log(`💬 [PROCESS] Resultado da consulta de conversa:`, conversation?.length || 0, "registros")
+      conversationData = newConversation[0]!
+      console.log(`✅ [PROCESS] Nova conversa criada: ${conversationData.id}`)
+    } else {
+      conversationData = conversation[0]!
+      console.log(`✅ [PROCESS] Conversa existente encontrada: ${conversationData.id}`)
+      // Atualizar última interação
+      await executeWithTimeout(() =>
+        db
+          .update(conversations)
+          .set({
+            ultimaMensagem: messageText.substring(0, 500),
+            ultimaInteracao: new Date(),
+            nomeContato: senderName || conversationData.nomeContato,
+          })
+          .where(eq(conversations.id, conversationData.id)),
+      )
+      console.log(`✅ [PROCESS] Conversa atualizada`)
+    }
 
-      let conversationData: ConversationData
-      if (!conversation || conversation.length === 0) {
-        console.log(`🆕 [PROCESS] Criando nova conversa`)
-        const newConversation = await executeWithTimeout(() =>
-          db
-            .insert(conversations)
-            .values({
-              userId,
-              telefone: phone,
-              nomeContato: senderName || null,
-              ativa: true,
-              ultimaMensagem: messageText.substring(0, 500),
-              ultimaInteracao: new Date(),
-            })
-            .returning(),
-        )
-        conversationData = newConversation[0]!
-        console.log(`✅ [PROCESS] Nova conversa criada: ${conversationData.id}`)
-      } else {
-        conversationData = conversation[0]!
-        console.log(`✅ [PROCESS] Conversa existente encontrada: ${conversationData.id}`)
-        // Atualizar última interação
+    // 3. Buscar ou criar cliente
+    console.log(`👥 [PROCESS] Buscando cliente...`)
+    const cliente = await executeWithTimeout(() =>
+      db.select().from(clientes).where(eq(clientes.telefone, phone)).limit(1),
+    )
+    console.log(`👥 [PROCESS] Cliente encontrado:`, cliente?.length || 0, "registros")
+
+    if ((!cliente || cliente.length === 0) && senderName) {
+      console.log(`🆕 [PROCESS] Criando novo cliente com nome: ${senderName}`)
+      const newCliente = await executeWithTimeout(() =>
+        db
+          .insert(clientes)
+          .values({
+            userId,
+            nome: senderName,
+            telefone: phone,
+          })
+          .returning(),
+      )
+
+      if (newCliente && newCliente.length > 0) {
+        // Vincular cliente à conversa
         await executeWithTimeout(() =>
           db
             .update(conversations)
-            .set({
-              ultimaMensagem: messageText.substring(0, 500),
-              ultimaInteracao: new Date(),
-              nomeContato: senderName || conversationData.nomeContato,
-            })
+            .set({ clienteId: newCliente[0]!.id })
             .where(eq(conversations.id, conversationData.id)),
         )
-        console.log(`✅ [PROCESS] Conversa atualizada`)
+        console.log(`✅ [PROCESS] Cliente criado e vinculado: ${newCliente[0]!.id}`)
       }
+    } else if (cliente && cliente.length > 0) {
+      console.log(`✅ [PROCESS] Cliente existente: ${cliente[0]!.id}`)
+    }
 
-      // 3. Buscar ou criar cliente
-      console.log(`👥 [PROCESS] Buscando cliente...`)
-      const cliente = await executeWithTimeout(() =>
-        db.select().from(clientes).where(eq(clientes.telefone, phone)).limit(1),
+    // 4. Salvar mensagem do usuário
+    console.log(`💾 [PROCESS] Salvando mensagem do usuário...`)
+    await executeWithTimeout(() =>
+      db.insert(messages).values({
+        conversationId: conversationData.id,
+        content: messageText,
+        role: "user",
+        timestamp: new Date(timestamp),
+        messageId,
+      }),
+    )
+    console.log(`✅ [PROCESS] Mensagem do usuário salva`)
+
+    // 5. Buscar histórico da conversa
+    console.log(`📚 [PROCESS] Buscando histórico...`)
+    const history = await executeWithTimeout(() =>
+      db
+        .select({
+          content: messages.content,
+          role: messages.role,
+          timestamp: messages.timestamp,
+        })
+        .from(messages)
+        .where(eq(messages.conversationId, conversationData.id))
+        .orderBy(desc(messages.timestamp))
+        .limit(10),
+    )
+
+    const conversationHistory: CoreMessage[] = history
+      .reverse()
+      .filter(
+        (msg) => msg.role === "user" || msg.role === "assistant",
       )
-      console.log(`👥 [PROCESS] Cliente encontrado:`, cliente?.length || 0, "registros")
+      .map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }))
 
-      if ((!cliente || cliente.length === 0) && senderName) {
-        console.log(`🆕 [PROCESS] Criando novo cliente com nome: ${senderName}`)
-        const newCliente = await executeWithTimeout(() =>
-          db
-            .insert(clientes)
-            .values({
-              userId,
-              nome: senderName,
-              telefone: phone,
-            })
-            .returning(),
-        )
+    console.log(`✅ [PROCESS] Histórico obtido: ${conversationHistory.length} mensagens`)
 
-        if (newCliente && newCliente.length > 0) {
-          // Vincular cliente à conversa
-          await executeWithTimeout(() =>
-            db
-              .update(conversations)
-              .set({ clienteId: newCliente[0]!.id })
-              .where(eq(conversations.id, conversationData.id)),
-          )
-          console.log(`✅ [PROCESS] Cliente criado e vinculado: ${newCliente[0]!.id}`)
-        }
-      } else if (cliente && cliente.length > 0) {
-        console.log(`✅ [PROCESS] Cliente existente: ${cliente[0]!.id}`)
-      }
+    // 6. Processar com IA
+    console.log(`🤖 [PROCESS] Chamando serviço de IA...`)
+    const aiResponse = await aiService.processMessage(messageText, phone, conversationHistory)
+    console.log(`✅ [PROCESS] Resposta da IA recebida: "${aiResponse.message?.substring(0, 50)}..."`)
 
-      // 4. Salvar mensagem do usuário
-      console.log(`💾 [PROCESS] Salvando mensagem do usuário...`)
+    // 7. Salvar resposta da IA e enviar
+    if (aiResponse.message) {
+      console.log(`💾 [PROCESS] Salvando resposta da IA...`)
       await executeWithTimeout(() =>
         db.insert(messages).values({
           conversationId: conversationData.id,
-          content: messageText,
-          role: "user",
-          timestamp: new Date(timestamp),
-          messageId,
+          content: aiResponse.message,
+          role: "assistant",
+          timestamp: new Date(),
         }),
       )
-      console.log(`✅ [PROCESS] Mensagem do usuário salva`)
+      console.log(`✅ [PROCESS] Resposta da IA salva`)
 
-      // 5. Buscar histórico da conversa
-      console.log(`📚 [PROCESS] Buscando histórico...`)
-      const history = await executeWithTimeout(() =>
-        db
-          .select({
-            content: messages.content,
-            role: messages.role,
-            timestamp: messages.timestamp,
-          })
-          .from(messages)
-          .where(eq(messages.conversationId, conversationData.id))
-          .orderBy(desc(messages.timestamp))
-          .limit(10),
-      )
-
-      const conversationHistory: CoreMessage[] = history
-        .reverse()
-        .filter(
-          (msg) => msg.role === "user" || msg.role === "assistant",
-        )
-        .map((msg) => ({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content,
-        }))
-
-      console.log(`✅ [PROCESS] Histórico obtido: ${conversationHistory.length} mensagens`)
-
-      // 6. Processar com IA
-      console.log(`🤖 [PROCESS] Chamando serviço de IA...`)
-      const aiResponse = await aiService.processMessage(messageText, phone, conversationHistory)
-      console.log(`✅ [PROCESS] Resposta da IA recebida: "${aiResponse.message?.substring(0, 50)}..."`)
-
-      // 7. Salvar resposta da IA e enviar
-      if (aiResponse.message) {
-        console.log(`💾 [PROCESS] Salvando resposta da IA...`)
-        await executeWithTimeout(() =>
-          db.insert(messages).values({
-            conversationId: conversationData.id,
-            content: aiResponse.message,
-            role: "assistant",
-            timestamp: new Date(),
-          }),
-        )
-        console.log(`✅ [PROCESS] Resposta da IA salva`)
-
-        console.log(`📤 [PROCESS] Enviando mensagem via WhatsApp...`)
-        const enviado = await enviarMensagemWhatsApp(phone, aiResponse.message)
-        console.log(`${enviado ? '✅' : '❌'} [PROCESS] Mensagem WhatsApp: ${enviado ? 'enviada' : 'falhou'}`)
-      }
-
-      const totalTime = Date.now() - processStart
-      console.log(`🎉 [PROCESS] Processamento concluído em ${totalTime}ms para ${phone}`)
-
-    } catch (dbError) {
-      console.error(`💥 [PROCESS] Erro específico na consulta de usuário:`, dbError)
-      throw dbError
+      console.log(`📤 [PROCESS] Enviando mensagem via WhatsApp...`)
+      const enviado = await enviarMensagemWhatsApp(phone, aiResponse.message)
+      console.log(`${enviado ? '✅' : '❌'} [PROCESS] Mensagem WhatsApp: ${enviado ? 'enviada' : 'falhou'}`)
     }
-  } catch (error) {
+
     const totalTime = Date.now() - processStart
-    console.error(`💥 [PROCESS] Erro após ${totalTime}ms:`, error)
+    console.log(`🎉 [PROCESS] Processamento concluído em ${totalTime}ms para ${phone}`)
 
-    // Tentar enviar mensagem de erro
-    try {
-      await enviarMensagemWhatsApp(
-        phone,
-        "Desculpe, ocorreu um erro temporário. Tente novamente em alguns instantes. 🔧",
-      )
-    } catch (sendError) {
-      console.error(`💥 [PROCESS] Falha ao enviar mensagem de erro:`, sendError)
-    }
+  } catch (dbError) {
+    console.error(`💥 [PROCESS] Erro específico na consulta de usuário:`, dbError)
+    throw dbError
   }
 }
 

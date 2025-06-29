@@ -33,6 +33,7 @@ export const messagesRouter = createTRPCRouter({
       console.log(`🔍 [MESSAGES] Listando mensagens da conversa: ${input.conversationId}`)
 
       try {
+        // Buscar as mensagens mais recentes primeiro, depois inverter para ordem cronológica
         const result = await sql`
           SELECT 
             id,
@@ -43,20 +44,27 @@ export const messagesRouter = createTRPCRouter({
             created_at as "createdAt"
           FROM messages
           WHERE conversation_id = ${input.conversationId}
-          ORDER BY created_at ASC
+          ORDER BY created_at DESC
           LIMIT ${input.limite}
         `
 
         // Processar mensagens garantindo que tudo seja string
-        const mensagensFormatadas = (result as MessageRow[]).map((msg) => ({
-          id: String(msg.id),
-          conversationId: String(msg.conversationId),
-          conteudo: String(msg.content ?? ""),
-          tipo: msg.role === "user" ? "recebida" : msg.role === "assistant" ? "enviada" : "sistema",
-          // GARANTIR que timestamp seja string ISO
-          timestamp: new Date(msg.createdAt).toISOString(),
-          lida: true,
-        }))
+        const mensagensFormatadas = (result as MessageRow[])
+          .reverse()
+          .map((msg) => ({
+            id: String(msg.id),
+            conversationId: String(msg.conversationId),
+            conteudo: String(msg.content ?? ""),
+            tipo:
+              msg.role === "user"
+                ? "recebida"
+                : msg.role === "assistant" || msg.role === "bot"
+                  ? "enviada"
+                  : "sistema",
+            // Garantir que timestamp seja string ISO
+            timestamp: new Date(msg.createdAt).toISOString(),
+            lida: true,
+          }))
 
         console.log(`✅ [MESSAGES] Encontradas ${mensagensFormatadas.length} mensagens`)
         return mensagensFormatadas
@@ -84,12 +92,12 @@ export const messagesRouter = createTRPCRouter({
 
       try {
         // Sempre enviar como bot quando a mensagem é enviada pelo sistema
-        const remetente = input.tipo === "recebida" ? "cliente" : "bot"
+        const remetente = input.tipo === "recebida" ? "user" : "assistant"
 
         // Inserir mensagem
         const insertResult = await sql`
           INSERT INTO messages (conversation_id, content, role, timestamp)
-          VALUES (${input.conversationId}, ${input.conteudo}, ${remetente}, 'texto')
+          VALUES (${input.conversationId}, ${input.conteudo}, ${remetente}, NOW())
           RETURNING id, created_at
         `
 
