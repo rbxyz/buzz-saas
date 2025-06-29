@@ -1,207 +1,149 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Building, Save } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
+import { z } from 'zod'
+
+import { Button } from '@/components/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { api } from "@/trpc/react";
-import { Building, Save } from "lucide-react";
+} from '@/components/ui/card'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
+import { api } from '@/trpc/react'
 
-// Schema de validação com Zod
-const schema = z.object({
-  nomeEmpresa: z.string().min(1, "O nome da empresa é obrigatório."),
-  telefone: z.string().min(10, "O telefone deve ter pelo menos 10 dígitos."),
-  endereco: z.string().min(5, "O endereço é obrigatório."),
-});
+const formSchema = z.object({
+  nomeEmpresa: z.string().min(1, 'O nome da empresa é obrigatório.'),
+  telefone: z.string().optional(),
+  endereco: z.string().optional(),
+})
 
-type FormData = z.infer<typeof schema>;
+type FormData = z.infer<typeof formSchema>
 
 export function EstabelecimentoCard() {
-  const { toast } = useToast();
-  const utils = api.useContext();
+  const utils = api.useUtils()
+  const router = useRouter()
 
-  // Query para buscar os dados
-  const { data: config, isLoading: isLoadingConfig } =
-    api.configuracao.obterConfiguracaoCompleta.useQuery();
+  const { data } = api.configuracao.obterConfiguracaoCompleta.useQuery()
+  const configuracao = api.configuracao.atualizarConfiguracao.useMutation()
 
-  // Mutation para atualizar
-  const { mutate: atualizarConfig, isPending: isSaving } =
-    api.configuracao.atualizarConfiguracao.useMutation({
-      onSuccess: () => {
-        toast({
-          title: "Sucesso!",
-          description: "As informações do estabelecimento foram salvas.",
-        });
-        utils.configuracao.obterConfiguracaoCompleta.invalidate();
-      },
-      onError: (error) => {
-        toast({
-          variant: "destructive",
-          title: "Erro ao salvar",
-          description:
-            error.message ||
-            "Não foi possível salvar as informações. Tente novamente.",
-        });
-      },
-    });
-
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
-      nomeEmpresa: "",
-      telefone: "",
-      endereco: "",
+      nomeEmpresa: '',
+      telefone: '',
+      endereco: '',
     },
-  });
+  })
 
-  // Preencher o formulário quando os dados chegam da API
-  useEffect(() => {
-    if (config) {
-      reset({
-        nomeEmpresa: config.nomeEmpresa || "",
-        telefone: config.telefone || "",
-        endereco: config.endereco || "",
-      });
-    }
-  }, [config, reset]);
-
-  const onSubmit = (data: FormData) => {
-    atualizarConfig(data);
-  };
-
-  if (isLoadingConfig) {
-    return (
-      <Card>
-        <CardHeader>
-          <div className="h-8 w-48 rounded bg-muted/50 animate-pulse" />
-          <div className="h-4 w-64 rounded bg-muted/50 animate-pulse" />
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="h-10 w-full rounded bg-muted/50 animate-pulse" />
-          <div className="h-10 w-full rounded bg-muted/50 animate-pulse" />
-          <div className="h-10 w-full rounded bg-muted/50 animate-pulse" />
-        </CardContent>
-      </Card>
-    );
+  const onSubmit = (formData: FormData) => {
+    const promise = configuracao.mutateAsync(formData)
+    void toast.promise(promise, {
+      loading: 'Salvando alterações...',
+      success: () => {
+        void utils.configuracao.obterConfiguracaoCompleta.invalidate()
+        router.refresh()
+        return 'Alterações salvas com sucesso!'
+      },
+      error: (err: Error) => {
+        console.error('Erro ao atualizar configuração:', err)
+        return 'Erro ao salvar alterações.'
+      },
+    })
   }
 
+  useEffect(() => {
+    if (data) {
+      form.reset({
+        nomeEmpresa: data.nomeEmpresa ?? '',
+        telefone: data.telefone ?? '',
+        endereco: data.endereco ?? '',
+      })
+    }
+  }, [data, form])
+
   return (
-    <Card className="interactive-hover">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-heading-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-light/30">
-              <Building className="h-4 w-4 text-brand-primary" />
-            </div>
-            Estabelecimento
-          </CardTitle>
-          <CardDescription>
-            Gerencie as informações principais do seu negócio.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {/* Nome da Empresa */}
-          <div>
-            <Label htmlFor="nomeEmpresa">Nome da Empresa</Label>
-            <Controller
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <Building className="mr-2 inline-block h-5 w-5" />
+          Estabelecimento
+        </CardTitle>
+        <CardDescription>
+          Gerencie as informações do seu estabelecimento.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            <FormField
+              control={form.control}
               name="nomeEmpresa"
-              control={control}
               render={({ field }) => (
-                <Input
-                  id="nomeEmpresa"
-                  placeholder="Ex: Barbearia do Zé"
-                  {...field}
-                />
+                <FormItem>
+                  <FormLabel>Nome da Empresa</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Barbearia do Zé" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {errors.nomeEmpresa && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.nomeEmpresa.message}
-              </p>
-            )}
-          </div>
-
-          {/* Telefone */}
-          <div>
-            <Label htmlFor="telefone">Telefone</Label>
-            <Controller
+            <FormField
+              control={form.control}
               name="telefone"
-              control={control}
               render={({ field }) => (
-                <Input
-                  id="telefone"
-                  placeholder="(99) 99999-9999"
-                  {...field}
-                />
+                <FormItem>
+                  <FormLabel>Telefone</FormLabel>
+                  <FormControl>
+                    <Input placeholder="(99) 99999-9999" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {errors.telefone && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.telefone.message}
-              </p>
-            )}
-          </div>
-
-          {/* Endereço */}
-          <div>
-            <Label htmlFor="endereco">Endereço</Label>
-            <Controller
+            <FormField
+              control={form.control}
               name="endereco"
-              control={control}
               render={({ field }) => (
-                <Input
-                  id="endereco"
-                  placeholder="Rua das Flores, 123"
-                  {...field}
-                />
+                <FormItem>
+                  <FormLabel>Endereço</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Rua, número, bairro, cidade"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
-            {errors.endereco && (
-              <p className="mt-1 text-sm text-destructive">
-                {errors.endereco.message}
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-end pt-2">
             <Button
               type="submit"
               variant="secondary"
-              disabled={isSaving || !isDirty}
-              className="gap-2"
+              disabled={!form.formState.isDirty || configuracao.isPending}
             >
-              {isSaving ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Salvar Alterações
-                </>
-              )}
+              <Save className="mr-2 h-4 w-4" />
+              Salvar Alterações
             </Button>
-          </div>
-        </CardContent>
-      </form>
+          </form>
+        </Form>
+      </CardContent>
     </Card>
-  );
+  )
 } 

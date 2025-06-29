@@ -1,51 +1,22 @@
-"use client";
+'use client'
 
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth } from '@/contexts/auth-context'
+import { useSidebar } from '@/contexts/sidebar-context'
+import { cn } from '@/lib/utils'
 import {
-  Home,
   Calendar,
-  Users,
-  Settings,
-  LinkIcon,
-  MessageSquare,
+  Home,
+  Link as LinkIcon,
   LogOut,
-  ChevronRight,
-  PanelLeft,
-  Book,
-  Bell,
+  Settings,
+  Users,
   Bot,
-} from "lucide-react";
-import { useTheme } from "next-themes";
-import Image from "next/image";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useSidebar } from "@/contexts/sidebar-context";
-import Link from "next/link";
-
-interface Route {
-  title: string;
-  href: string;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  blocked?: boolean;
-}
-
-const routes: Route[] = [
-  { title: "Dashboard", href: "/dashboard", icon: Home },
-  { title: "Agendamentos", href: "/dashboard/agendamentos", icon: Calendar },
-  { title: "Clientes", href: "/dashboard/clientes", icon: Users },
-  { title: "Linktree", href: "/dashboard/linktree", icon: LinkIcon },
-  { title: "Chatbot", href: "/dashboard/chatbot", icon: Bot },
-  {
-    title: "Configurações",
-    href: "/dashboard/configuracoes",
-    icon: Settings,
-  },
-  { title: "Página Inicial", href: "/", icon: Home },
-];
+} from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { Button } from '../ui/button'
+import { useToast } from '@/hooks/use-toast'
 
 const menuItems = [
   { href: '/dashboard', label: 'Início', icon: Home },
@@ -57,18 +28,22 @@ const menuItems = [
 ]
 
 export function Sidebar() {
-  const { isExpanded } = useSidebar();
-  const pathname = usePathname();
-  const router = useRouter();
-  const { toast } = useToast();
+  const { user, logout } = useAuth()
+  const { isExpanded } = useSidebar()
+  const pathname = usePathname()
+  const router = useRouter()
+  const { toast } = useToast()
 
-  const handleLogout = async () => {
+  if (!user) return null
+
+  const handleLogout = () => {
+    logout()
     toast({
       title: 'Logout realizado com sucesso!',
-      description: 'Você será redirecionado para a página de login.',
-    });
-    router.push('/');
-  };
+      description: 'Você foi desconectado da sua conta.',
+    })
+    router.push('/')
+  }
 
   return (
     <aside
@@ -105,16 +80,6 @@ export function Sidebar() {
               </Button>
             </Link>
           ))}
-          <Link href="/docs">
-            <Button
-              variant={pathname.startsWith('/docs') ? 'secondary' : 'ghost'}
-              className="w-full justify-start gap-2"
-              title="Documentação"
-            >
-              <Book className="h-5 w-5" />
-              {isExpanded && <span>Documentação</span>}
-            </Button>
-          </Link>
         </nav>
       </div>
 
@@ -130,5 +95,5 @@ export function Sidebar() {
         </Button>
       </div>
     </aside>
-  );
-}
+  )
+} 
