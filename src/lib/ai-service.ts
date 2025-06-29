@@ -151,6 +151,36 @@ class AIService {
     return context
   }
 
+  /**
+   * Extrai um dado específico de uma mensagem usando um prompt direcionado.
+   * @param userMessage A mensagem do usuário.
+   * @param extractionPrompt O prompt que instrui o modelo sobre o que extrair.
+   * @returns O dado extraído como string, ou null se nada for encontrado.
+   */
+  async extractData(userMessage: string, extractionPrompt: string): Promise<string | null> {
+    const prompt = `${extractionPrompt}\n\nMensagem do usuário: "${userMessage}"\n\nDado extraído:`
+
+    try {
+      const { text } = await generateText({
+        model: groq("gemma2-9b-it"),
+        prompt,
+        maxTokens: 50,
+        temperature: 0, // Temperatura 0 para extração determinística
+      })
+
+      // Limpar a resposta da IA, que pode incluir texto adicional.
+      const extracted = text.trim();
+      if (extracted.toLowerCase() === 'null' || extracted.toLowerCase() === 'nenhum' || extracted === '') {
+        return null;
+      }
+      return extracted;
+
+    } catch (error) {
+      console.error("[AI] Erro ao extrair dado:", error)
+      return null
+    }
+  }
+
   private getServiceNames(context: BusinessContext): string[] {
     return context.servicos.map(s => s.nome.toLowerCase())
   }
@@ -166,14 +196,14 @@ class AIService {
         .then(rows => rows[0])
 
       if (conversation) {
-        if (conversation.memoriaContext) {
+        if (conversation.memoria_contexto) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            const parsed: UserMemory = JSON.parse(conversation.memoriaContext)
+            const parsed: UserMemory = JSON.parse(conversation.memoria_contexto as string)
             // Garantir que campos essenciais existam
             return { ...parsed, telefone, ultimaInteracao: new Date() }
           } catch {
-            console.warn('[AI] Falha ao parsear memoria_context, usando defaults')
+            console.warn('[AI] Falha ao parsear memoria_contexto, usando defaults')
           }
         }
 
@@ -203,7 +233,7 @@ class AIService {
         .update(conversations)
         .set({
           nomeContato: memory.nomeCliente ? memory.nomeCliente + ' ❤️' : undefined,
-          memoriaContext: JSON.stringify(memory),
+          memoria_contexto: JSON.stringify(memory),
           ultimaInteracao: new Date(),
         })
         .where(eq(conversations.telefone, memory.telefone))

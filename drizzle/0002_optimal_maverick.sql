@@ -1,0 +1,1 @@
+ALTER TABLE "conversations" RENAME COLUMN "memoria_context" TO "memoria_contexto";

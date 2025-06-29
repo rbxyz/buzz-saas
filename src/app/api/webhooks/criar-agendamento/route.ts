@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { configuracoes, clientes, agendamentos, servicos } from "@/server/db/schema"
-import { eq } from "drizzle-orm"
+import { configuracoes, clientes, agendamentos, servicos, intervalosTrabalho } from "@/server/db/schema"
+import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
 
 interface RequestBody {
@@ -91,8 +91,36 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [WEBHOOK-CRIAR-AGENDAMENTO] Serviço encontrado: ${servicoSelecionado.nome}`)
 
-    // Criar data completa
-    const dataHora = dayjs(`${data}T${horario}`).toDate()
+    // --- VALIDAÇÃO DE DISPONIBILIDADE FINAL ---
+    const diaSemana = dayjs(data).day()
+    const intervalosDoDia = await db
+      .select()
+      .from(intervalosTrabalho)
+      .where(and(eq(intervalosTrabalho.diaSemana, diaSemana), eq(intervalosTrabalho.ativo, true)))
+
+    if (intervalosDoDia.length === 0) {
+      return NextResponse.json({ success: false, error: `Desculpe, não atendemos no dia ${dayjs(data).format("DD/MM/YYYY")}.` }, { status: 400 });
+    }
+
+    const dataHora = dayjs(`${data}T${horario}`)
+    const duracaoMinutos = servicoSelecionado.duracao
+
+    const agendamentosNoDia = await db.select().from(agendamentos).where(and(
+      gte(agendamentos.dataHora, dataHora.startOf('day').toDate()),
+      lte(agendamentos.dataHora, dataHora.endOf('day').toDate()),
+      eq(agendamentos.status, "agendado")
+    ));
+
+    const temConflito = agendamentosNoDia.some(ag => {
+      const inicioExistente = dayjs(ag.dataHora);
+      const fimExistente = inicioExistente.add(ag.duracaoMinutos, "minute");
+      return dataHora.isBefore(fimExistente) && dataHora.add(duracaoMinutos, "minute").isAfter(inicioExistente);
+    });
+
+    if (temConflito) {
+      return NextResponse.json({ success: false, error: `O horário das ${horario} já foi reservado. Por favor, tente outro.` }, { status: 409 }); // 409 Conflict
+    }
+    // --- FIM DA VALIDAÇÃO ---
 
     // Criar agendamento
     const novoAgendamento = await db
@@ -104,7 +132,7 @@ export async function POST(request: NextRequest) {
         servico: servicoSelecionado.nome,
         duracaoMinutos: servicoSelecionado.duracao,
         valorCobrado: servicoSelecionado.preco,
-        dataHora,
+        dataHora: dataHora.toDate(),
         status: "agendado",
         observacoes: `Agendamento criado via WhatsApp - Valor: R$ ${Number(servicoSelecionado.preco).toFixed(2)}`,
       })

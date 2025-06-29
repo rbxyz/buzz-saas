@@ -1,11 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages, clientes, users, messageRoleEnum } from "@/server/db/schema"
+import { conversations, messages, clientes, users, messageRoleEnum, servicos } from "@/server/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { type CoreMessage } from "ai"
 import { env } from "@/env"
+import dayjs from "dayjs"
 
 // Configurações do runtime
 export const runtime = "nodejs"
@@ -50,6 +51,24 @@ interface WebhookBody {
   fromApi?: boolean
 }
 
+// Tipos para a máquina de estados do agendamento
+type StatusAgendamento =
+  | "ocioso"
+  | "coletando_servico"
+  | "coletando_data"
+  | "coletando_horario"
+  | "confirmacao_final"
+  | "concluido";
+
+interface MemoriaAgendamento {
+  status: StatusAgendamento;
+  servicoId?: number | null;
+  servicoNome?: string | null;
+  data?: string | null; // Formato YYYY-MM-DD
+  horario?: string | null; // Formato HH:mm
+  tentativas?: number;
+}
+
 interface ConversationData {
   id: number
   userId: number
@@ -59,6 +78,7 @@ interface ConversationData {
   ultimaMensagem: string | null
   ultimaInteracao: Date
   ativa: boolean
+  memoria_contexto?: MemoriaAgendamento | null;
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -215,176 +235,298 @@ async function processMessage(data: {
 }): Promise<void> {
   const { phone, messageText, messageId, timestamp, senderName } = data
   const processStart = Date.now()
-
   console.log(`🔄 [PROCESS] Iniciando processamento para ${phone}`)
 
-  try {
-    // 1. Buscar usuário (assumir primeiro usuário como padrão)
-    console.log(`👤 [PROCESS] Buscando usuário...`)
+  // 1. Obter ou criar a conversa e o cliente associado
+  const conversation = await getOrCreateConversation(phone, senderName, messageText)
 
-    let userId: number
-    const forcedId = Number(env.CHATBOT_USER_ID)
-    if (!Number.isNaN(forcedId) && forcedId > 0) {
-      userId = forcedId
-      console.log(`👤 [PROCESS] Usando CHATBOT_USER_ID=${userId}`)
-    } else {
-      const user = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1))
-      console.log(`👤 [PROCESS] Resultado da consulta de usuários:`, user)
+  // 2. Salvar a mensagem do usuário
+  await saveMessage(conversation.id, messageText, "user", new Date(timestamp), messageId)
 
-      if (!user || user.length === 0) {
-        console.error(`❌ [PROCESS] Nenhum usuário encontrado no sistema`)
-        throw new Error("Nenhum usuário encontrado no sistema")
+  // 3. Gerenciar o estado da conversa e determinar a próxima ação
+  await gerenciarEstadoConversa(conversation, messageText)
+
+  const totalTime = Date.now() - processStart
+  console.log(`🎉 [PROCESS] Processamento concluído em ${totalTime}ms para ${phone}`)
+}
+
+/**
+ * Orquestrador principal da conversa, baseado em uma máquina de estados.
+ */
+async function gerenciarEstadoConversa(conversation: ConversationData, userMessage: string) {
+  let memoria = conversation.memoria_contexto ?? { status: 'ocioso' };
+
+  console.log(`🧠 [STATE] Estado atual: ${memoria.status}, Memória:`, memoria)
+
+  // Lógica da máquina de estados
+  switch (memoria.status) {
+    case 'ocioso': {
+      const palavrasChaveAgendamento = ["agendar", "marcar", "horário", "agenda", "agendamento"];
+      const intençãoAgendamento = palavrasChaveAgendamento.some(p => userMessage.toLowerCase().includes(p));
+
+      if (intençãoAgendamento) {
+        console.log(`🧠 [STATE] Intenção de agendamento detectada. Mudando para 'coletando_servico'`);
+
+        // Buscar serviços disponíveis para apresentar ao usuário
+        const servicosDisponiveis = await db.select({ nome: servicos.nome, id: servicos.id }).from(servicos).where(eq(servicos.ativo, true));
+        const listaServicos = servicosDisponiveis.map(s => `- ${s.nome}`).join('\n');
+        const mensagem = `Legal! Vamos marcar. Qual desses serviços você gostaria?\n\n${listaServicos}`;
+
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+
+        memoria.status = 'coletando_servico';
+        await updateConversationMemory(conversation.id, memoria);
+      } else {
+        const mensagem = "Olá! Sou seu assistente de agendamento. Para começar, diga 'quero agendar' ou me pergunte sobre os serviços. 😊";
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
       }
-      userId = user[0]!.id
-    }
-    console.log(`✅ [PROCESS] Usuário encontrado: ${userId}`)
-
-    // 2. Buscar ou criar conversa
-    console.log(`💬 [PROCESS] Buscando conversa...`)
-    const conversation = await executeWithTimeout(() =>
-      db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1),
-    )
-    console.log(`💬 [PROCESS] Resultado da consulta de conversa:`, conversation?.length || 0, "registros")
-
-    let conversationData: ConversationData
-    if (!conversation || conversation.length === 0) {
-      console.log(`🆕 [PROCESS] Criando nova conversa`)
-      const newConversation = await executeWithTimeout(() =>
-        db
-          .insert(conversations)
-          .values({
-            userId,
-            telefone: phone,
-            nomeContato: senderName || null,
-            ativa: true,
-            ultimaMensagem: messageText.substring(0, 500),
-            ultimaInteracao: new Date(),
-          })
-          .returning(),
-      )
-      conversationData = newConversation[0]!
-      console.log(`✅ [PROCESS] Nova conversa criada: ${conversationData.id}`)
-    } else {
-      conversationData = conversation[0]!
-      console.log(`✅ [PROCESS] Conversa existente encontrada: ${conversationData.id}`)
-      // Atualizar última interação
-      await executeWithTimeout(() =>
-        db
-          .update(conversations)
-          .set({
-            ultimaMensagem: messageText.substring(0, 500),
-            ultimaInteracao: new Date(),
-            nomeContato: senderName || conversationData.nomeContato,
-          })
-          .where(eq(conversations.id, conversationData.id)),
-      )
-      console.log(`✅ [PROCESS] Conversa atualizada`)
+      break;
     }
 
-    // 3. Buscar ou criar cliente
-    console.log(`👥 [PROCESS] Buscando cliente...`)
-    const cliente = await executeWithTimeout(() =>
-      db.select().from(clientes).where(eq(clientes.telefone, phone)).limit(1),
-    )
-    console.log(`👥 [PROCESS] Cliente encontrado:`, cliente?.length || 0, "registros")
+    case 'coletando_servico': {
+      console.log(`🧠 [STATE] Coletando serviço...`);
+      const servicosDisponiveis = await db.select().from(servicos).where(eq(servicos.ativo, true));
 
-    if ((!cliente || cliente.length === 0) && senderName) {
-      console.log(`🆕 [PROCESS] Criando novo cliente com nome: ${senderName}`)
-      const newCliente = await executeWithTimeout(() =>
-        db
-          .insert(clientes)
-          .values({
-            userId,
-            nome: senderName,
-            telefone: phone,
-          })
-          .returning(),
-      )
+      const servicoSelecionado = servicosDisponiveis.find(s =>
+        userMessage.toLowerCase().includes(s.nome.toLowerCase())
+      );
 
-      if (newCliente && newCliente.length > 0) {
-        // Vincular cliente à conversa
-        await executeWithTimeout(() =>
-          db
-            .update(conversations)
-            .set({ clienteId: newCliente[0]!.id })
-            .where(eq(conversations.id, conversationData.id)),
-        )
-        console.log(`✅ [PROCESS] Cliente criado e vinculado: ${newCliente[0]!.id}`)
+      if (servicoSelecionado) {
+        memoria.status = 'coletando_data';
+        memoria.servicoId = servicoSelecionado.id;
+        memoria.servicoNome = servicoSelecionado.nome;
+
+        const mensagem = `Ótima escolha! Para qual dia você gostaria de agendar o serviço de ${servicoSelecionado.nome}?`;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        await updateConversationMemory(conversation.id, memoria);
+      } else {
+        const listaServicos = servicosDisponiveis.map(s => `- ${s.nome}`).join('\n');
+        const mensagem = `Hum, não encontrei esse serviço. Por favor, escolha um da lista abaixo:\n\n${listaServicos}`;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        // O estado não muda, continua como 'coletando_servico' para a próxima tentativa.
       }
-    } else if (cliente && cliente.length > 0) {
-      console.log(`✅ [PROCESS] Cliente existente: ${cliente[0]!.id}`)
+      break;
     }
 
-    // 4. Salvar mensagem do usuário
-    console.log(`💾 [PROCESS] Salvando mensagem do usuário...`)
-    await executeWithTimeout(() =>
-      db.insert(messages).values({
-        conversationId: conversationData.id,
-        content: messageText,
-        role: "user",
-        timestamp: new Date(timestamp),
-        messageId,
-      }),
-    )
-    console.log(`✅ [PROCESS] Mensagem do usuário salva`)
+    case 'coletando_data': {
+      console.log(`🧠 [STATE] Coletando data...`);
+      const promptExtracao = `Analise a mensagem do usuário e extraia apenas a data, respondendo estritamente no formato AAAA-MM-DD. Considere "hoje" como ${dayjs().format('YYYY-MM-DD')} e "amanhã" como ${dayjs().add(1, 'day').format('YYYY-MM-DD')}. Se nenhuma data for mencionada, responda 'null'.`;
+      const dataExtraida = await aiService.extractData(userMessage, promptExtracao);
 
-    // 5. Buscar histórico da conversa
-    console.log(`📚 [PROCESS] Buscando histórico...`)
-    const history = await executeWithTimeout(() =>
-      db
-        .select({
-          content: messages.content,
-          role: messages.role,
-          timestamp: messages.timestamp,
-        })
-        .from(messages)
-        .where(eq(messages.conversationId, conversationData.id))
-        .orderBy(desc(messages.timestamp))
-        .limit(10),
-    )
+      if (!dataExtraida || !/^\d{4}-\d{2}-\d{2}$/.test(dataExtraida)) {
+        const mensagem = "Não consegui entender a data. Por favor, diga o dia que você quer, como 'hoje', 'amanhã' ou '25 de julho'.";
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        break;
+      }
 
-    const conversationHistory: CoreMessage[] = history
-      .reverse()
-      .filter(
-        (msg) => msg.role === "user" || msg.role === "assistant",
-      )
-      .map((msg) => ({
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-      }))
+      const dataObj = dayjs(dataExtraida);
+      if (dataObj.isBefore(dayjs().startOf('day'))) {
+        const mensagem = "Essa data já passou! Por favor, escolha uma data a partir de hoje.";
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        break;
+      }
 
-    console.log(`✅ [PROCESS] Histórico obtido: ${conversationHistory.length} mensagens`)
+      // Usar o webhook interno para buscar horários (fonte única da verdade)
+      const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+      const resp = await fetch(`${baseUrl}/api/webhooks/listar-horarios?data=${dataExtraida}&servico=${memoria.servicoNome}`);
+      const horariosData = await resp.json() as { success: boolean, periodos?: { manha: string[], tarde: string[] } };
 
-    // 6. Processar com IA
-    console.log(`🤖 [PROCESS] Chamando serviço de IA...`)
-    const aiResponse = await aiService.processMessage(messageText, phone, conversationHistory)
-    console.log(`✅ [PROCESS] Resposta da IA recebida: "${aiResponse.message?.substring(0, 50)}..."`)
+      if (horariosData.success && horariosData.periodos && (horariosData.periodos.manha.length > 0 || horariosData.periodos.tarde.length > 0)) {
+        const manha = horariosData.periodos.manha.join('h, ') + (horariosData.periodos.manha.length > 0 ? 'h' : '');
+        const tarde = horariosData.periodos.tarde.join('h, ') + (horariosData.periodos.tarde.length > 0 ? 'h' : '');
 
-    // 7. Salvar resposta da IA e enviar
-    if (aiResponse.message) {
-      console.log(`💾 [PROCESS] Salvando resposta da IA...`)
-      await executeWithTimeout(() =>
-        db.insert(messages).values({
-          conversationId: conversationData.id,
-          content: aiResponse.message,
-          role: "assistant",
-          timestamp: new Date(),
-        }),
-      )
-      console.log(`✅ [PROCESS] Resposta da IA salva`)
+        let mensagemHorarios = `Ótimo! Para o dia ${dataObj.format('DD/MM')}, tenho os seguintes horários disponíveis:\n`;
+        if (manha.length > 0) mensagemHorarios += `\n☀️ *Manhã:* ${manha}`;
+        if (tarde.length > 0) mensagemHorarios += `\n🌙 *Tarde:* ${tarde}`;
+        mensagemHorarios += `\n\nQual você prefere?`;
 
-      console.log(`📤 [PROCESS] Enviando mensagem via WhatsApp...`)
-      const enviado = await enviarMensagemWhatsApp(phone, aiResponse.message)
-      console.log(`${enviado ? '✅' : '❌'} [PROCESS] Mensagem WhatsApp: ${enviado ? 'enviada' : 'falhou'}`)
+        memoria.status = 'coletando_horario';
+        memoria.data = dataExtraida;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagemHorarios);
+        await saveMessage(conversation.id, mensagemHorarios, 'assistant', new Date(), '');
+        await updateConversationMemory(conversation.id, memoria);
+      } else {
+        const mensagem = `Poxa, não tenho horários disponíveis para o dia ${dataObj.format('DD/MM')}. Que tal tentar outra data?`;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+      }
+      break;
     }
 
-    const totalTime = Date.now() - processStart
-    console.log(`🎉 [PROCESS] Processamento concluído em ${totalTime}ms para ${phone}`)
+    case 'coletando_horario': {
+      console.log(`🧠 [STATE] Coletando horário...`);
+      const promptExtracao = `Analise a mensagem do usuário e extraia apenas o horário, respondendo estritamente no formato HH:mm. Se nenhum horário for mencionado, responda 'null'.`;
+      const horarioExtraido = await aiService.extractData(userMessage, promptExtracao);
 
-  } catch (dbError) {
-    console.error(`💥 [PROCESS] Erro específico na consulta de usuário:`, dbError)
-    throw dbError
+      if (!horarioExtraido || !/^\d{2}:\d{2}$/.test(horarioExtraido)) {
+        const mensagem = "Não consegui entender o horário. Por favor, diga a hora que você quer, como '14:30' ou '3 da tarde'.";
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        break;
+      }
+
+      // Validar se o horário extraído estava na lista de opções
+      const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+      const resp = await fetch(`${baseUrl}/api/webhooks/listar-horarios?data=${memoria.data}&servico=${memoria.servicoNome}`);
+      const horariosData = await resp.json() as { success: boolean, horariosDisponiveis?: string[] };
+
+      if (horariosData.success && horariosData.horariosDisponiveis?.includes(horarioExtraido)) {
+        memoria.status = 'confirmacao_final';
+        memoria.horario = horarioExtraido;
+
+        const mensagem = `Ok! Só para confirmar antes de agendar:\n\n*Serviço:* ${memoria.servicoNome}\n*Data:* ${dayjs(memoria.data).format('DD/MM/YYYY')}\n*Horário:* ${memoria.horario}\n\nPosso confirmar? (Responda "sim" ou "não")`;
+
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        await updateConversationMemory(conversation.id, memoria);
+      } else {
+        const mensagem = `Hum, o horário ${horarioExtraido} não parece estar disponível. Por favor, escolha um dos horários que te enviei.`;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+      }
+      break;
+    }
+
+    case 'confirmacao_final': {
+      console.log(`🧠 [STATE] Aguardando confirmação final...`);
+      const userMessageLower = userMessage.toLowerCase();
+      const confirmacoes = ["sim", "pode", "confirma", "isso", "certo", "ok"];
+      const negacoes = ["não", "nao", "cancela", "mudar"];
+
+      if (confirmacoes.some(p => userMessageLower.includes(p))) {
+        // Chamar o webhook para criar o agendamento
+        const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+        const resp = await fetch(`${baseUrl}/api/webhooks/criar-agendamento`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telefone: conversation.telefone,
+            nome: conversation.nomeContato,
+            servico: memoria.servicoNome,
+            data: memoria.data,
+            horario: memoria.horario,
+          }),
+        });
+
+        const resultadoAgendamento = await resp.json() as { success: boolean; message?: string, error?: string };
+
+        if (resultadoAgendamento.success && resultadoAgendamento.message) {
+          await enviarMensagemWhatsApp(conversation.telefone, resultadoAgendamento.message);
+          await saveMessage(conversation.id, resultadoAgendamento.message, 'assistant', new Date(), '');
+
+          memoria.status = 'concluido';
+          await updateConversationMemory(conversation.id, memoria);
+        } else {
+          const mensagemErro = `Opa, tivemos um problema ao tentar confirmar seu horário: ${resultadoAgendamento.error}. Vamos tentar de novo. Para qual data você gostaria de agendar?`;
+          await enviarMensagemWhatsApp(conversation.telefone, mensagemErro);
+          await saveMessage(conversation.id, mensagemErro, 'assistant', new Date(), '');
+
+          // Resetar para coletar a data novamente
+          memoria.status = 'coletando_data';
+          memoria.data = null;
+          memoria.horario = null;
+          await updateConversationMemory(conversation.id, memoria);
+        }
+
+      } else if (negacoes.some(p => userMessageLower.includes(p))) {
+        const mensagem = "Ok, sem problemas! Se quiser recomeçar, é só dizer 'quero agendar'.";
+        memoria = { status: 'ocioso' }; // Reset completo
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+        await updateConversationMemory(conversation.id, memoria);
+      } else {
+        const mensagem = `Não entendi. Por favor, responda com "sim" para confirmar o agendamento ou "não" para cancelar.`;
+        await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+        await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+      }
+      break;
+    }
+
+    case 'concluido':
+      // TODO: Agradecer e voltar para o estado ocioso
+      console.log('TODO: Implementar estado CONCLUIDO')
+      await enviarMensagemWhatsApp(conversation.telefone, "Seu agendamento já foi confirmado! 😊 Se precisar de algo mais, é só chamar.")
+      memoria = { status: 'ocioso' } // Resetar
+      await updateConversationMemory(conversation.id, memoria);
+      break;
+
+    default:
+      console.error(`❌ [STATE] Estado desconhecido: ${memoria.status}`)
+      await enviarMensagemWhatsApp(conversation.telefone, "Desculpe, ocorreu um erro interno. Tente novamente mais tarde.")
   }
+}
+
+/**
+ * Busca uma conversa existente ou cria uma nova.
+ */
+async function getOrCreateConversation(phone: string, senderName: string, messageText: string): Promise<ConversationData> {
+  // Lógica de busca/criação de usuário...
+  let userId = Number(env.CHATBOT_USER_ID);
+  if (isNaN(userId)) {
+    const user = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1));
+    if (!user || user.length === 0) throw new Error("Nenhum usuário encontrado no sistema");
+    userId = user[0]!.id;
+  }
+
+  const conversation = await executeWithTimeout(() =>
+    db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1)
+  );
+
+  if (conversation && conversation.length > 0) {
+    console.log(`✅ [CONV] Conversa existente encontrada: ${conversation[0]!.id}`);
+    return conversation[0] as ConversationData;
+  }
+
+  console.log(`🆕 [CONV] Criando nova conversa para ${phone}`);
+  const newConversation = await executeWithTimeout(() =>
+    db.insert(conversations).values({
+      userId,
+      telefone: phone,
+      nomeContato: senderName || null,
+      ativa: true,
+      ultimaMensagem: messageText.substring(0, 500),
+      ultimaInteracao: new Date(),
+      memoria_contexto: { status: 'ocioso' } // Estado inicial
+    }).returning()
+  );
+
+  return newConversation[0]! as ConversationData;
+}
+
+/**
+ * Salva uma mensagem no banco de dados.
+ */
+async function saveMessage(conversationId: number, content: string, role: 'user' | 'assistant', timestamp: Date, messageId: string): Promise<void> {
+  console.log(`💾 [MSG] Salvando mensagem: role=${role}, convId=${conversationId}`);
+  await executeWithTimeout(() =>
+    db.insert(messages).values({
+      conversationId,
+      content,
+      role,
+      timestamp,
+      messageId,
+    })
+  );
+  console.log(`✅ [MSG] Mensagem salva.`);
+}
+
+/**
+ * Atualiza a memória de contexto da conversa.
+ */
+async function updateConversationMemory(conversationId: number, memoria: MemoriaAgendamento): Promise<void> {
+  console.log(`🧠 [MEM] Atualizando memória para convId=${conversationId}:`, memoria);
+  await executeWithTimeout(() =>
+    db.update(conversations)
+      .set({ memoria_contexto: memoria, ultimaInteracao: new Date() })
+      .where(eq(conversations.id, conversationId))
+  );
+  console.log(`✅ [MEM] Memória atualizada.`);
 }
 
 // Endpoint GET para verificar status

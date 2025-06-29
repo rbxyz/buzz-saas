@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       const inicioMinutos = horaInicioNum * 60 + minutoInicioNum
       const fimMinutos = horaFimNum * 60 + minutoFimNum
 
-      for (let minutos = inicioMinutos; minutos + duracaoMinutos <= fimMinutos; minutos += 30) {
+      for (let minutos = inicioMinutos; minutos + duracaoMinutos <= fimMinutos; minutos += duracaoMinutos) {
         const hora = Math.floor(minutos / 60)
         const minuto = minutos % 60
         const horarioFormatado = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
 
         const temConflito = agendamentosExistentes.some((agendamento) => {
           const inicioExistente = dayjs(agendamento.dataHora)
-          const fimExistente = inicioExistente.add(agendamento.duracaoMinutos ?? 30, "minute")
+          const fimExistente = inicioExistente.add(agendamento.duracaoMinutos, "minute")
 
           return dataHorario.isBefore(fimExistente) && dataFim.isAfter(inicioExistente)
         })

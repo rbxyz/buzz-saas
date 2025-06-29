@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgEnum,
   serial,
   text,
@@ -202,7 +203,7 @@ export const conversations = pgTable(
     ultimaMensagem: text("ultima_mensagem"),
     ultimaInteracao: timestamp("ultima_interacao", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     ativa: boolean("ativa").default(true).notNull(),
-    memoriaContext: text("memoria_context"), // Campo para armazenar a memória persistente do agente
+    memoria_contexto: jsonb("memoria_contexto"), // Armazena o estado da conversa (máquina de estados)
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   },

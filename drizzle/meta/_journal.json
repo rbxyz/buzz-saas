@@ -15,6 +15,13 @@
       "when": 1751148393956,
       "tag": "0001_wealthy_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1751162887920,
+      "tag": "0002_optimal_maverick",
+      "breakpoints": true
     }
   ]
 }
