@@ -1,0 +1,29 @@
+# Webhooks
+
+Os webhooks são a principal forma de comunicação em tempo real de serviços de terceiros com o `buzz-saas`.
+
+## `POST /api/webhooks/zapi`
+
+Este é o endpoint de gateway principal para todas as mensagens recebidas do WhatsApp via Z-API.
+
+-   **Responsabilidade:** Receber a mensagem, identificar a intenção do usuário através do `AIService` e orquestrar a resposta.
+-   **Segurança:** A rota deve ser protegida por um token secreto configurado no Z-API e validado no nosso backend.
+-   **Payload Recebido (Simplificado):**
+    ```json
+    {
+      "phone": "5511999998888",
+      "message": {
+        "text": {
+          "message": "Olá, gostaria de agendar um horário."
+        }
+      },
+      "sender": {
+        "name": "João da Silva"
+      }
+    }
+    ```
+-   **Fluxo de Processamento:**
+    1.  Valida o payload.
+    2.  Chama o orquestrador `gerenciarEstadoConversa`.
+    3.  Persiste o estado da conversa no banco de dados (`memoria_contexto`).
+    4.  Envia a resposta formatada de volta ao usuário através do `ZapiService`. 

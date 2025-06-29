@@ -1,0 +1,51 @@
+# Guia de Desenvolvimento
+
+Este guia define as práticas e o fluxo de trabalho para contribuir com o desenvolvimento do `buzz-saas`.
+
+## Fluxo de Trabalho (Git Flow)
+
+Adotamos um fluxo de trabalho simplificado baseado em `feature branches`.
+
+1.  **Crie uma Branch:** Para cada nova funcionalidade ou correção de bug, crie uma nova branch a partir da `main`:
+    ```bash
+    git checkout main
+    git pull origin main
+    git checkout -b feat/nome-da-funcionalidade # ou fix/nome-da-correcao
+    ```
+
+2.  **Desenvolva e Commite:** Faça suas alterações e realize commits atômicos e descritivos. Siga a convenção de [Commits Convencionais](https://www.conventionalcommits.org/).
+    *   **Exemplos:**
+        *   `feat(auth): adiciona login com google`
+        *   `fix(dashboard): corrige quebra de layout no mobile`
+        *   `docs(readme): atualiza instruções de instalação`
+        *   `refactor(api): simplifica lógica do serviço de IA`
+
+3.  **Abra um Pull Request (PR):** Após concluir o desenvolvimento, envie sua branch para o repositório remoto e abra um Pull Request para a `main`.
+    *   No PR, descreva claramente **o que** foi feito, **por que** foi feito e **como** foi feito.
+    *   Link para quaisquer documentos relevantes (ADRs, RFCs, Tarefas).
+
+4.  **Revisão e Merge:** O PR será revisado por outro membro da equipe. Após a aprovação e a passagem dos checks de CI/CD, ele será mesclado (squash and merge) na `main`.
+
+## Estrutura do Projeto
+
+A estrutura de pastas segue as convenções do Next.js App Router.
+-   `src/app/`: Contém as rotas da aplicação, incluindo as páginas do dashboard e os endpoints de API.
+-   `src/components/`: Componentes React reutilizáveis.
+-   `src/lib/`: Lógica de negócio core (ex: `ai-service.ts`, `zapi-service.ts`).
+-   `src/server/`: Lógica de backend, incluindo a API tRPC e o schema do banco de dados.
+-   `drizzle/`: Arquivos de migração e configuração do Drizzle ORM.
+-   `docs/`: Documentação de arquitetura e produto (ADRs, RFCs, PRDs).
+-   `src/app/docs/`: O conteúdo do portal de documentação que você está lendo.
+
+## Testes
+
+(Seção a ser detalhada no futuro, quando a estratégia de testes for implementada).
+
+## Versionamento
+
+Utilizamos o **Versionamento Semântico (SemVer)**. O versionamento é atualizado no arquivo `package.json`.
+-   **MAJOR (ex: 1.0.0 -> 2.0.0):** Para mudanças incompatíveis (breaking changes).
+-   **MINOR (ex: 1.1.0 -> 1.2.0):** Para novas funcionalidades que são retrocompatíveis.
+-   **PATCH (ex: 1.1.1 -> 1.1.2):** Para correções de bugs que são retrocompatíveis.
+
+Antes de commitar uma nova versão, o **Changelog** deve ser atualizado. 
