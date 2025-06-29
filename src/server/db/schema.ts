@@ -203,7 +203,7 @@ export const conversations = pgTable(
     ultimaMensagem: text("ultima_mensagem"),
     ultimaInteracao: timestamp("ultima_interacao", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     ativa: boolean("ativa").default(true).notNull(),
-    memoria_contexto: jsonb("memoria_contexto"), // Armazena o estado da conversa (máquina de estados)
+    memoria_context: jsonb("memoria_context"), // Armazena o estado da conversa (máquina de estados)
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   },

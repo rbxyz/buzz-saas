@@ -77,7 +77,7 @@ interface ConversationData {
   ultimaMensagem: string | null
   ultimaInteracao: Date
   ativa: boolean
-  memoria_contexto?: MemoriaAgendamento | null;
+  memoria_context?: MemoriaAgendamento | null;
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -256,7 +256,7 @@ async function processMessage(data: {
  * Orquestrador principal da conversa, baseado em uma máquina de estados.
  */
 async function gerenciarEstadoConversa(conversation: ConversationData, userMessage: string) {
-  let memoria = conversation.memoria_contexto ?? { status: 'ocioso' };
+  let memoria = conversation.memoria_context ?? { status: 'ocioso' };
 
   console.log(`🧠 [STATE] Estado atual: ${memoria.status}, Memória:`, memoria)
 
@@ -495,7 +495,7 @@ async function getOrCreateConversation(phone: string, senderName: string, messag
       ativa: true,
       ultimaMensagem: messageText.substring(0, 500),
       ultimaInteracao: new Date(),
-      memoria_contexto: { status: 'ocioso' } // Estado inicial
+      memoria_context: { status: 'ocioso' } // Estado inicial
     }).returning()
   );
 
@@ -526,7 +526,7 @@ async function updateConversationMemory(conversationId: number, memoria: Memoria
   console.log(`🧠 [MEM] Atualizando memória para convId=${conversationId}:`, memoria);
   await executeWithTimeout(() =>
     db.update(conversations)
-      .set({ memoria_contexto: memoria, ultimaInteracao: new Date() })
+      .set({ memoria_context: memoria, ultimaInteracao: new Date() })
       .where(eq(conversations.id, conversationId))
   );
   console.log(`✅ [MEM] Memória atualizada.`);
