@@ -196,14 +196,14 @@ class AIService {
         .then(rows => rows[0])
 
       if (conversation) {
-        if (conversation.memoria_contexto) {
+        if (conversation.memoria_context) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-            const parsed: UserMemory = JSON.parse(conversation.memoria_contexto as string)
+            const parsed: UserMemory = JSON.parse(conversation.memoria_context as string)
             // Garantir que campos essenciais existam
             return { ...parsed, telefone, ultimaInteracao: new Date() }
           } catch {
-            console.warn('[AI] Falha ao parsear memoria_contexto, usando defaults')
+            console.warn('[AI] Falha ao parsear memoria_context, usando defaults')
           }
         }
 
@@ -233,7 +233,7 @@ class AIService {
         .update(conversations)
         .set({
           nomeContato: memory.nomeCliente ? memory.nomeCliente + ' ❤️' : undefined,
-          memoria_contexto: JSON.stringify(memory),
+          memoria_context: JSON.stringify(memory),
           ultimaInteracao: new Date(),
         })
         .where(eq(conversations.telefone, memory.telefone))
