@@ -161,26 +161,35 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [WEBHOOK] Todas as variáveis de ambiente configuradas`)
 
-    // Processar mensagem de forma assíncrona (não bloquear resposta)
-    processMessage({
-      phone,
-      messageText,
-      messageId,
-      timestamp,
-      senderName,
-    }).catch((error) => {
-      console.error(`💥 [WEBHOOK] Erro no processamento assíncrono:`, error)
-    })
+    // O processamento agora será síncrono para garantir a execução em ambiente serverless.
+    // A resposta ao webhook só será enviada após a conclusão.
+    try {
+      await processMessage({
+        phone,
+        messageText,
+        messageId,
+        timestamp,
+        senderName,
+      })
 
-    // Responder imediatamente para evitar timeout do Z-API
-    const processingTime = Date.now() - startTime
-    console.log(`⚡ [WEBHOOK] Resposta enviada em ${processingTime}ms`)
+      const processingTime = Date.now() - startTime
+      console.log(`⚡ [WEBHOOK] Resposta enviada após processamento completo em ${processingTime}ms`)
+      return NextResponse.json({
+        success: true,
+        processingTime,
+        status: "processed",
+      })
 
-    return NextResponse.json({
-      success: true,
-      processingTime,
-      phone: phone.substring(0, 4) + "****", // Log parcial por segurança
-    })
+    } catch (processingError) {
+      console.error(`💥 [WEBHOOK] Erro durante o processamento da mensagem:`, processingError)
+      // Mesmo com erro no processamento, retornamos 200 para o Z-API não reenviar.
+      // O erro já foi logado.
+      return NextResponse.json({
+        success: false,
+        status: "error_during_processing",
+        error: processingError instanceof Error ? processingError.message : "Erro desconhecido",
+      })
+    }
   } catch (error) {
     const processingTime = Date.now() - startTime
     console.error(`💥 [WEBHOOK] Erro principal (${processingTime}ms):`, error)
