@@ -459,7 +459,8 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
       break;
 
     default:
-      console.error(`❌ [STATE] Estado desconhecido: ${memoria.status}`)
+      const estadoDesconhecido: string = memoria.status
+      console.error(`❌ [STATE] Estado desconhecido: ${estadoDesconhecido}`)
       await enviarMensagemWhatsApp(conversation.telefone, "Desculpe, ocorreu um erro interno. Tente novamente mais tarde.")
   }
 }
