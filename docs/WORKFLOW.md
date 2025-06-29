@@ -62,3 +62,17 @@ graph TD
 ### Fase 4: Revisão e Entrega
 - **Gatilho:** Abertura de um Pull Request (PR).
 - **Prática:** A descrição do PR deve conter links para os documentos de design relevantes (FRD, ADR, etc.). A revisão do código deve incluir também a revisão da documentação associada. 
+
+---
+
+## 5. Versionamento e Deploy
+
+Toda alteração significativa, especialmente a criação ou atualização de um documento de arquitetura ou design (ADR, LLD, RFC), deve ser acompanhada por um incremento de versão.
+
+1.  **Incremento de Versão:** Após a criação/alteração da documentação, a versão no arquivo `package.json` deve ser incrementada seguindo o Versionamento Semântico:
+    -   **PATCH:** Para correções de bugs, documentação, ou pequenas melhorias que não afetam a API.
+    -   **MINOR:** Para novas funcionalidades que são retrocompatíveis.
+    -   **MAJOR:** Para mudanças que quebram a compatibilidade (breaking changes).
+2.  **Commit e Push:** Todas as alterações (código, documentação e `package.json`) devem ser commitadas e enviadas ao repositório remoto imediatamente após a conclusão da tarefa. Use a convenção de commits para descrever a mudança.
+    -   Exemplo de commit para documentação: `docs(adr): cria ADR para processamento síncrono de webhooks`
+    -   Exemplo de commit para versionamento: `chore(release): bump version to 0.1.6` 
