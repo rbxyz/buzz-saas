@@ -31,7 +31,6 @@ import {
   XCircle,
   Info,
 } from "lucide-react";
-import "react-datepicker/dist/react-datepicker.css";
 import Image from "next/image";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br";
