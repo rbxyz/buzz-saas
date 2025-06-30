@@ -96,4 +96,6 @@ export function Sidebar() {
       </div>
     </aside>
   )
-} 
+}
+
+export { Sidebar as DashboardSidebar } 
