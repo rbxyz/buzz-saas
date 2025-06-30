@@ -221,11 +221,14 @@ export const clienteRouter = createTRPCRouter({
     }
 
     try {
+      // Compara apenas os últimos 11 dígitos (DDD + número) para ignorar prefixos de país (como 55)
+      const telefoneSemPrefixo = telefoneNumeros.length > 11 ? telefoneNumeros.slice(-11) : telefoneNumeros
+
       const cliente = await db
         .select()
         .from(clientes)
         .where(
-          sql`REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', '') = ${telefoneNumeros}`,
+          sql`RIGHT(REPLACE(REPLACE(REPLACE(REPLACE(${clientes.telefone}, '(', ''), ')', ''), '-', ''), ' ', ''), ${telefoneSemPrefixo.length}) = ${telefoneSemPrefixo}`,
         )
         .limit(1)
 

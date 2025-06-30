@@ -113,8 +113,8 @@ export default function LandingPage() {
   const { data: clientePorTelefone, isLoading: buscandoCliente } =
     api.cliente.buscarPorTelefone.useQuery(
       {
-        // Adiciona prefixo 55 ao telefone para busca
-        telefone: adicionarPrefixo55(telefoneAgendamento),
+        // Utiliza apenas os dígitos informados (sem prefixo 55) para busca
+        telefone: telefoneAgendamento.replace(/\D/g, ""),
       },
       {
         enabled: telefoneAgendamento.length >= 10,
@@ -220,7 +220,7 @@ export default function LandingPage() {
   const confirmarAgendamento = () => {
     // Adiciona prefixo 55 ao telefone para o agendamento
     const telefoneNumeros = adicionarPrefixo55(
-      limparTelefone(telefoneAgendamento),
+      telefoneAgendamento.replace(/\D/g, ""),
     );
 
     // Validar que temos um horário selecionado
@@ -617,7 +617,7 @@ export default function LandingPage() {
                         <Button
                           onClick={() => {
                             const telefoneNumeros =
-                              limparTelefone(telefoneAgendamento);
+                              telefoneAgendamento.replace(/\D/g, "");
                             if (telefoneNumeros.length >= 10) {
                               // Verificar se já temos os dados da query
                               if (clientePorTelefone) {
@@ -648,7 +648,7 @@ export default function LandingPage() {
                             }
                           }}
                           disabled={
-                            limparTelefone(telefoneAgendamento).length < 10 ||
+                            telefoneAgendamento.length < 10 ||
                             buscandoCliente
                           }
                           className="bg-gradient-brand hover:bg-gradient-brand-hover w-full text-white"
