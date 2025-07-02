@@ -3,13 +3,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
 import { conversations, messages, users } from "@/server/db/schema"
-import { eq, desc } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { env } from "@/env"
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
-import { type CoreMessage, type ToolCall } from 'ai'
+import { type CoreMessage } from 'ai'
 import { agentService } from "@/lib/ai-agent-service"
 
 // Configurar dayjs com timezone
@@ -150,14 +150,14 @@ async function getConversationHistory(conversationId: number): Promise<CoreMessa
         content: msg.content || '',
       } as CoreMessage;
     })
-    .filter(msg => msg && msg.content); // Filtrar mensagens inválidas
+    .filter(msg => msg?.content); // Filtrar mensagens inválidas
 }
 
 async function getOrCreateConversation(phone: string, senderName: string): Promise<ConversationData> {
   let userId = Number(env.CHATBOT_USER_ID);
   if (isNaN(userId)) {
     const userResult = await db.select({ id: users.id }).from(users).limit(1);
-    if (!userResult || userResult.length === 0) throw new Error("Nenhum usuário encontrado no sistema");
+    if (!userResult?.length) throw new Error("Nenhum usuário encontrado no sistema");
     userId = userResult[0]!.id;
   }
 
