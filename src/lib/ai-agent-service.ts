@@ -1,5 +1,4 @@
-import { type CoreMessage, generateText, tool, type ToolCall } from "ai";
-import { groq } from "@ai-sdk/groq";
+import { type CoreMessage, generateText, type ToolCall } from "ai";
 import { z } from "zod";
 import { db } from "@/server/db";
 import { agendamentos, clientes, configuracoes, servicos as servicosSchema } from "@/server/db/schema";
@@ -20,8 +19,15 @@ const openAIWithGroq = createOpenAI({
 
 const model = openAIWithGroq("gemma2-9b-it");
 
+// --- Tipos para as ferramentas ---
+interface ToolResponse {
+    success?: boolean;
+    error?: string;
+    [key: string]: unknown;
+}
+
 // --- 1. Definição das Ferramentas (Tools) ---
-const tools: any = {
+const tools = {
     // Ferramenta para listar horários disponíveis
     listar_horarios_disponiveis: {
         description: "Verifica e lista os horários de agendamento disponíveis para uma data específica e um serviço. Use isso quando o cliente perguntar sobre 'horários livres', 'vagas', 'disponibilidade', etc.",
@@ -29,41 +35,12 @@ const tools: any = {
             data: z.string().describe("A data para a verificação, no formato AAAA-MM-DD."),
             servico: z.string().describe("O nome do serviço que o cliente deseja. Ex: 'Corte de cabelo', 'Barba'.")
         }),
-        execute: async ({ data, servico }: { data: string, servico: string }) => {
-            try {
-                console.log(`🤖 [Tool] Executando listar_horarios_disponiveis para ${data} e serviço ${servico}...`);
-                const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-                const resp = await fetch(`${baseUrl}/api/webhooks/listar-horarios?data=${data}&servico=${servico}`);
-                if (!resp.ok) {
-                    return { success: false, error: "Falha ao buscar horários." };
-                }
-                const dataResp = await resp.json();
-                return dataResp;
-            } catch (error) {
-                console.error("Erro na ferramenta listar_horarios_disponiveis:", error);
-                return { success: false, error: "Ocorreu um erro interno ao buscar os horários." };
-            }
-        },
     },
 
     // Ferramenta para listar serviços disponíveis
     listar_servicos: {
         description: "Lista todos os serviços disponíveis com preços e duração. Use quando o cliente perguntar 'que serviços fazem?', 'qual o preço?', 'quanto custa?', etc.",
         parameters: z.object({}),
-        execute: async () => {
-            console.log(`🤖 [Tool] Executando listar_servicos...`);
-            const servicosAtivos = await db
-                .select({
-                    nome: servicosSchema.nome,
-                    preco: servicosSchema.preco,
-                    duracao: servicosSchema.duracao,
-                    descricao: servicosSchema.descricao,
-                })
-                .from(servicosSchema)
-                .where(eq(servicosSchema.ativo, true));
-
-            return { servicos: servicosAtivos };
-        }
     },
 
     // Ferramenta para consultar os agendamentos de um cliente
@@ -72,41 +49,12 @@ const tools: any = {
         parameters: z.object({
             telefoneCliente: z.string().describe("O número de telefone do cliente para a consulta."),
         }),
-        execute: async ({ telefoneCliente }: { telefoneCliente: string }) => {
-            console.log(`🤖 [Tool] Executando consultar_meus_agendamentos para ${telefoneCliente}...`);
-            const agendamentosFuturos = await db
-                .select({
-                    servico: agendamentos.servico,
-                    dataHora: agendamentos.dataHora,
-                })
-                .from(agendamentos)
-                .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
-                .where(
-                    and(
-                        eq(clientes.telefone, telefoneCliente.replace(/\D/g, "")),
-                        gte(agendamentos.dataHora, dayjs().startOf('day').toDate()),
-                        eq(agendamentos.status, "agendado")
-                    )
-                )
-                .orderBy(agendamentos.dataHora);
-
-            return { agendamentos: agendamentosFuturos };
-        }
     },
 
     // Ferramenta para buscar informações gerais da empresa
     buscar_informacoes_empresa: {
         description: "Busca informações gerais sobre a empresa, como endereço, telefone de contato ou horários de funcionamento. Use quando o cliente perguntar 'onde fica', 'qual o endereço', 'qual o telefone', 'até que horas abre', etc.",
         parameters: z.object({}),
-        execute: async () => {
-            console.log(`🤖 [Tool] Executando buscar_informacoes_empresa...`);
-            const config = await db.select().from(configuracoes).limit(1).then(r => r[0]);
-            return {
-                nomeEmpresa: config?.nomeEmpresa,
-                endereco: config?.endereco,
-                telefone: config?.telefone,
-            };
-        }
     },
 
     // Ferramenta para criar o agendamento
@@ -119,26 +67,92 @@ const tools: any = {
             data: z.string().describe("Data do agendamento no formato AAAA-MM-DD."),
             horario: z.string().describe("Horário do agendamento no formato HH:mm."),
         }),
-        execute: async (params: any) => {
-            try {
-                console.log(`🤖 [Tool] Executando criar_agendamento com os parâmetros:`, params);
-                const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-                const resp = await fetch(`${baseUrl}/api/webhooks/criar-agendamento`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(params),
-                });
-                const dataResp = await resp.json();
-                return dataResp;
-            } catch (error) {
-                console.error("Erro na ferramenta criar_agendamento:", error);
-                return { success: false, error: "Ocorreu um erro interno ao criar o agendamento." };
+    }
+};
+
+// --- 2. Lógica de Execução das Ferramentas ---
+const executeTools = {
+    async listar_horarios_disponiveis(args: { data: string, servico: string }): Promise<ToolResponse> {
+        try {
+            console.log(`🤖 [Tool] Executando listar_horarios_disponiveis para ${args.data} e serviço ${args.servico}...`);
+            const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+            const resp = await fetch(`${baseUrl}/api/webhooks/listar-horarios?data=${args.data}&servico=${args.servico}`);
+            if (!resp.ok) {
+                return { success: false, error: "Falha ao buscar horários." };
             }
+            const dataResp = await resp.json() as ToolResponse;
+            return dataResp;
+        } catch (error) {
+            console.error("Erro na ferramenta listar_horarios_disponiveis:", error);
+            return { success: false, error: "Ocorreu um erro interno ao buscar os horários." };
+        }
+    },
+
+    async listar_servicos(): Promise<ToolResponse> {
+        console.log(`🤖 [Tool] Executando listar_servicos...`);
+        const servicosAtivos = await db
+            .select({
+                nome: servicosSchema.nome,
+                preco: servicosSchema.preco,
+                duracao: servicosSchema.duracao,
+                descricao: servicosSchema.descricao,
+            })
+            .from(servicosSchema)
+            .where(eq(servicosSchema.ativo, true));
+
+        return { servicos: servicosAtivos };
+    },
+
+    async consultar_meus_agendamentos(args: { telefoneCliente: string }): Promise<ToolResponse> {
+        console.log(`🤖 [Tool] Executando consultar_meus_agendamentos para ${args.telefoneCliente}...`);
+        const agendamentosFuturos = await db
+            .select({
+                servico: agendamentos.servico,
+                dataHora: agendamentos.dataHora,
+            })
+            .from(agendamentos)
+            .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+            .where(
+                and(
+                    eq(clientes.telefone, String(args.telefoneCliente).replace(/\D/g, "")),
+                    gte(agendamentos.dataHora, dayjs().startOf('day').toDate()),
+                    eq(agendamentos.status, "agendado")
+                )
+            )
+            .orderBy(agendamentos.dataHora);
+
+        return { agendamentos: agendamentosFuturos };
+    },
+
+    async buscar_informacoes_empresa(): Promise<ToolResponse> {
+        console.log(`🤖 [Tool] Executando buscar_informacoes_empresa...`);
+        const config = await db.select().from(configuracoes).limit(1).then(r => r[0]);
+        return {
+            nomeEmpresa: config?.nomeEmpresa,
+            endereco: config?.endereco,
+            telefone: config?.telefone,
+        };
+    },
+
+    async criar_agendamento(args: { telefone: string, nome: string, servico: string, data: string, horario: string }): Promise<ToolResponse> {
+        try {
+            console.log(`🤖 [Tool] Executando criar_agendamento com os parâmetros:`, args);
+            const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+            const resp = await fetch(`${baseUrl}/api/webhooks/criar-agendamento`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(args),
+            });
+            const dataResp = await resp.json() as ToolResponse;
+            return dataResp;
+        } catch (error) {
+            console.error("Erro na ferramenta criar_agendamento:", error);
+            return { success: false, error: "Ocorreu um erro interno ao criar o agendamento." };
         }
     }
 };
 
-// --- 2. Definição do Prompt de Sistema ---
+// --- 3. Definição do Prompt de Sistema ---
 const systemPrompt = `
 Você é um assistente de agendamentos para uma barbearia. Seu nome é Buzz.
 Sua personalidade é AMIGÁVEL e CASUAL. Use gírias leves como "fechou", "bora", "top", e emojis de forma natural (😊, 👍, 😄, 🚀).
@@ -188,11 +202,11 @@ Sua personalidade é AMIGÁVEL e CASUAL. Use gírias leves como "fechou", "bora"
 
 interface AgentResponse {
     finalAnswer: CoreMessage;
-    toolCalls?: ToolCall<any, any>[];
+    toolCalls?: ToolCall<string, Record<string, unknown>>[];
     toolResults?: CoreMessage[];
 }
 
-// --- 3. Função Principal de Processamento ---
+// --- 4. Função Principal de Processamento ---
 class AgentService {
     async processMessage(
         history: CoreMessage[],
@@ -221,38 +235,64 @@ class AgentService {
 
             for (const call of toolCalls) {
                 try {
-                    let params = call.args;
+                    let result: ToolResponse;
+                    const toolName = (call as { toolName: string }).toolName;
 
-                    if (call.toolName === 'consultar_meus_agendamentos') {
-                        params = { telefoneCliente: telefone };
-                    } else if (call.toolName === 'criar_agendamento') {
-                        params = { ...call.args, telefone, nome: nomeContato };
+                    switch (toolName) {
+                        case 'consultar_meus_agendamentos':
+                            result = await executeTools.consultar_meus_agendamentos({ telefoneCliente: telefone });
+                            break;
+                        case 'criar_agendamento': {
+                            const callArgs = (call as { args: Record<string, string> }).args;
+                            const args = {
+                                telefone,
+                                nome: nomeContato,
+                                servico: callArgs.servico ?? '',
+                                data: callArgs.data ?? '',
+                                horario: callArgs.horario ?? ''
+                            };
+                            result = await executeTools.criar_agendamento(args);
+                            break;
+                        }
+                        case 'listar_horarios_disponiveis': {
+                            const callArgs = (call as { args: { data: string, servico: string } }).args;
+                            result = await executeTools.listar_horarios_disponiveis(callArgs);
+                            break;
+                        }
+                        case 'listar_servicos':
+                            result = await executeTools.listar_servicos();
+                            break;
+                        case 'buscar_informacoes_empresa':
+                            result = await executeTools.buscar_informacoes_empresa();
+                            break;
+                        default:
+                            result = { error: `Ferramenta desconhecida: ${toolName}` };
                     }
 
-                    console.log(`🛠️ [Tool] Executando ${call.toolName} com parâmetros:`, params);
-                    const result = await (tools[call.toolName as keyof typeof tools] as any).execute(params);
+                    console.log(`🛠️ [Tool] Resultado de ${toolName}:`, result);
 
                     toolResultMessages.push({
                         role: 'tool',
                         content: [
                             {
                                 type: 'tool-result',
-                                toolCallId: call.toolCallId,
-                                toolName: call.toolName,
+                                toolCallId: (call as { toolCallId: string }).toolCallId,
+                                toolName: toolName,
                                 result: result,
                             },
                         ],
                     });
                 } catch (error) {
-                    console.error(`💥 [Tool] Erro ao executar ${call.toolName}:`, error);
+                    const toolName = (call as { toolName: string }).toolName;
+                    console.error(`💥 [Tool] Erro ao executar ${toolName}:`, error);
                     toolResultMessages.push({
                         role: 'tool',
                         content: [
                             {
                                 type: 'tool-result',
-                                toolCallId: call.toolCallId,
-                                toolName: call.toolName,
-                                result: { error: `Erro na ferramenta ${call.toolName}` },
+                                toolCallId: (call as { toolCallId: string }).toolCallId,
+                                toolName: toolName,
+                                result: { error: `Erro na ferramenta ${toolName}` },
                             },
                         ],
                     });
