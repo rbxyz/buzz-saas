@@ -24,7 +24,7 @@ import {
   Check,
   XIcon,
 } from "lucide-react";
-import dayjs from "dayjs";
+import dayjs from "@/lib/dayjs-config";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -498,7 +498,7 @@ export default function AgendamentosPage() {
                           <div className="flex items-center gap-4">
                             <Clock className="h-5 w-5 text-muted-foreground" />
                             <div>
-                              <p className="font-semibold">{dayjs(agendamento.dataHora).format("HH:mm")}</p>
+                              <p className="font-semibold">{dayjs(agendamento.dataHora).tz("America/Sao_Paulo").format("HH:mm")}</p>
                               <p className="text-sm text-muted-foreground">{agendamento.cliente?.nome}</p>
                             </div>
                           </div>
@@ -586,7 +586,7 @@ export default function AgendamentosPage() {
                         <div className="flex items-center gap-4">
                            <Clock className="h-5 w-5 text-muted-foreground" />
                     <div>
-                              <p className="font-semibold">{dayjs(agendamento.dataHora).format("HH:mm")}</p>
+                              <p className="font-semibold">{dayjs(agendamento.dataHora).tz("America/Sao_Paulo").format("HH:mm")}</p>
                               <p className="text-sm text-muted-foreground">{agendamento.cliente?.nome}</p>
                         </div>
                       </div>
@@ -652,10 +652,10 @@ export default function AgendamentosPage() {
                       </div>
                   <div className="text-right">
                     <p className="font-medium">
-                      {dayjs(agendamento.dataHora).format("DD/MM")}
+                      {dayjs(agendamento.dataHora).tz("America/Sao_Paulo").format("DD/MM")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {dayjs(agendamento.dataHora).format("HH:mm")}
+                      {dayjs(agendamento.dataHora).tz("America/Sao_Paulo").format("HH:mm")}
                     </p>
                   </div>
                 </div>

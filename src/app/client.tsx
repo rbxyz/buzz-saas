@@ -2,6 +2,9 @@
 
 import type React from "react";
 
+// Configurar dayjs globalmente antes de qualquer uso
+import "@/lib/dayjs-config";
+
 import { Inter } from "next/font/google";
 import { TRPCReactProvider } from "@/trpc/react";
 import { ThemeProvider } from "@/components/theme-provider";

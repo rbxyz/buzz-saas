@@ -4,6 +4,7 @@ import { Clock, Calendar, User } from "lucide-react"
 import type { inferRouterOutputs } from "@trpc/server"
 import type { AppRouter } from "@/server/api/root"
 import { cn } from "@/lib/utils"
+import dayjs from "@/lib/dayjs-config"
 
 type Agendamentos = inferRouterOutputs<AppRouter>["agendamento"]["getRecents"]
 
@@ -68,9 +69,9 @@ export function RecentAppointments() {
   return (
     <div className="space-y-3">
       {appointments.map((appointment: Agendamentos[0]) => {
-        const appointmentDate = new Date(appointment.dataHora)
-        const isToday = appointmentDate.toDateString() === new Date().toDateString()
-        const isPast = appointmentDate < new Date()
+        const appointmentDate = dayjs(appointment.dataHora).tz("America/Sao_Paulo")
+        const isToday = appointmentDate.isSame(dayjs(), 'day')
+        const isPast = appointmentDate.isBefore(dayjs())
         
         return (
           <div 
@@ -113,14 +114,11 @@ export function RecentAppointments() {
               <div className="flex items-center space-x-3 text-caption text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  <span>{appointmentDate.toLocaleDateString("pt-BR")}</span>
+                  <span>{appointmentDate.format("DD/MM/YYYY")}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  <span>{appointmentDate.toLocaleTimeString("pt-BR", { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}</span>
+                  <span>{appointmentDate.format("HH:mm")}</span>
                 </div>
               </div>
               
