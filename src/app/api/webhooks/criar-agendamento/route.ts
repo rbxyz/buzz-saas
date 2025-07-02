@@ -3,6 +3,13 @@ import { db } from "@/server/db"
 import { configuracoes, clientes, agendamentos, servicos, intervalosTrabalho } from "@/server/db/schema"
 import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+
+// Configurar dayjs com timezone
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.tz.setDefault("America/Sao_Paulo")
 
 interface RequestBody {
   telefone: string;
@@ -102,7 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: `Desculpe, não atendemos no dia ${dayjs(data).format("DD/MM/YYYY")}.` }, { status: 400 });
     }
 
-    const dataHora = dayjs(`${data}T${horario}`)
+    const dataHora = dayjs.tz(`${data}T${horario}`, "America/Sao_Paulo")
     const duracaoMinutos = servicoSelecionado.duracao
 
     const agendamentosNoDia = await db.select().from(agendamentos).where(and(

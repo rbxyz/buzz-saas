@@ -3,6 +3,13 @@ import { db } from "@/server/db"
 import { configuracoes, agendamentos, intervalosTrabalho, servicos } from "@/server/db/schema"
 import { eq, and, gte, lte } from "drizzle-orm"
 import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+
+// Configurar dayjs com timezone
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.tz.setDefault("America/Sao_Paulo")
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,7 +89,7 @@ export async function GET(request: NextRequest) {
         const horarioFormatado = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
 
         // Verificar conflito com agendamentos existentes
-        const dataHorario = dayjs(`${data}T${horarioFormatado}`)
+        const dataHorario = dayjs.tz(`${data}T${horarioFormatado}`, "America/Sao_Paulo")
         const dataFim = dataHorario.add(duracaoMinutos, "minute")
 
         const temConflito = agendamentosExistentes.some((agendamento) => {

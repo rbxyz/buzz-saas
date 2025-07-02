@@ -6,6 +6,13 @@ import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { env } from "@/env"
 import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+
+// Configurar dayjs com timezone
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.tz.setDefault("America/Sao_Paulo")
 
 // Configurações do runtime
 export const runtime = "nodejs"
@@ -316,7 +323,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
 
     case 'coletando_data': {
       console.log(`🧠 [STATE] Coletando data...`);
-      const promptExtracao = `Analise a mensagem do usuário e extraia apenas a data, respondendo estritamente no formato AAAA-MM-DD. Considere "hoje" como ${dayjs().format('YYYY-MM-DD')} e "amanhã" como ${dayjs().add(1, 'day').format('YYYY-MM-DD')}. Se nenhuma data for mencionada, responda 'null'.`;
+      const promptExtracao = `Analise a mensagem do usuário e extraia apenas a data, respondendo estritamente no formato AAAA-MM-DD. Considere "hoje" como ${dayjs.tz().format('YYYY-MM-DD')} e "amanhã" como ${dayjs.tz().add(1, 'day').format('YYYY-MM-DD')}. Se nenhuma data for mencionada, responda 'null'.`;
       const dataExtraida = await aiService.extractData(userMessage, promptExtracao);
 
       if (!dataExtraida || !/^\d{4}-\d{2}-\d{2}$/.test(dataExtraida)) {
@@ -326,8 +333,8 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         break;
       }
 
-      const dataObj = dayjs(dataExtraida);
-      if (dataObj.isBefore(dayjs().startOf('day'))) {
+      const dataObj = dayjs.tz(dataExtraida, "America/Sao_Paulo");
+      if (dataObj.isBefore(dayjs.tz().startOf('day'))) {
         const mensagem = "Essa data já passou! Por favor, escolha uma data a partir de hoje.";
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
@@ -382,7 +389,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         memoria.status = 'confirmacao_final';
         memoria.horario = horarioExtraido;
 
-        const mensagem = `Ok! Só para confirmar antes de agendar:\n\n*Serviço:* ${memoria.servicoNome}\n*Data:* ${dayjs(memoria.data).format('DD/MM/YYYY')}\n*Horário:* ${memoria.horario}\n\nPosso confirmar? (Responda "sim" ou "não")`;
+        const mensagem = `Ok! Só para confirmar antes de agendar:\n\n*Serviço:* ${memoria.servicoNome}\n*Data:* ${dayjs.tz(memoria.data, "America/Sao_Paulo").format('DD/MM/YYYY')}\n*Horário:* ${memoria.horario}\n\nPosso confirmar? (Responda "sim" ou "não")`;
 
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');

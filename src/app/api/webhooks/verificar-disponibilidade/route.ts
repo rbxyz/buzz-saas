@@ -3,6 +3,13 @@ import { db } from "@/server/db"
 import { configuracoes, agendamentos, servicos } from "@/server/db/schema"
 import { and, gte, lte, eq } from "drizzle-orm"
 import dayjs from "dayjs"
+import utc from "dayjs/plugin/utc"
+import timezone from "dayjs/plugin/timezone"
+
+// Configurar dayjs com timezone
+dayjs.extend(utc)
+dayjs.extend(timezone)
+dayjs.tz.setDefault("America/Sao_Paulo")
 
 interface RequestBody {
   data: string;
@@ -63,7 +70,7 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [WEBHOOK-DISPONIBILIDADE] Agendamentos existentes no dia: ${agendamentosExistentes.length}`)
 
     // Verificar se o horário específico está ocupado
-    const horarioSolicitado = dayjs(`${data}T${horario}`).toDate()
+    const horarioSolicitado = dayjs.tz(`${data}T${horario}`, "America/Sao_Paulo").toDate()
     const duracaoServico = servicoEncontrado.duracao || 30
 
     const conflito = agendamentosExistentes.some((agendamento) => {
@@ -85,7 +92,7 @@ export async function POST(request: NextRequest) {
       for (let hora = horaInicio; hora < horaFim; hora++) {
         for (const minuto of [0, 30]) {
           const horarioTeste = `${hora.toString().padStart(2, "0")}:${minuto.toString().padStart(2, "0")}`
-          const dataHoraTeste = dayjs(`${data}T${horarioTeste}`).toDate()
+          const dataHoraTeste = dayjs.tz(`${data}T${horarioTeste}`, "America/Sao_Paulo").toDate()
 
           // Verificar se este horário está livre
           const temConflito = agendamentosExistentes.some((agendamento) => {
