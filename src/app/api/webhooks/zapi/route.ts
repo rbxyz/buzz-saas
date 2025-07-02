@@ -85,8 +85,18 @@ async function processMessageWithAgent(data: {
 
   const history = await getConversationHistory(conversation.id);
 
+  // Validar histórico antes de passar para o agente
+  const validHistory = history.filter(msg =>
+    msg &&
+    msg.content !== null &&
+    msg.content !== undefined &&
+    msg.role
+  );
+
+  console.log(`📊 [HISTORY] ${validHistory.length} mensagens válidas de ${history.length} totais`);
+
   const agentResponse = await agentService.processMessage(
-    history,
+    validHistory,
     phone,
     senderName
   );
@@ -120,13 +130,27 @@ async function getConversationHistory(conversationId: number): Promise<CoreMessa
   const historyDb = await db
     .select({
       raw: messages.raw,
+      content: messages.content,
+      role: messages.role,
     })
     .from(messages)
     .where(eq(messages.conversationId, conversationId))
     .orderBy(messages.createdAt)
     .limit(20);
 
-  return historyDb.map(msg => msg.raw as CoreMessage);
+  return historyDb
+    .map(msg => {
+      // Se raw está preenchido (mensagens novas), usar raw
+      if (msg.raw) {
+        return msg.raw as CoreMessage;
+      }
+      // Para mensagens antigas sem raw, criar CoreMessage do zero
+      return {
+        role: msg.role || 'user',
+        content: msg.content || '',
+      } as CoreMessage;
+    })
+    .filter(msg => msg && msg.content); // Filtrar mensagens inválidas
 }
 
 async function getOrCreateConversation(phone: string, senderName: string): Promise<ConversationData> {
@@ -151,18 +175,34 @@ async function getOrCreateConversation(phone: string, senderName: string): Promi
 }
 
 async function saveMessage(conversationId: number, message: CoreMessage): Promise<void> {
-  if (typeof message.content !== 'string') {
-    // Lidar com content que não é string, talvez serializando
-    message.content = JSON.stringify(message.content);
-  }
   try {
+    // Determinar o content baseado no tipo de mensagem
+    let contentString = '';
+
+    if (typeof message.content === 'string') {
+      contentString = message.content;
+    } else if (Array.isArray(message.content)) {
+      // Para mensagens com múltiplos conteúdos (como tool results)
+      contentString = message.content
+        .map(item => {
+          if (typeof item === 'string') return item;
+          if (item.type === 'text') return item.text;
+          if (item.type === 'tool-result') return JSON.stringify(item.result);
+          return JSON.stringify(item);
+        })
+        .join('\n');
+    } else {
+      contentString = JSON.stringify(message.content);
+    }
+
     await db.insert(messages).values({
       conversationId,
-      content: message.content,
-      role: message.role,
+      content: contentString,
+      role: message.role as "user" | "assistant" | "system" | "bot" | "tool",
       raw: message,
     });
   } catch (error) {
     console.error(`💥 [MSG] Erro ao salvar mensagem:`, error);
+    console.error(`Mensagem problemática:`, JSON.stringify(message, null, 2));
   }
 }
