@@ -38,6 +38,7 @@ interface ConversationData {
   id: number;
   telefone: string;
   nomeContato: string | null;
+  memoria_context?: any;
 }
 
 export async function POST(request: NextRequest) {
@@ -79,28 +80,60 @@ async function processMessageWithAgent(data: {
   const { phone, messageText, senderName } = data;
   const processStart = Date.now();
 
+  // 1. Buscar conversa e contexto persistente
   const conversation = await getOrCreateConversation(phone, senderName);
+  let memoriaContext: any = {};
+  if (conversation.memoria_context) {
+    try {
+      memoriaContext = typeof conversation.memoria_context === 'string'
+        ? JSON.parse(conversation.memoria_context)
+        : conversation.memoria_context;
+    } catch {
+      memoriaContext = {};
+    }
+  }
 
+  // 2. Salvar mensagem do usuário normalmente
   await saveMessage(conversation.id, { role: 'user', content: messageText });
 
+  // 3. Buscar histórico
   const history = await getConversationHistory(conversation.id);
 
-  // Validar histórico antes de passar para o agente
-  const validHistory = history.filter(msg =>
-    msg &&
-    msg.content !== null &&
-    msg.content !== undefined &&
-    msg.role
-  );
+  // 4. Montar prompt de contexto
+  const memoriaPrompt = `DADOS JÁ CONFIRMADOS PELO CLIENTE:\n` +
+    `- Serviço: ${memoriaContext.servico ?? '??'}\n` +
+    `- Data   : ${memoriaContext.data ?? '??'}\n` +
+    `- Horário: ${memoriaContext.horario ?? '??'}\n`;
 
-  console.log(`📊 [HISTORY] ${validHistory.length} mensagens válidas de ${history.length} totais`);
-
+  // 5. Passar prompt de contexto para o agente
   const agentResponse = await agentService.processMessage(
-    validHistory,
+    history,
     phone,
-    senderName
+    senderName,
+    memoriaPrompt // novo parâmetro opcional
   );
 
+  // 6. Atualizar contexto se tool-calls relevantes
+  if (agentResponse.toolCalls) {
+    for (const call of agentResponse.toolCalls) {
+      if (call.toolName === 'listar_horarios_disponiveis') {
+        memoriaContext.servico = call.args.servico;
+        memoriaContext.data = call.args.data;
+      }
+      if (call.toolName === 'criar_agendamento') {
+        memoriaContext.servico = call.args.servico;
+        memoriaContext.data = call.args.data;
+        memoriaContext.horario = call.args.horario;
+        memoriaContext.nome = call.args.nome;
+      }
+    }
+    // Persistir contexto atualizado
+    await db.update(conversations)
+      .set({ memoria_context: memoriaContext })
+      .where(eq(conversations.id, conversation.id));
+  }
+
+  // 7. Salvar resposta do agente
   await saveMessage(conversation.id, agentResponse.finalAnswer);
 
   if (agentResponse.toolResults) {
@@ -112,17 +145,13 @@ async function processMessageWithAgent(data: {
   // Garantir que o content seja sempre uma string para o WhatsApp
   let messageToSend = agentResponse.finalAnswer.content;
   if (typeof messageToSend !== 'string') {
-    // Se não for string, converta para string de forma segura
     messageToSend = JSON.stringify(messageToSend);
   }
-
-  // Garantir que não seja uma string vazia
   if (!messageToSend || messageToSend.trim() === '') {
     messageToSend = "Ops, não consegui processar sua mensagem. Pode tentar novamente? 😊";
   }
 
   await enviarMensagemWhatsApp(phone, messageToSend);
-
   console.log(`🎉 [AGENT-PROCESS] Processamento finalizado em ${Date.now() - processStart}ms`);
 }
 

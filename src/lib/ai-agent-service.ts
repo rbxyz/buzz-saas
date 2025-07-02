@@ -225,13 +225,16 @@ class AgentService {
     async processMessage(
         history: CoreMessage[],
         telefone: string,
-        nomeContato: string
+        nomeContato: string,
+        memoriaPrompt?: string
     ): Promise<AgentResponse> {
         console.log(`🤖 [Agent] Processando mensagem para ${telefone}...`);
 
+        const system = memoriaPrompt ? `${memoriaPrompt}\n\n${systemPrompt}` : systemPrompt;
+
         const { text, toolCalls } = await generateText({
             model,
-            system: systemPrompt,
+            system,
             messages: history,
             tools,
             temperature: 0.4,
