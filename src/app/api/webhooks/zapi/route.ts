@@ -92,7 +92,7 @@ async function processMessageWithAgent(data: {
   let memoriaContext: MemoryContext = {};
   if (conversation.memoria_context) {
     try {
-      const parsed = typeof conversation.memoria_context === 'string'
+      const parsed: unknown = typeof conversation.memoria_context === 'string'
         ? JSON.parse(conversation.memoria_context)
         : conversation.memoria_context;
 

@@ -11,8 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { api } from "@/trpc/react";
 import {
   Loader2,
@@ -101,7 +99,7 @@ export default function AgendamentosPage() {
 
   const { data: conflito, isFetching: verificandoHorario } = api.agendamento.verificarConflito.useQuery(
     {
-      data: format(dataParaAgendamento, "yyyy-MM-dd"),
+      data: dayjs(dataParaAgendamento).format("YYYY-MM-DD"),
       horario: horario,
       servico: servico,
     },
@@ -269,7 +267,7 @@ export default function AgendamentosPage() {
 
     createMutation.mutate({
       clienteId: parseInt(clienteId, 10),
-      data: format(dataParaAgendamento, "yyyy-MM-dd"),
+      data: dayjs(dataParaAgendamento).format("YYYY-MM-DD"),
       horario,
       servico,
       status: "agendado",
@@ -312,7 +310,7 @@ export default function AgendamentosPage() {
           <DialogContent className="max-w-md">
                     <DialogHeader>
               <DialogTitle>
-                Novo Agendamento - {format(dataParaAgendamento, "dd/MM/yyyy")}
+                Novo Agendamento - {dayjs(dataParaAgendamento).format("DD/MM/YYYY")}
               </DialogTitle>
               <DialogDescription>
                 Preencha os campos abaixo para criar um novo agendamento.
@@ -356,7 +354,7 @@ export default function AgendamentosPage() {
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <label className="text-foreground text-sm font-medium">Data</label>
-                  <p className="mt-1 text-base font-semibold">{format(dataParaAgendamento, "dd/MM/yyyy")}</p>
+                  <p className="mt-1 text-base font-semibold">{dayjs(dataParaAgendamento).format("DD/MM/YYYY")}</p>
                           </div>
                           <Button
                             variant="outline"
@@ -473,7 +471,7 @@ export default function AgendamentosPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>
-                      {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}
+                      {dayjs(selectedDate).format("DD [de] MMMM")}
                     </CardTitle>
                                     <Button
                                       size="sm"
@@ -558,7 +556,7 @@ export default function AgendamentosPage() {
               <CardHeader>
                  <div className="flex items-center justify-between">
               <div>
-                        <CardTitle>Agendamentos de {format(selectedDate, "dd 'de' MMMM", { locale: ptBR })}</CardTitle>
+                        <CardTitle>Agendamentos de {dayjs(selectedDate).format("DD [de] MMMM")}</CardTitle>
                         <CardDescription>{agendamentos?.length ?? 0} agendamentos encontrados</CardDescription>
               </div>
                   <Button
