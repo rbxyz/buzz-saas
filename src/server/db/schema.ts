@@ -18,7 +18,7 @@ import {
 
 // Enums
 export const userRoleEnum = pgEnum("user_role_enum", ["superadmin", "admin"])
-export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "bot"])
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "bot", "tool"])
 export const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"])
 
 // Tabela de usuários
@@ -227,6 +227,7 @@ export const messages = pgTable(
     role: messageRoleEnum("role").notNull(),
     timestamp: timestamp("timestamp", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
     messageId: varchar("message_id", { length: 255 }),
+    raw: jsonb("raw"),
     createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   },
   (table) => ({
