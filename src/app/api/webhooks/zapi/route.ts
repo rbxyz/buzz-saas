@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/server/db"
-import { conversations, messages, users, servicos } from "@/server/db/schema"
-import { eq } from "drizzle-orm"
+import { conversations, messages, users, servicos, agendamentos, clientes } from "@/server/db/schema"
+import { eq, and, gte, desc } from "drizzle-orm"
 import { aiService } from "@/lib/ai-service"
 import { enviarMensagemWhatsApp } from "@/lib/zapi-service"
 import { env } from "@/env"
@@ -267,10 +267,28 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
 
   console.log(`🧠 [STATE] Estado atual: ${memoria.status}, Memória:`, memoria)
 
+  // Detectar intenções especiais antes da lógica de estados
+  const intencoes = await detectarIntencoes(userMessage, conversation);
+
+  if (intencoes.consultarAgendamentos) {
+    await consultarAgendamentosExistentes(conversation);
+    return;
+  }
+
+  if (intencoes.ajuda) {
+    await mostrarMenuAjuda(conversation);
+    return;
+  }
+
+  if (intencoes.cancelarAgendamento) {
+    await iniciarCancelamento(conversation);
+    return;
+  }
+
   // Lógica da máquina de estados
   switch (memoria.status) {
     case 'ocioso': {
-      const palavrasChaveAgendamento = ["agendar", "marcar", "horário", "agenda", "agendamento"];
+      const palavrasChaveAgendamento = ["agendar", "marcar", "horário", "agenda", "agendamento", "reservar"];
       const intençãoAgendamento = palavrasChaveAgendamento.some(p => userMessage.toLowerCase().includes(p));
 
       if (intençãoAgendamento) {
@@ -279,7 +297,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         // Buscar serviços disponíveis para apresentar ao usuário
         const servicosDisponiveis = await db.select({ nome: servicos.nome, id: servicos.id }).from(servicos).where(eq(servicos.ativo, true));
         const listaServicos = servicosDisponiveis.map(s => `- ${s.nome}`).join('\n');
-        const mensagem = `Legal! Vamos marcar. Qual desses serviços você gostaria?\n\n${listaServicos}`;
+        const mensagem = `Perfeito! Vou te ajudar a agendar. 😊\n\nQual desses serviços você gostaria?\n\n${listaServicos}`;
 
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
@@ -287,7 +305,8 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         memoria.status = 'coletando_servico';
         await updateConversationMemory(conversation.id, memoria);
       } else {
-        const mensagem = "Olá! Sou seu assistente de agendamento. Para começar, diga 'quero agendar' ou me pergunte sobre os serviços. 😊";
+        // Resposta mais acolhedora e prestativa
+        const mensagem = `Olá! 👋 Sou seu assistente de agendamentos!\n\nComo posso te ajudar hoje?\n\n• Digite "agendar" para marcar um horário\n• Digite "meus agendamentos" para ver seus horários\n• Digite "ajuda" para mais opções\n\nEstou aqui para facilitar sua vida! 😊`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
       }
@@ -307,13 +326,13 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         memoria.servicoId = servicoSelecionado.id;
         memoria.servicoNome = servicoSelecionado.nome;
 
-        const mensagem = `Ótima escolha! Para qual dia você gostaria de agendar o serviço de ${servicoSelecionado.nome}?`;
+        const mensagem = `Excelente escolha! 🎯\n\n${servicoSelecionado.nome} é um dos nossos serviços mais procurados.\n\nPara qual dia você gostaria de agendar? Pode me dizer como "hoje", "amanhã" ou "próxima sexta"!`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         await updateConversationMemory(conversation.id, memoria);
       } else {
         const listaServicos = servicosDisponiveis.map(s => `- ${s.nome}`).join('\n');
-        const mensagem = `Hum, não encontrei esse serviço. Por favor, escolha um da lista abaixo:\n\n${listaServicos}`;
+        const mensagem = `Hmm, não consegui identificar esse serviço. 🤔\n\nPor favor, escolha um da nossa lista:\n\n${listaServicos}\n\nOu me fale de forma diferente qual você quer!`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         // O estado não muda, continua como 'coletando_servico' para a próxima tentativa.
@@ -327,7 +346,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
       const dataExtraida = await aiService.extractData(userMessage, promptExtracao);
 
       if (!dataExtraida || !/^\d{4}-\d{2}-\d{2}$/.test(dataExtraida)) {
-        const mensagem = "Não consegui entender a data. Por favor, diga o dia que você quer, como 'hoje', 'amanhã' ou '25 de julho'.";
+        const mensagem = `Ops, não consegui entender a data que você quer. 😅\n\nPor favor, me diga de uma dessas formas:\n• "hoje" ou "amanhã"\n• "próxima segunda"\n• "15 de janeiro"\n• "25/01"\n\nQual data você prefere?`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         break;
@@ -335,7 +354,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
 
       const dataObj = dayjs.tz(dataExtraida, "America/Sao_Paulo");
       if (dataObj.isBefore(dayjs.tz().startOf('day'))) {
-        const mensagem = "Essa data já passou! Por favor, escolha uma data a partir de hoje.";
+        const mensagem = `Oops! Essa data já passou! 📅\n\nPor favor, escolha uma data a partir de hoje. Que tal "amanhã" ou me diga outro dia?`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         break;
@@ -350,10 +369,10 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         const manha = horariosData.periodos.manha.join('h, ') + (horariosData.periodos.manha.length > 0 ? 'h' : '');
         const tarde = horariosData.periodos.tarde.join('h, ') + (horariosData.periodos.tarde.length > 0 ? 'h' : '');
 
-        let mensagemHorarios = `Ótimo! Para o dia ${dataObj.format('DD/MM')}, tenho os seguintes horários disponíveis:\n`;
+        let mensagemHorarios = `Perfeito! Para ${dataObj.format('DD/MM')} (${dataObj.format('dddd')}), temos estes horários livres: 🕒\n`;
         if (manha.length > 0) mensagemHorarios += `\n☀️ *Manhã:* ${manha}`;
-        if (tarde.length > 0) mensagemHorarios += `\n🌙 *Tarde:* ${tarde}`;
-        mensagemHorarios += `\n\nQual você prefere?`;
+        if (tarde.length > 0) mensagemHorarios += `\n🌅 *Tarde:* ${tarde}`;
+        mensagemHorarios += `\n\nQual horário combina melhor com você?`;
 
         memoria.status = 'coletando_horario';
         memoria.data = dataExtraida;
@@ -361,7 +380,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         await saveMessage(conversation.id, mensagemHorarios, 'assistant', new Date(), '');
         await updateConversationMemory(conversation.id, memoria);
       } else {
-        const mensagem = `Poxa, não tenho horários disponíveis para o dia ${dataObj.format('DD/MM')}. Que tal tentar outra data?`;
+        const mensagem = `Que pena! 😔 Não temos horários disponíveis para ${dataObj.format('DD/MM')}.\n\nQue tal tentar:\n• Outro dia da semana?\n• Uma data diferente?\n\nMe diga qual data você prefere e vou verificar!`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
       }
@@ -374,7 +393,7 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
       const horarioExtraido = await aiService.extractData(userMessage, promptExtracao);
 
       if (!horarioExtraido || !/^\d{2}:\d{2}$/.test(horarioExtraido)) {
-        const mensagem = "Não consegui entender o horário. Por favor, diga a hora que você quer, como '14:30' ou '3 da tarde'.";
+        const mensagem = `Não consegui entender o horário. 🕐\n\nPor favor, me diga assim:\n• "14:30" ou "14h30"\n• "9 da manhã" ou "3 da tarde"\n\nQual horário você quer?`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         break;
@@ -389,13 +408,13 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         memoria.status = 'confirmacao_final';
         memoria.horario = horarioExtraido;
 
-        const mensagem = `Ok! Só para confirmar antes de agendar:\n\n*Serviço:* ${memoria.servicoNome}\n*Data:* ${dayjs.tz(memoria.data, "America/Sao_Paulo").format('DD/MM/YYYY')}\n*Horário:* ${memoria.horario}\n\nPosso confirmar? (Responda "sim" ou "não")`;
+        const mensagem = `Pronto! 🎉 Vou confirmar seu agendamento:\n\n📋 *Resumo:*\n• *Serviço:* ${memoria.servicoNome}\n• *Data:* ${dayjs.tz(memoria.data, "America/Sao_Paulo").format('DD/MM/YYYY (dddd)')}\n• *Horário:* ${memoria.horario}\n\n✅ Posso confirmar para você?\n\n👍 Responda "sim" para confirmar\n👎 Ou "não" se quiser mudar algo`;
 
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         await updateConversationMemory(conversation.id, memoria);
       } else {
-        const mensagem = `Hum, o horário ${horarioExtraido} não parece estar disponível. Por favor, escolha um dos horários que te enviei.`;
+        const mensagem = `Hmm, o horário ${horarioExtraido} não está mais disponível. 😅\n\nPor favor, escolha um dos horários que te mostrei acima.\n\nQual você prefere?`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
       }
@@ -405,8 +424,8 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
     case 'confirmacao_final': {
       console.log(`🧠 [STATE] Aguardando confirmação final...`);
       const userMessageLower = userMessage.toLowerCase();
-      const confirmacoes = ["sim", "pode", "confirma", "isso", "certo", "ok"];
-      const negacoes = ["não", "nao", "cancela", "mudar"];
+      const confirmacoes = ["sim", "pode", "confirma", "isso", "certo", "ok", "vai", "confirmar"];
+      const negacoes = ["não", "nao", "cancela", "mudar", "não quero"];
 
       if (confirmacoes.some(p => userMessageLower.includes(p))) {
         // Chamar o webhook para criar o agendamento
@@ -429,10 +448,15 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
           await enviarMensagemWhatsApp(conversation.telefone, resultadoAgendamento.message);
           await saveMessage(conversation.id, resultadoAgendamento.message, 'assistant', new Date(), '');
 
+          // Mensagem adicional de orientação
+          const mensagemOrientacao = `\n\n💡 *Dicas importantes:*\n• Chegue 10min antes\n• Qualquer dúvida, é só chamar!\n• Para reagendar: "meus agendamentos"\n\nObrigado pela confiança! 🙏`;
+          await enviarMensagemWhatsApp(conversation.telefone, mensagemOrientacao);
+          await saveMessage(conversation.id, mensagemOrientacao, 'assistant', new Date(), '');
+
           memoria.status = 'concluido';
           await updateConversationMemory(conversation.id, memoria);
         } else {
-          const mensagemErro = `Opa, tivemos um problema ao tentar confirmar seu horário: ${resultadoAgendamento.error}. Vamos tentar de novo. Para qual data você gostaria de agendar?`;
+          const mensagemErro = `Oops! 😔 Tivemos um problema:\n\n❌ ${resultadoAgendamento.error}\n\nVamos tentar novamente? Para qual data você gostaria de agendar?`;
           await enviarMensagemWhatsApp(conversation.telefone, mensagemErro);
           await saveMessage(conversation.id, mensagemErro, 'assistant', new Date(), '');
 
@@ -444,13 +468,13 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
         }
 
       } else if (negacoes.some(p => userMessageLower.includes(p))) {
-        const mensagem = "Ok, sem problemas! Se quiser recomeçar, é só dizer 'quero agendar'.";
+        const mensagem = `Sem problemas! 😊\n\nO que você gostaria de mudar?\n\n• Digite "agendar" para começar novamente\n• Ou me diga o que quer alterar\n\nEstou aqui para te ajudar!`;
         memoria = { status: 'ocioso' }; // Reset completo
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
         await updateConversationMemory(conversation.id, memoria);
       } else {
-        const mensagem = `Não entendi. Por favor, responda com "sim" para confirmar o agendamento ou "não" para cancelar.`;
+        const mensagem = `Não entendi sua resposta. 🤔\n\n✅ Responda "sim" para confirmar seu agendamento\n❌ Ou "não" se quiser cancelar/mudar\n\nO que você decide?`;
         await enviarMensagemWhatsApp(conversation.telefone, mensagem);
         await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
       }
@@ -458,18 +482,131 @@ async function gerenciarEstadoConversa(conversation: ConversationData, userMessa
     }
 
     case 'concluido':
-      // TODO: Agradecer e voltar para o estado ocioso
-      console.log('TODO: Implementar estado CONCLUIDO')
-      await enviarMensagemWhatsApp(conversation.telefone, "Seu agendamento já foi confirmado! 😊 Se precisar de algo mais, é só chamar.")
-      memoria = { status: 'ocioso' } // Resetar
+      console.log('Estado concluído - redirecionando para ocioso')
+      const mensagemConcluido = `Seu agendamento está confirmado! ✅\n\nComo posso te ajudar mais?\n\n• "meus agendamentos" - ver seus horários\n• "agendar" - marcar novo horário\n• "ajuda" - mais opções`;
+      await enviarMensagemWhatsApp(conversation.telefone, mensagemConcluido);
+      await saveMessage(conversation.id, mensagemConcluido, 'assistant', new Date(), '');
+      memoria = { status: 'ocioso' }; // Resetar
       await updateConversationMemory(conversation.id, memoria);
       break;
 
     default:
       const estadoDesconhecido: string = memoria.status
       console.error(`❌ [STATE] Estado desconhecido: ${estadoDesconhecido}`)
-      await enviarMensagemWhatsApp(conversation.telefone, "Desculpe, ocorreu um erro interno. Tente novamente mais tarde.")
+      await enviarMensagemWhatsApp(conversation.telefone, "Ops! Algo deu errado. 😅\n\nVamos recomeçar? Digite 'ajuda' para ver o que posso fazer por você!")
   }
+}
+
+/**
+ * Detecta intenções especiais na mensagem do usuário
+ */
+async function detectarIntencoes(userMessage: string, conversation: ConversationData) {
+  const msgLower = userMessage.toLowerCase();
+
+  // Palavras-chave para consultar agendamentos
+  const palavrasConsulta = [
+    'meus agendamentos', 'agendamentos', 'horários marcados', 'quando tenho',
+    'que horas', 'marcado', 'agendado', 'minha agenda', 'próximos horários',
+    'horários', 'quando é', 'que dia', 'qual horário', 'ver agendamentos'
+  ];
+
+  // Palavras-chave para ajuda
+  const palavrasAjuda = [
+    'ajuda', 'help', 'menu', 'opções', 'o que pode', 'como funciona',
+    'comandos', 'não entendi', 'perdido'
+  ];
+
+  // Palavras-chave para cancelamento
+  const palavrasCancelamento = [
+    'cancelar', 'desmarcar', 'não quero mais', 'remarcar', 'mudar horário'
+  ];
+
+  return {
+    consultarAgendamentos: palavrasConsulta.some(p => msgLower.includes(p)),
+    ajuda: palavrasAjuda.some(p => msgLower.includes(p)),
+    cancelarAgendamento: palavrasCancelamento.some(p => msgLower.includes(p))
+  };
+}
+
+/**
+ * Consulta e exibe agendamentos existentes do cliente
+ */
+async function consultarAgendamentosExistentes(conversation: ConversationData) {
+  try {
+    console.log(`🔍 [CONSULTA] Buscando agendamentos para ${conversation.telefone}`);
+
+    // Buscar agendamentos futuros do cliente
+    const agendamentosFuturos = await db
+      .select({
+        id: agendamentos.id,
+        servico: agendamentos.servico,
+        dataHora: agendamentos.dataHora,
+        status: agendamentos.status,
+        valorCobrado: agendamentos.valorCobrado
+      })
+      .from(agendamentos)
+      .leftJoin(clientes, eq(agendamentos.clienteId, clientes.id))
+      .where(
+        and(
+          eq(clientes.telefone, conversation.telefone.replace(/\D/g, "")),
+          gte(agendamentos.dataHora, dayjs.tz().startOf('day').toDate()),
+          eq(agendamentos.status, "agendado")
+        )
+      )
+      .orderBy(agendamentos.dataHora);
+
+    if (agendamentosFuturos.length === 0) {
+      const mensagem = `📅 Você não tem nenhum agendamento marcado no momento.\n\n🎯 Que tal agendar um serviço?\n\nDigite "agendar" e vou te ajudar! 😊`;
+      await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+      await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+      return;
+    }
+
+    let mensagem = `📋 *Seus agendamentos:*\n\n`;
+
+    agendamentosFuturos.forEach((agendamento, index) => {
+      const dataFormatada = dayjs.tz(agendamento.dataHora, "America/Sao_Paulo").format('DD/MM/YYYY (dddd)');
+      const horaFormatada = dayjs.tz(agendamento.dataHora, "America/Sao_Paulo").format('HH:mm');
+      const valor = agendamento.valorCobrado ? `R$ ${Number(agendamento.valorCobrado).toFixed(2)}` : 'N/A';
+
+      mensagem += `${index + 1}️⃣ *${agendamento.servico}*\n`;
+      mensagem += `📅 ${dataFormatada}\n`;
+      mensagem += `🕐 ${horaFormatada}\n`;
+      mensagem += `💰 ${valor}\n\n`;
+    });
+
+    mensagem += `\n💡 *Precisa de alguma coisa?*\n• Digite "cancelar" para desmarcar\n• Digite "agendar" para novo horário\n• Digite "ajuda" para mais opções`;
+
+    await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+    await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+
+  } catch (error) {
+    console.error('Erro ao consultar agendamentos:', error);
+    const mensagemErro = `Ops! 😅 Não consegui consultar seus agendamentos agora.\n\nTente novamente em alguns minutos ou digite "ajuda" para outras opções.`;
+    await enviarMensagemWhatsApp(conversation.telefone, mensagemErro);
+    await saveMessage(conversation.id, mensagemErro, 'assistant', new Date(), '');
+  }
+}
+
+/**
+ * Exibe menu de ajuda com todas as opções disponíveis
+ */
+async function mostrarMenuAjuda(conversation: ConversationData) {
+  const mensagem = `🤖 *Central de Ajuda*\n\n*Como posso te ajudar?*\n\n📅 *AGENDAMENTOS:*\n• "agendar" - marcar novo horário\n• "meus agendamentos" - ver horários marcados\n• "cancelar" - desmarcar horário\n\n💬 *INFORMAÇÕES:*\n• "serviços" - ver lista de serviços\n• "horários" - ver funcionamento\n• "endereço" - localização\n\n🆘 *SUPORTE:*\nSe tiver dúvidas, é só perguntar!\nEstou aqui para facilitar sua vida! 😊\n\n*Digite sua opção ou faça sua pergunta:*`;
+
+  await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+  await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
+}
+
+/**
+ * Inicia processo de cancelamento de agendamento
+ */
+async function iniciarCancelamento(conversation: ConversationData) {
+  // Por enquanto, apenas orienta o usuário - pode ser expandido futuramente
+  const mensagem = `❌ *Cancelamento de Agendamento*\n\nPara cancelar um agendamento:\n\n1️⃣ Digite "meus agendamentos" para ver seus horários\n2️⃣ Me informe qual você quer cancelar\n\nOu se preferir, entre em contato diretamente conosco!\n\n📞 Posso te ajudar com mais alguma coisa?`;
+
+  await enviarMensagemWhatsApp(conversation.telefone, mensagem);
+  await saveMessage(conversation.id, mensagem, 'assistant', new Date(), '');
 }
 
 /**
@@ -479,18 +616,18 @@ async function getOrCreateConversation(phone: string, senderName: string, messag
   // Lógica de busca/criação de usuário...
   let userId = Number(env.CHATBOT_USER_ID);
   if (isNaN(userId)) {
-    const user = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1));
-    if (!user || user.length === 0) throw new Error("Nenhum usuário encontrado no sistema");
-    userId = user[0]!.id;
+    const userResult = await executeWithTimeout(() => db.select({ id: users.id }).from(users).limit(1));
+    if (!userResult || userResult.length === 0) throw new Error("Nenhum usuário encontrado no sistema");
+    userId = userResult[0]!.id;
   }
 
-  const conversation = await executeWithTimeout(() =>
+  const conversationResult = await executeWithTimeout(() =>
     db.select().from(conversations).where(eq(conversations.telefone, phone)).limit(1)
   );
 
-  if (conversation && conversation.length > 0) {
-    console.log(`✅ [CONV] Conversa existente encontrada: ${conversation[0]!.id}`);
-    return conversation[0] as ConversationData;
+  if (conversationResult && conversationResult.length > 0) {
+    console.log(`✅ [CONV] Conversa existente encontrada: ${conversationResult[0]!.id}`);
+    return conversationResult[0] as ConversationData;
   }
 
   console.log(`🆕 [CONV] Criando nova conversa para ${phone}`);
