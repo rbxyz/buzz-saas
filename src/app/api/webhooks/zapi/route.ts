@@ -34,11 +34,18 @@ interface WebhookBody {
   isGroup?: boolean
 }
 
+interface MemoryContext {
+  servico?: string;
+  data?: string;
+  horario?: string;
+  nome?: string;
+}
+
 interface ConversationData {
   id: number;
   telefone: string;
   nomeContato: string | null;
-  memoria_context?: any;
+  memoria_context?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -82,13 +89,18 @@ async function processMessageWithAgent(data: {
 
   // 1. Buscar conversa e contexto persistente
   const conversation = await getOrCreateConversation(phone, senderName);
-  let memoriaContext: any = {};
+  let memoriaContext: MemoryContext = {};
   if (conversation.memoria_context) {
     try {
-      memoriaContext = typeof conversation.memoria_context === 'string'
+      const parsed = typeof conversation.memoria_context === 'string'
         ? JSON.parse(conversation.memoria_context)
         : conversation.memoria_context;
+
+      if (typeof parsed === 'object' && parsed !== null) {
+        memoriaContext = parsed as MemoryContext;
+      }
     } catch {
+      console.warn(`[CONTEXT] Falha ao parsear memoria_context para ${conversation.telefone}. Resetando.`);
       memoriaContext = {};
     }
   }
@@ -116,15 +128,16 @@ async function processMessageWithAgent(data: {
   // 6. Atualizar contexto se tool-calls relevantes
   if (agentResponse.toolCalls) {
     for (const call of agentResponse.toolCalls) {
+      const callArgs = call.args as MemoryContext;
       if (call.toolName === 'listar_horarios_disponiveis') {
-        memoriaContext.servico = call.args.servico;
-        memoriaContext.data = call.args.data;
+        memoriaContext.servico = callArgs.servico;
+        memoriaContext.data = callArgs.data;
       }
       if (call.toolName === 'criar_agendamento') {
-        memoriaContext.servico = call.args.servico;
-        memoriaContext.data = call.args.data;
-        memoriaContext.horario = call.args.horario;
-        memoriaContext.nome = call.args.nome;
+        memoriaContext.servico = callArgs.servico;
+        memoriaContext.data = callArgs.data;
+        memoriaContext.horario = callArgs.horario;
+        memoriaContext.nome = callArgs.nome;
       }
     }
     // Persistir contexto atualizado
