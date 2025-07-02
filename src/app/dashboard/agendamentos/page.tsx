@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import { ptBR } from "date-fns/locale";
 import { api } from "@/trpc/react";
 import {
   Loader2,
