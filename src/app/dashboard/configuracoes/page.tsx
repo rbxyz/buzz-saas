@@ -7,6 +7,7 @@ import { ContaCard } from "@/components/configuracoes/conta-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
 import { CoresCard } from "@/components/configuracoes/cores-card";
 import { EstabelecimentoCard } from "@/components/configuracoes/estabelecimento-card";
+import { StripeCard } from "@/components/configuracoes/stripe-card";
 
 export default function Configuracoes() {
   return (
@@ -52,6 +53,11 @@ export default function Configuracoes() {
             {/* Quinta linha - Gerenciamento de Usuários */}
             <div className="w-full">
               <UsuariosCard />
+            </div>
+
+            {/* Sexta linha - Stripe e Planos */}
+            <div className="w-full">
+              <StripeCard />
             </div>
           </div>
         </div>

@@ -10,6 +10,9 @@ import { authRouter } from "./routers/auth"
 import { conversationsRouter } from "./routers/conversations"
 import { messagesRouter } from "./routers/messages"
 import { agentsRouter } from "./routers/agents"
+import { subscriptionRouter } from "./routers/subscription"
+import { mercadoPagoRouter } from "./routers/mercado-pago"
+import { stripeRouter } from "./routers/stripe"
 
 /**
  * This is the primary router for your server.
@@ -28,6 +31,9 @@ export const appRouter = createTRPCRouter({
   conversations: conversationsRouter,
   messages: messagesRouter,
   agents: agentsRouter,
+  subscription: subscriptionRouter,
+  mercadoPago: mercadoPagoRouter,
+  stripe: stripeRouter,
 })
 
 // export type definition of API

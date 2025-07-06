@@ -29,6 +29,34 @@
       "when": 1751416681958,
       "tag": "0003_giant_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1751815230232,
+      "tag": "0004_sour_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1751819180893,
+      "tag": "0005_early_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1751819831432,
+      "tag": "0006_bouncy_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1751820097170,
+      "tag": "0007_huge_smasher",
+      "breakpoints": true
     }
   ]
 }

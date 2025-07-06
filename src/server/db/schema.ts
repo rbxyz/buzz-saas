@@ -20,6 +20,9 @@ import {
 export const userRoleEnum = pgEnum("user_role_enum", ["superadmin", "admin"])
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "bot", "tool"])
 export const linkTypeEnum = pgEnum("link_type_enum", ["cliente", "parceria"])
+export const planTypeEnum = pgEnum("plan_type_enum", ["starter", "pro"])
+export const paymentStatusEnum = pgEnum("payment_status_enum", ["pending", "approved", "rejected", "cancelled"])
+export const subscriptionStatusEnum = pgEnum("subscription_status_enum", ["active", "inactive", "cancelled", "expired", "past_due"])
 
 // Tabela de usuários
 export const users = pgTable(
@@ -238,6 +241,67 @@ export const messages = pgTable(
   }),
 )
 
+// Tabela de planos
+export const plans = pgTable("plans", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  features: jsonb("features").default([]),
+  type: varchar("type", { length: 50 }).notNull(),
+  mercadoPagoPlanId: varchar("mercado_pago_plan_id", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+
+// Tabela de assinaturas
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  planId: integer("plan_id")
+    .references(() => plans.id, { onDelete: "cascade" })
+    .notNull(),
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  startDate: timestamp("start_date", { withTimezone: true }).notNull(),
+  endDate: timestamp("end_date", { withTimezone: true }).notNull(),
+  autoRenew: boolean("auto_renew").default(true).notNull(),
+  mercadoPagoPreferenceId: varchar("mercado_pago_preference_id", { length: 255 }),
+  mercadoPagoSubscriptionId: varchar("mercado_pago_subscription_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+  userIdIdx: index("subscriptions_user_idx").on(table.userId),
+  statusIdx: index("subscriptions_status_idx").on(table.status),
+}))
+
+// Tabela de pagamentos
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  subscriptionId: integer("subscription_id")
+    .references(() => subscriptions.id, { onDelete: "cascade" })
+    .notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("BRL").notNull(),
+  status: paymentStatusEnum("status").default("pending").notNull(),
+  mercadoPagoPaymentId: varchar("mercado_pago_payment_id", { length: 255 }),
+  mercadoPagoStatus: varchar("mercado_pago_status", { length: 50 }),
+  paymentMethod: varchar("payment_method", { length: 50 }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+  userIdIdx: index("payments_user_idx").on(table.userId),
+  subscriptionIdIdx: index("payments_subscription_idx").on(table.subscriptionId),
+  statusIdx: index("payments_status_idx").on(table.status),
+  mercadoPagoPaymentIdIdx: index("payments_mp_payment_idx").on(table.mercadoPagoPaymentId),
+}))
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   configuracoes: one(configuracoes),
@@ -246,6 +310,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   intervalosTrabalho: many(intervalosTrabalho),
   agendamentos: many(agendamentos),
   conversations: many(conversations),
+  subscriptions: many(subscriptions),
+  payments: many(payments),
 }))
 
 export const configuracoesRelations = relations(configuracoes, ({ one }) => ({
@@ -310,6 +376,33 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, {
     fields: [messages.conversationId],
     references: [conversations.id],
+  }),
+}))
+
+export const plansRelations = relations(plans, ({ many }) => ({
+  subscriptions: many(subscriptions),
+}))
+
+export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [subscriptions.userId],
+    references: [users.id],
+  }),
+  plan: one(plans, {
+    fields: [subscriptions.planId],
+    references: [plans.id],
+  }),
+  payments: many(payments),
+}))
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  user: one(users, {
+    fields: [payments.userId],
+    references: [users.id],
+  }),
+  subscription: one(subscriptions, {
+    fields: [payments.subscriptionId],
+    references: [subscriptions.id],
   }),
 }))
 
