@@ -14,6 +14,11 @@ export async function uploadToBlob(file: File, folder = "uploads") {
     // Criar um nome de arquivo único
     const fileName = `${folder}/${uniqueId}-${file.name.replace(/\s+/g, "_")}`;
 
+    // Verificar se o token está disponível
+    if (!env.BLOB_READ_WRITE_TOKEN) {
+      throw new Error("BLOB_READ_WRITE_TOKEN não está configurado");
+    }
+
     // Fazer upload para o Vercel Blob
     const blob = await put(fileName, file, {
       access: "public",

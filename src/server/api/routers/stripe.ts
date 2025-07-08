@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 
 // Inicializar Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "sk_test_dummy", {
     apiVersion: "2025-06-30.basil",
 });
 

@@ -5,11 +5,11 @@ import { db } from "@/server/db";
 import { subscriptions } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "sk_test_dummy", {
     apiVersion: "2025-06-30.basil",
 });
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "whsec_dummy";
 
 export async function POST(req: NextRequest) {
     try {
