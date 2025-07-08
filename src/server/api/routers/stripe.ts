@@ -5,8 +5,18 @@ import Stripe from "stripe";
 
 // Inicializar Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: "2024-12-18.acacia",
+    apiVersion: "2025-06-30.basil",
 });
+
+function isStripeSubscription(obj: unknown): obj is Stripe.Subscription {
+    return obj !== null && typeof obj === 'object' && 'id' in obj && 'status' in obj;
+}
+
+function getStripeProp<T>(obj: Stripe.Subscription, snake: string, camel: string): T | undefined {
+    const snakeValue = (obj as unknown as Record<string, unknown>)[snake];
+    const camelValue = (obj as unknown as Record<string, unknown>)[camel];
+    return (snakeValue ?? camelValue) as T | undefined;
+}
 
 export const stripeRouter = createTRPCRouter({
     // Criar sessão de checkout
@@ -30,7 +40,7 @@ export const stripeRouter = createTRPCRouter({
                                 currency: 'brl',
                                 product_data: {
                                     name: input.planName,
-                                    description: input.description || `Assinatura do plano ${input.planName}`,
+                                    description: input.description ?? `Assinatura do plano ${input.planName}`,
                                 },
                                 unit_amount: Math.round(input.amount * 100), // Stripe usa centavos
                                 recurring: {
@@ -119,15 +129,21 @@ export const stripeRouter = createTRPCRouter({
         }))
         .query(async ({ input }) => {
             try {
-                const subscription = await stripe.subscriptions.retrieve(input.subscriptionId);
-
+                const response = await stripe.subscriptions.retrieve(input.subscriptionId);
+                const subscription = (response as unknown as { data?: Stripe.Subscription }).data ?? response;
+                if (!isStripeSubscription(subscription)) {
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Stripe subscription inválida',
+                    });
+                }
                 return {
                     id: subscription.id,
                     status: subscription.status,
-                    currentPeriodStart: subscription.current_period_start,
-                    currentPeriodEnd: subscription.current_period_end,
-                    cancelAt: subscription.cancel_at,
-                    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                    currentPeriodStart: getStripeProp<number>(subscription, 'current_period_start', 'currentPeriodStart'),
+                    currentPeriodEnd: getStripeProp<number>(subscription, 'current_period_end', 'currentPeriodEnd'),
+                    cancelAt: getStripeProp<number>(subscription, 'cancel_at', 'cancelAt'),
+                    cancelAtPeriodEnd: getStripeProp<number>(subscription, 'cancel_at_period_end', 'cancelAtPeriodEnd'),
                 };
             } catch (error) {
                 console.error('Erro ao obter detalhes da assinatura:', error);
@@ -166,8 +182,8 @@ export const stripeRouter = createTRPCRouter({
     getPublicConfig: protectedProcedure
         .query(async () => {
             return {
-                publicKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
-                isConfigured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY),
+                publicKey: process.env.STRIPE_PUBLISHABLE_KEY ?? '',
+                isConfigured: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY),
             };
         }),
 }); 

@@ -201,9 +201,7 @@ export default function LandingPage() {
     return valor;
   };
 
-  const limparTelefone = (valor: string) => {
-    return valor.replace(/\D/g, "");
-  };
+
 
   const resetarAgendamento = () => {
     setTelefoneAgendamento("");

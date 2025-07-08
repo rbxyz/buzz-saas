@@ -3,7 +3,7 @@ import Link from "next/link";
 import "@/styles/globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { BookOpen, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 
 export const metadata: Metadata = {
   title: "Documentação | Buzz SaaS",

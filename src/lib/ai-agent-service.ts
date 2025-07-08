@@ -101,7 +101,7 @@ const executeTools = {
             .where(eq(servicosSchema.ativo, true));
 
         // Adicionar identificação única para cortes com preços diferentes
-        const servicosFormatados = servicosAtivos.map((servico, index) => {
+        const servicosFormatados = servicosAtivos.map((servico) => {
             if (servico.nome === 'Corte de cabelo' && servicosAtivos.filter(s => s.nome === 'Corte de cabelo').length > 1) {
                 const preco = servico.preco ? parseFloat(servico.preco) : 0;
                 if (preco <= 30) {

@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import Stripe from "stripe";
 import { db } from "@/server/db";
-import { subscriptions, plans } from "@/server/db/schema";
+import { subscriptions } from "@/server/db/schema";
 import { eq } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -39,22 +39,22 @@ export async function POST(req: NextRequest) {
         // Processar diferentes tipos de eventos
         switch (event.type) {
             case "checkout.session.completed":
-                await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+                await handleCheckoutSessionCompleted(event.data.object);
                 break;
             case "customer.subscription.created":
-                await handleSubscriptionCreated(event.data.object as Stripe.Subscription);
+                await handleSubscriptionCreated(event.data.object);
                 break;
             case "customer.subscription.updated":
-                await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+                await handleSubscriptionUpdated(event.data.object);
                 break;
             case "customer.subscription.deleted":
-                await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+                await handleSubscriptionDeleted(event.data.object);
                 break;
             case "invoice.payment_succeeded":
-                await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
+                await handleInvoicePaymentSucceeded(event.data.object);
                 break;
             case "invoice.payment_failed":
-                await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+                await handleInvoicePaymentFailed(event.data.object);
                 break;
             default:
                 console.log(`Unhandled event type: ${event.type}`);
@@ -73,9 +73,8 @@ export async function POST(req: NextRequest) {
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     try {
         console.log("Checkout session completed:", session.id);
-
-        const userId = parseInt(session.metadata?.userId || "0");
-        const planId = parseInt(session.metadata?.planId || "0");
+        const userId = parseInt(session.metadata?.userId ?? "0");
+        const planId = parseInt(session.metadata?.planId ?? "0");
 
         if (!userId || !planId) {
             console.error("Missing userId or planId in session metadata");
@@ -171,14 +170,14 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     try {
         console.log("Invoice payment succeeded:", invoice.id);
 
-        const subscriptionId = (invoice as any).subscription;
+        const subscriptionId = (invoice as { subscription?: string }).subscription;
         if (subscriptionId && typeof subscriptionId === 'string') {
             // Atualizar data de renovação da assinatura
             const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
             await db.update(subscriptions)
                 .set({
-                    endDate: new Date((subscription as any).current_period_end * 1000),
+                    endDate: new Date((subscription as unknown as { current_period_end: number }).current_period_end * 1000),
                     updatedAt: new Date(),
                 })
                 .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
@@ -192,7 +191,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     try {
         console.log("Invoice payment failed:", invoice.id);
 
-        const subscriptionId = (invoice as any).subscription;
+        const subscriptionId = (invoice as { subscription?: string }).subscription;
         if (subscriptionId && typeof subscriptionId === 'string') {
             // Marcar assinatura como com problema de pagamento
             await db.update(subscriptions)

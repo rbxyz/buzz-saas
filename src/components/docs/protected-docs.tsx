@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/auth-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+
 import { Lock, ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 

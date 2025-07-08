@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpenCheck, Cpu, MessageCircle, Server, TerminalSquare, GitBranch, Zap, Sparkles, ArrowRight, Star, Rocket, Shield, Users, Code, Database, Settings, FileText, Archive, Lock } from "lucide-react";
+import { BookOpenCheck, Server, TerminalSquare, GitBranch, Sparkles, Rocket, Code, Database, Settings, Archive, ArrowRight, Star, FileText, Lock } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 

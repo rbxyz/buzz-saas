@@ -5,7 +5,7 @@ interface SubscriptionButtonProps {
   label?: string;
 }
 
-const SubscriptionButton: React.FC<SubscriptionButtonProps> = ({ planId, label = 'Assinar Agora' }) => {
+const SubscriptionButton: React.FC<SubscriptionButtonProps> = ({ planId }) => {
   useEffect(() => {
     const scriptId = 'mp-button-loader';
 

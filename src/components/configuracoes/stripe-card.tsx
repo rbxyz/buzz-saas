@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Shield, AlertCircle, CheckCircle2, Crown } from "lucide-react";
+import { CreditCard, CheckCircle2, Crown } from "lucide-react";
 import { api } from "@/trpc/react";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+
 
 interface Plan {
   id: number;

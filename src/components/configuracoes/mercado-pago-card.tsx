@@ -30,7 +30,7 @@ interface Plan {
 }
 
 export function MercadoPagoCard() {
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [selectedPlan] = useState<Plan | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
@@ -38,9 +38,7 @@ export function MercadoPagoCard() {
   const { data: currentSubscription, refetch: refetchSubscription } = api.subscription.getCurrentSubscription.useQuery();
   const { data: connectionStatus } = api.mercadoPago.testConnection.useQuery();
 
-  // Mutations
-  const createSubscription = api.subscription.create.useMutation();
-  const createPaymentPreference = api.mercadoPago.createPaymentPreference.useMutation();
+
 
   // Planos disponíveis
   const plans: Plan[] = [
@@ -94,9 +92,7 @@ export function MercadoPagoCard() {
     }
   ];
 
-  const handleSelectPlan = async (plan: Plan) => {
-    console.log("Selecionando plano para assinatura:", plan.name);
-  };
+
 
   const handleCancelSubscription = async () => {
     try {
