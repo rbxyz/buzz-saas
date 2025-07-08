@@ -36,7 +36,8 @@ export const subscriptionRouter = createTRPCRouter({
             planName: subscription.plan.name,
             planPrice: Number(subscription.plan.price),
             planFeatures: subscription.plan.features,
-            planLimits: subscription.plan.limits,
+            stripeSubscriptionId: subscription.stripeSubscriptionId,
+            stripeCustomerId: subscription.stripeCustomerId,
         };
     }),
 
@@ -94,22 +95,6 @@ export const subscriptionRouter = createTRPCRouter({
                         "Usuários ilimitados"
                     ];
 
-                const planLimits = input.planType === "starter"
-                    ? {
-                        monthlyBookings: 30,
-                        maxUsers: 1,
-                        whatsappIntegration: false,
-                        advancedAnalytics: false,
-                        customTheme: false,
-                    }
-                    : {
-                        monthlyBookings: -1,
-                        maxUsers: -1,
-                        whatsappIntegration: true,
-                        advancedAnalytics: true,
-                        customTheme: true,
-                    };
-
                 const newPlan = await db
                     .insert(plans)
                     .values({
@@ -117,8 +102,6 @@ export const subscriptionRouter = createTRPCRouter({
                         type: input.planType,
                         price: input.price.toString(),
                         features: planFeatures,
-                        limits: planLimits,
-                        isActive: true,
                     })
                     .returning();
 
@@ -297,9 +280,8 @@ export const subscriptionRouter = createTRPCRouter({
                     }
                 }
 
-                // Tipo as limits como objeto conhecido
-                const limits = subscription.plan.limits as Record<string, number>
-                const monthlyBookings = limits.monthlyBookings ?? 0
+                // Como limits foi removido, usar valores padrão baseados no tipo do plano
+                const monthlyBookings = subscription.plan.type === 'pro' ? -1 : 30
 
                 // Se tem agendamentos ilimitados, retornar acesso
                 if (monthlyBookings === -1) {

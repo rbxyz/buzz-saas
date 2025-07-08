@@ -56,9 +56,9 @@ export class SubscriptionService {
 
         return {
             isActive: true,
-            planType: subscription.plan.type,
+            planType: subscription.plan.type as "starter" | "pro",
             planName: subscription.plan.name,
-            limits: subscription.plan.limits as SubscriptionLimits,
+            limits: null, // limits foi removido da tabela plans
             endDate: subscription.endDate,
         };
     }
@@ -119,8 +119,8 @@ export class SubscriptionService {
                 };
             }
 
-            const limits = subscription.plan.limits as SubscriptionLimits;
-            const monthlyBookings = limits.monthlyBookings ?? 0;
+            // Como limits foi removido, usar valores padrão baseados no tipo do plano
+            const monthlyBookings = subscription.plan.type === 'pro' ? -1 : 30;
 
             // Se tem agendamentos ilimitados
             if (monthlyBookings === -1) {
@@ -182,7 +182,7 @@ export class SubscriptionService {
     }> {
         const subscription = await this.getUserSubscription(userId);
 
-        if (!subscription.isActive || !subscription.limits) {
+        if (!subscription.isActive) {
             return {
                 hasAccess: false,
                 currentCount: 0,
@@ -191,7 +191,8 @@ export class SubscriptionService {
             };
         }
 
-        const userLimit = subscription.limits.maxUsers ?? 0;
+        // Como limits foi removido, usar valores padrão baseados no tipo do plano
+        const userLimit = subscription.planType === 'pro' ? -1 : 1;
 
         // Se for ilimitado
         if (userLimit === -1) {
