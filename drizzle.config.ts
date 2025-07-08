@@ -7,5 +7,5 @@ export default {
   dbCredentials: {
     url: env.DATABASE_URL,
   },
-  tablesFilter: ["buzze-saas_*"],
+  tablesFilter: ["*"],
 } satisfies Config;

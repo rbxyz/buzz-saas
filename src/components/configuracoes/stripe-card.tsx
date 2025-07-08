@@ -171,6 +171,7 @@ export function StripeCard() {
       <CardContent className="space-y-6">
         
         {/* Status da Integração */}
+        {/**
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Status da Integração</h3>
@@ -203,7 +204,7 @@ export function StripeCard() {
             </Alert>
           )}
         </div>
-
+        */}
         <Separator />
 
         {/* Plano Atual */}
