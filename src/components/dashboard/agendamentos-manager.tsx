@@ -5,12 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, Clock, User, Check, X, Loader2 } from "lucide-react";
+import { Calendar, Clock, User, Check, X, Loader2, AlertCircle } from "lucide-react";
 import { api } from "@/trpc/react";
 import { useToast } from "@/hooks/use-toast";
 import dayjs from "dayjs";
 
-export function AgendamentosCard() {
+export function AgendamentosManager() {
   const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
   const { toast } = useToast();
 
@@ -38,17 +38,10 @@ export function AgendamentosCard() {
     },
   });
 
-  const handleConcluirAgendamento = (agendamentoId: number) => {
+  const handleStatusChange = (agendamentoId: number, newStatus: "agendado" | "concluido" | "cancelado") => {
     atualizarStatus.mutate({ 
       id: agendamentoId, 
-      status: 'concluido' 
-    });
-  };
-
-  const handleCancelarAgendamento = (agendamentoId: number) => {
-    atualizarStatus.mutate({ 
-      id: agendamentoId, 
-      status: 'cancelado' 
+      status: newStatus 
     });
   };
 
@@ -56,15 +49,22 @@ export function AgendamentosCard() {
   const agendamentosConcluidos = agendamentos?.filter(a => a.status === "concluido") ?? [];
   const agendamentosCancelados = agendamentos?.filter(a => a.status === "cancelado") ?? [];
 
+  const totalAgendamentos = agendamentos?.length ?? 0;
+
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-blue-600" />
-          <CardTitle>Gerenciar Agendamentos</CardTitle>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-blue-600" />
+            <CardTitle>Gerenciar Agendamentos</CardTitle>
+          </div>
+          <Badge variant="outline" className="text-sm">
+            Total: {totalAgendamentos}
+          </Badge>
         </div>
         <CardDescription>
-          Visualize e gerencie os agendamentos do dia selecionado
+          Visualize e gerencie todos os agendamentos do dia selecionado
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -97,7 +97,7 @@ export function AgendamentosCard() {
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-blue-600 flex items-center gap-2">
                   <Clock className="h-5 w-5" />
-                  Agendados ({agendamentosAgendados.length})
+                  Pendentes ({agendamentosAgendados.length})
                 </h3>
                 <div className="space-y-3">
                   {agendamentosAgendados.map((agendamento) => (
@@ -125,7 +125,7 @@ export function AgendamentosCard() {
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
-                          onClick={() => handleConcluirAgendamento(agendamento.id)}
+                          onClick={() => handleStatusChange(agendamento.id, 'concluido')}
                           disabled={atualizarStatus.isPending}
                           className="bg-green-600 hover:bg-green-700 text-white"
                         >
@@ -135,7 +135,7 @@ export function AgendamentosCard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleCancelarAgendamento(agendamento.id)}
+                          onClick={() => handleStatusChange(agendamento.id, 'cancelado')}
                           disabled={atualizarStatus.isPending}
                           className="border-red-200 text-red-700 hover:bg-red-50"
                         >
@@ -179,9 +179,21 @@ export function AgendamentosCard() {
                           {agendamento.servico}
                         </Badge>
                       </div>
-                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
-                        Concluído
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300">
+                          Concluído
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStatusChange(agendamento.id, 'agendado')}
+                          disabled={atualizarStatus.isPending}
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          <AlertCircle className="h-4 w-4 mr-1" />
+                          Marcar Pendente
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -218,9 +230,21 @@ export function AgendamentosCard() {
                           {agendamento.servico}
                         </Badge>
                       </div>
-                      <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300">
-                        Cancelado
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300">
+                          Cancelado
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStatusChange(agendamento.id, 'agendado')}
+                          disabled={atualizarStatus.isPending}
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          <AlertCircle className="h-4 w-4 mr-1" />
+                          Reativar
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

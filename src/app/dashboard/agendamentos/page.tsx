@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AgendamentosManager } from "@/components/dashboard/agendamentos-manager";
 
 const aplicarMascaraHorario = (valor: string): string => {
   const numeros = valor.replace(/\D/g, "");
@@ -446,9 +447,10 @@ export default function AgendamentosPage() {
 
       {isMobile ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="calendario">Calendário</TabsTrigger>
             <TabsTrigger value="agendamentos">Agendamentos</TabsTrigger>
+            <TabsTrigger value="gerenciar">Gerenciar</TabsTrigger>
           </TabsList>
           <TabsContent value="calendario" className="mt-4">
             <Card className="w-full">
@@ -527,6 +529,9 @@ export default function AgendamentosPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="gerenciar" className="mt-4">
+            <AgendamentosManager />
           </TabsContent>
         </Tabs>
       ) : (
