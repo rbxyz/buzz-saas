@@ -7,7 +7,7 @@ import { ContaCard } from "@/components/configuracoes/conta-card";
 import { UsuariosCard } from "@/components/configuracoes/usuarios-card";
 import { CoresCard } from "@/components/configuracoes/cores-card";
 import { EstabelecimentoCard } from "@/components/configuracoes/estabelecimento-card";
-import { StripeCard } from "@/components/configuracoes/stripe-card";
+import { AgendamentosCard } from "@/components/configuracoes/agendamentos-card";
 
 export default function Configuracoes() {
   return (
@@ -55,9 +55,9 @@ export default function Configuracoes() {
               <UsuariosCard />
             </div>
 
-            {/* Sexta linha - Stripe e Planos */}
+            {/* Sexta linha - Gerenciamento de Agendamentos */}
             <div className="w-full">
-              <StripeCard />
+              <AgendamentosCard />
             </div>
           </div>
         </div>
