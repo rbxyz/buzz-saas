@@ -20,7 +20,7 @@ import {
   Settings,
   Eye,
   FileSpreadsheet,
-  FilePdf
+  File
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,7 +64,7 @@ export function ExportadorRelatorios({ onExport }: ExportadorRelatoriosProps) {
   ];
 
   const formatosExportacao = [
-    { value: "pdf", label: "PDF", icon: FilePdf, descricao: "Documento formatado" },
+    { value: "pdf", label: "PDF", icon: File, descricao: "Documento formatado" },
     { value: "excel", label: "Excel", icon: FileSpreadsheet, descricao: "Dados em planilha" },
     { value: "csv", label: "CSV", icon: FileSpreadsheet, descricao: "Dados brutos" }
   ];
