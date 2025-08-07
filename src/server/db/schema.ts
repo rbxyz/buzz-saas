@@ -158,7 +158,6 @@ export const intervalosTrabalho = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
   },
   (table) => ({
-    userDiaIdx: unique().on(table.userId, table.diaSemana),
     userIdx: index("intervalos_user_idx").on(table.userId),
   }),
 )

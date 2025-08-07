@@ -11,6 +11,7 @@ import {
   Settings,
   Users,
   Bot,
+  BarChart3,
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -22,6 +23,7 @@ const menuItems = [
   { href: '/dashboard', label: 'Início', icon: Home },
   { href: '/dashboard/agendamentos', label: 'Agendamentos', icon: Calendar },
   { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
+  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/dashboard/linktree', label: 'Linktree', icon: LinkIcon },
   { href: '/dashboard/chatbot', label: 'Chatbot', icon: Bot },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },

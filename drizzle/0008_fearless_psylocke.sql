@@ -1,0 +1,1 @@
+ALTER TABLE "intervalos_trabalho" DROP CONSTRAINT "intervalos_trabalho_user_id_dia_semana_unique";

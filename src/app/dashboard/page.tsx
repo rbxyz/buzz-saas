@@ -3,6 +3,7 @@
 import { DashboardStats } from "@/components/dashboard/dashboard-stats";
 import { Overview } from "@/components/dashboard/overview";
 import { RecentAppointments } from "@/components/dashboard/recent-appointments";
+import { ConfiguracaoInicialAlert } from "@/components/configuracoes/configuracao-inicial-alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -14,6 +15,9 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 space-y-8 p-6 md:p-8">
+      {/* Configuração Inicial Alert */}
+      <ConfiguracaoInicialAlert />
+      
       {/* Header */}
       <div className="flex flex-col space-y-2">
         <h1 className="text-display font-bold text-foreground">

@@ -121,6 +121,52 @@ export const configuracaoRouter = createTRPCRouter({
     }
   }),
 
+  verificarConfiguracaoInicial: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const userId = ctx.user.id
+
+      const config = await db.query.configuracoes.findFirst({
+        where: eq(configuracoes.userId, userId),
+      })
+
+      if (!config) {
+        return {
+          configuracaoInicialCompleta: false,
+          camposFaltantes: ['nome da empresa', 'telefone', 'endereço'],
+          mensagem: "Configure as informações básicas do seu estabelecimento para começar a usar o sistema."
+        }
+      }
+
+      const camposFaltantes: string[] = []
+
+      if (!config.nomeEmpresa || config.nomeEmpresa.trim() === '') {
+        camposFaltantes.push('nome da empresa')
+      }
+
+      if (!config.telefone || config.telefone.trim() === '') {
+        camposFaltantes.push('telefone')
+      }
+
+      if (!config.endereco || config.endereco.trim() === '') {
+        camposFaltantes.push('endereço')
+      }
+
+      return {
+        configuracaoInicialCompleta: camposFaltantes.length === 0,
+        camposFaltantes,
+        mensagem: camposFaltantes.length > 0
+          ? `Para completar a configuração, preencha: ${camposFaltantes.join(', ')}.`
+          : "Configuração inicial completa!"
+      }
+    } catch (error) {
+      console.error("❌ [CONFIGURACAO] Erro ao verificar configuração inicial:", error)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Erro ao verificar configuração inicial",
+      })
+    }
+  }),
+
   atualizarConfiguracao: protectedProcedure
     .input(
       z.object({
@@ -135,9 +181,44 @@ export const configuracaoRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
 
+      // Verificar se é a primeira configuração (configuração inicial)
       const existingConfig = await db.query.configuracoes.findFirst({
         where: eq(configuracoes.userId, userId),
       })
+
+      const isFirstTimeSetup = !existingConfig
+
+      // Validação específica para configuração inicial
+      if (isFirstTimeSetup) {
+        const missingFields: string[] = []
+
+        if (!input.nomeEmpresa || input.nomeEmpresa.trim() === '') {
+          missingFields.push('nome da empresa')
+        }
+
+        if (!input.telefone || input.telefone.trim() === '') {
+          missingFields.push('telefone')
+        }
+
+        if (!input.endereco || input.endereco.trim() === '') {
+          missingFields.push('endereço')
+        }
+
+        if (missingFields.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Para completar a configuração inicial, preencha os seguintes campos: ${missingFields.join(', ')}.`,
+          })
+        }
+      }
+
+      // Validação para atualizações (nome da empresa sempre obrigatório)
+      if (!isFirstTimeSetup && (!input.nomeEmpresa || input.nomeEmpresa.trim() === '')) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "O nome da empresa é obrigatório.",
+        })
+      }
 
       if (existingConfig) {
         await db
@@ -148,7 +229,12 @@ export const configuracaoRouter = createTRPCRouter({
         await db.insert(configuracoes).values({ ...input, userId })
       }
 
-      return { success: true, message: "Configurações da conta salvas." }
+      return {
+        success: true,
+        message: isFirstTimeSetup
+          ? "Configuração inicial concluída com sucesso!"
+          : "Configurações da conta salvas."
+      }
     }),
 
 

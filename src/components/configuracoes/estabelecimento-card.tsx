@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Building, Save } from 'lucide-react'
+import { Building, Save, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
@@ -21,16 +21,17 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { api } from '@/trpc/react'
 
 const formSchema = z.object({
   nomeEmpresa: z.string().min(1, 'O nome da empresa é obrigatório.'),
-  telefone: z.string().optional(),
-  endereco: z.string().optional(),
+  telefone: z.string().min(1, 'O telefone é obrigatório.'),
+  endereco: z.string().min(1, 'O endereço é obrigatório.'),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -41,6 +42,9 @@ export function EstabelecimentoCard() {
 
   const { data } = api.configuracao.obterConfiguracaoCompleta.useQuery()
   const configuracao = api.configuracao.atualizarConfiguracao.useMutation()
+
+  // Verificar se é a primeira configuração
+  const isFirstTimeSetup = !data?.nomeEmpresa && !data?.telefone && !data?.endereco
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -62,7 +66,17 @@ export function EstabelecimentoCard() {
       },
       error: (err: Error) => {
         console.error('Erro ao atualizar configuração:', err)
-        return 'Erro ao salvar alterações.'
+        
+        // Tratar erros específicos de validação
+        if (err.message.includes('preencha os seguintes campos')) {
+          return `Campos obrigatórios: ${err.message}`
+        }
+        
+        if (err.message.includes('nome da empresa é obrigatório')) {
+          return 'O nome da empresa é obrigatório.'
+        }
+        
+        return 'Erro ao salvar alterações. Verifique se todos os campos obrigatórios estão preenchidos.'
       },
     })
   }
@@ -85,18 +99,31 @@ export function EstabelecimentoCard() {
           Estabelecimento
         </CardTitle>
         <CardDescription>
-          Gerencie as informações do seu estabelecimento.
+          {isFirstTimeSetup 
+            ? "Configure as informações básicas do seu estabelecimento. Todos os campos são obrigatórios para completar a configuração inicial."
+            : "Gerencie as informações do seu estabelecimento."
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            {isFirstTimeSetup && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Configure as informações básicas do seu estabelecimento para começar a usar o sistema. 
+                  Todos os campos marcados com * são obrigatórios.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <FormField
               control={form.control}
               name="nomeEmpresa"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome da Empresa</FormLabel>
+                  <Label variant="required">Nome da Empresa</Label>
                   <FormControl>
                     <Input placeholder="Ex: Barbearia do Zé" {...field} />
                   </FormControl>
@@ -109,7 +136,7 @@ export function EstabelecimentoCard() {
               name="telefone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Telefone</FormLabel>
+                  <Label variant="required">Telefone</Label>
                   <FormControl>
                     <Input placeholder="(99) 99999-9999" {...field} />
                   </FormControl>
@@ -122,7 +149,7 @@ export function EstabelecimentoCard() {
               name="endereco"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Endereço</FormLabel>
+                  <Label variant="required">Endereço</Label>
                   <FormControl>
                     <Input
                       placeholder="Rua, número, bairro, cidade"
@@ -137,9 +164,21 @@ export function EstabelecimentoCard() {
               type="submit"
               variant="secondary"
               disabled={!form.formState.isDirty || configuracao.isPending}
+              onClick={() => {
+                // Validação adicional antes de submeter
+                const values = form.getValues()
+                const hasEmptyFields = !values.nomeEmpresa?.trim() || !values.telefone?.trim() || !values.endereco?.trim()
+                
+                if (hasEmptyFields && isFirstTimeSetup) {
+                  toast.error("Campos obrigatórios", {
+                    description: "Para completar a configuração inicial, preencha todos os campos obrigatórios.",
+                    duration: 4000,
+                  })
+                }
+              }}
             >
               <Save className="mr-2 h-4 w-4" />
-              Salvar Alterações
+              {isFirstTimeSetup ? 'Completar Configuração' : 'Salvar Alterações'}
             </Button>
           </form>
         </Form>
